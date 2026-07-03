@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
+import { BillingModule } from './billing/billing.module';
 import { HealthController } from './health.controller';
 import { OwnerModule } from './owner/owner.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -15,6 +16,7 @@ import { WxModule } from './wx/wx.module';
     AuthModule,
     AdminModule,
     OwnerModule,
+    BillingModule,
   ],
   controllers: [HealthController],
 })
