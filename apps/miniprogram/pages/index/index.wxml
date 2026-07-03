@@ -1,67 +1,81 @@
 <view class="page index-page">
   <view class="top-line">
     <view>
-      <view class="nav-title">{{communityName}}</view>
+      <view class="nav-title">{{currentHouse ? currentHouse.communityName : '物业缴费'}}</view>
       <view class="nav-subtitle">雅致生活 · 从容缴费</view>
     </view>
-    <view class="profile-orb">{{avatarText}}</view>
+    <view class="profile-orb">宅</view>
   </view>
 
-  <view class="hero-card">
+  <!-- 未绑定房屋引导 -->
+  <view wx:if="{{ready && noHouse}}" class="hero-card">
     <view class="hero-kicker">PROPERTY SERVICE</view>
-    <view class="hero-title">优雅缴费\n从容生活</view>
-    <view class="house-chip">
-      <view class="chip-dot"></view>
-      <text>{{currentHouse}}</text>
-    </view>
+    <view class="hero-title">绑定房屋\n开启从容缴费</view>
     <view class="amount-panel">
-      <view class="panel-label">本期应缴</view>
+      <view class="panel-label">首次使用请先绑定您的房屋</view>
       <view class="amount-row">
-        <view class="hero-amount amount">¥ {{totalAmount}}</view>
-        <button class="gold-button pay-btn" bindtap="goPay">立即缴纳</button>
+        <view class="hero-amount amount"> </view>
+        <button class="gold-button pay-btn" bindtap="goBind">立即绑定</button>
       </view>
     </view>
   </view>
 
-  <view class="quick-grid">
-    <block wx:for="{{quickActions}}" wx:key="title">
-      <view class="quick-card {{item.active ? 'quick-active' : ''}}" data-index="{{index}}" bindtap="handleQuickTap">
-        <view class="quick-icon">{{item.icon}}</view>
-        <view class="quick-title">{{item.title}}</view>
-        <view class="quick-desc">{{item.desc}}</view>
+  <!-- 正常态 -->
+  <block wx:if="{{ready && !noHouse}}">
+    <view class="hero-card">
+      <view class="hero-kicker">PROPERTY SERVICE</view>
+      <view class="hero-title">优雅缴费\n从容生活</view>
+      <view class="house-chip" bindtap="switchHouse">
+        <view class="chip-dot"></view>
+        <text>{{currentHouse.displayName}}{{houses.length > 1 ? ' ⇄' : ''}}</text>
       </view>
-    </block>
-  </view>
-
-  <view class="section-head">
-    <view>
-      <view class="section-kicker">费用组成</view>
-      <view class="section-title">本月账单</view>
-    </view>
-    <view class="section-more" bindtap="goBill">查看全部</view>
-  </view>
-
-  <view class="bill-list">
-    <block wx:for="{{bills}}" wx:key="title">
-      <view class="bill-card card">
-        <view class="bill-left">
-          <view class="bill-icon {{item.theme}}">{{item.icon}}</view>
-          <view>
-            <view class="bill-title">{{item.title}}</view>
-            <view class="bill-desc">{{item.desc}}</view>
-          </view>
+      <view class="amount-panel">
+        <view class="panel-label">待缴合计（{{unpaidCount}} 笔）</view>
+        <view class="amount-row">
+          <view class="hero-amount amount">¥ {{unpaidTotal}}</view>
+          <button class="gold-button pay-btn" bindtap="goPay">立即缴纳</button>
         </view>
-        <view class="bill-amount amount">¥{{item.amount}}</view>
       </view>
-    </block>
-  </view>
-
-  <view class="service-card card">
-    <view>
-      <view class="service-kicker">尊享服务</view>
-      <view class="service-title">开通自动提醒，避免逾期</view>
-      <view class="service-desc">每月账单生成后自动推送微信提醒</view>
     </view>
-    <button class="mini-dark">开启</button>
-  </view>
+
+    <view class="quick-grid">
+      <block wx:for="{{quickActions}}" wx:key="title">
+        <view class="quick-card {{item.active ? 'quick-active' : ''}}" data-index="{{index}}" bindtap="handleQuickTap">
+          <view class="quick-icon">{{item.icon}}</view>
+          <view class="quick-title">{{item.title}}</view>
+          <view class="quick-desc">{{item.desc}}</view>
+        </view>
+      </block>
+    </view>
+
+    <view class="section-head">
+      <view>
+        <view class="section-kicker">待缴费用</view>
+        <view class="section-title">本期账单</view>
+      </view>
+      <view class="section-more" bindtap="goBill">查看全部</view>
+    </view>
+
+    <view class="bill-list">
+      <block wx:for="{{bills}}" wx:key="id">
+        <view class="bill-card card">
+          <view class="bill-left">
+            <view class="bill-icon {{item.theme}}">{{item.icon}}</view>
+            <view>
+              <view class="bill-title">{{item.title}}</view>
+              <view class="bill-desc">{{item.desc}}</view>
+            </view>
+          </view>
+          <view class="bill-amount amount">¥{{item.amount}}</view>
+        </view>
+      </block>
+      <view wx:if="{{bills.length === 0}}" class="service-card card">
+        <view>
+          <view class="service-kicker">全部缴清</view>
+          <view class="service-title">当前房屋没有待缴账单</view>
+          <view class="service-desc">账单生成后将自动推送微信提醒</view>
+        </view>
+      </view>
+    </view>
+  </block>
 </view>

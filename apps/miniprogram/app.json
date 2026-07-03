@@ -4,7 +4,9 @@
     "pages/bill/bill",
     "pages/pay-confirm/pay-confirm",
     "pages/pay-success/pay-success",
-    "pages/mine/mine"
+    "pages/mine/mine",
+    "pages/bind-house/bind-house",
+    "pages/payments/payments"
   ],
   "window": {
     "navigationStyle": "custom",
