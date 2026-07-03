@@ -2,52 +2,79 @@
   padding-bottom: 48rpx;
 }
 
+/* ---------- 标题行 ---------- */
+.head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.house-pill {
+  max-width: 320rpx;
+  padding: 10rpx 24rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #5c5245;
+  background: rgba(255, 250, 242, 0.86);
+  border: 1rpx solid rgba(201, 166, 107, 0.35);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 汇总细条 ---------- */
 .summary-card {
-  margin-top: 34rpx;
-  padding: 42rpx 36rpx;
-  border-radius: 52rpx;
+  margin-top: 24rpx;
+  padding: 24rpx 30rpx;
+  border-radius: 36rpx;
   color: #fff;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   background: radial-gradient(circle at 90% 0%, rgba(201, 166, 107, 0.72), transparent 30%), linear-gradient(145deg, #102033, #223f59 64%, #5f7f86);
-  box-shadow: 0 32rpx 78rpx rgba(16, 32, 51, 0.24);
+  box-shadow: 0 22rpx 54rpx rgba(16, 32, 51, 0.2);
 }
 
 .summary-label {
   color: rgba(255, 255, 255, 0.72);
-  font-size: 24rpx;
-  letter-spacing: 4rpx;
+  font-size: 22rpx;
+  letter-spacing: 2rpx;
 }
 
 .summary-amount {
-  margin-top: 12rpx;
-  font-size: 62rpx;
+  margin-top: 6rpx;
+  font-size: 46rpx;
   font-weight: 900;
 }
 
 .summary-btn {
-  height: 76rpx;
-  padding: 0 28rpx;
+  height: 68rpx;
+  padding: 0 30rpx;
   font-size: 25rpx;
+  flex-shrink: 0;
 }
 
-.tabs {
-  margin-top: 28rpx;
-  padding: 10rpx;
+/* ---------- 筛选区（状态 + 科目 同卡） ---------- */
+.filter-panel {
+  margin-top: 20rpx;
+  padding: 10rpx 12rpx;
+}
+
+.tabs-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8rpx;
 }
 
 .tab-item {
-  height: 70rpx;
+  height: 60rpx;
   border-radius: 999rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #82786c;
-  font-size: 26rpx;
+  font-size: 25rpx;
   font-weight: 700;
 }
 
@@ -56,154 +83,52 @@
   background: linear-gradient(145deg, #fff1c8, #ead0a0);
 }
 
-.bill-stack {
-  margin-top: 24rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 22rpx;
+.filter-divider {
+  height: 1rpx;
+  margin: 10rpx 8rpx;
+  background: rgba(16, 32, 51, 0.06);
 }
 
-.bill-item {
-  padding: 30rpx 22rpx 30rpx 30rpx;
-  display: flex;
-  align-items: center;
-  gap: 22rpx;
-}
-
-.bill-paid {
-  opacity: 0.72;
-}
-
-.bill-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.bill-dot {
-  width: 22rpx;
-  height: 88rpx;
-  border-radius: 999rpx;
-}
-
-.sapphire { background: linear-gradient(180deg, #395875, #102033); }
-.emerald { background: linear-gradient(180deg, #6f9795, #315f63); }
-.amber { background: linear-gradient(180deg, #ddbd76, #9b743a); }
-
-.bill-name {
-  font-size: 30rpx;
-  font-weight: 900;
-}
-
-.bill-period {
-  margin-top: 10rpx;
-  color: #82786c;
-  font-size: 24rpx;
-}
-
-.bill-side {
-  text-align: right;
-}
-
-.bill-money {
-  font-size: 32rpx;
-  font-weight: 900;
-}
-
-.status {
-  display: inline-flex;
-  margin-top: 10rpx;
-  padding: 8rpx 16rpx;
-  border-radius: 999rpx;
-  color: #9b743a;
-  font-size: 22rpx;
-  font-weight: 800;
-  background: rgba(201, 166, 107, 0.16);
-}
-
-.status-paid {
-  color: #5f7f86;
-  background: rgba(95, 127, 134, 0.14);
-}
-
-/* 勾选态（动态化新增） */
-.bill-selected {
-  border: 2rpx solid #c9a66b;
-  box-shadow: 0 18rpx 44rpx rgba(155, 116, 58, 0.22);
-}
-
-/* 逾期状态 */
-.status-overdue {
-  color: #c45656;
-  background: rgba(196, 86, 86, 0.12);
-}
-
-/* 待缴账单的勾选圈（catchtap，选择动作与整卡详情分离） */
-.check-circle {
-  flex-shrink: 0;
-  width: 44rpx;
-  height: 44rpx;
-  border-radius: 50%;
-  border: 3rpx solid rgba(155, 116, 58, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 26rpx;
-  color: #fffaf2;
-  background: transparent;
-  transition: all 0.15s ease;
-}
-
-.check-on {
-  border-color: #c9a66b;
-  background: linear-gradient(145deg, #e3bd7d, #9b743a);
-  box-shadow: 0 6rpx 16rpx rgba(155, 116, 58, 0.35);
-}
-
-/* 右侧详情箭头（视觉引导：整卡可点） */
-.chevron {
-  flex-shrink: 0;
-  color: rgba(130, 120, 108, 0.55);
-  font-size: 36rpx;
-  font-weight: 300;
-  padding-left: 4rpx;
-}
-
-/* 科目筛选条（分组功能新增） */
-.filter-bar {
-  margin-top: 22rpx;
+.chips-row {
   white-space: nowrap;
 }
 
-.filter-inner {
+.chips-inner {
   display: inline-flex;
-  gap: 14rpx;
-  padding: 4rpx 4rpx;
+  gap: 10rpx;
+  padding: 2rpx 6rpx 6rpx;
 }
 
 .filter-chip {
   display: inline-flex;
-  padding: 12rpx 30rpx;
+  padding: 10rpx 24rpx;
   border-radius: 999rpx;
-  font-size: 24rpx;
-  font-weight: 700;
+  font-size: 23rpx;
+  font-weight: 600;
   color: #82786c;
-  background: rgba(255, 250, 242, 0.86);
-  border: 1rpx solid rgba(255, 255, 255, 0.78);
+  background: rgba(16, 32, 51, 0.04);
 }
 
 .chip-active {
-  color: #102033;
-  background: linear-gradient(145deg, #fff1c8, #ead0a0);
-  border-color: rgba(201, 166, 107, 0.5);
+  color: #9b743a;
+  font-weight: 800;
+  background: rgba(201, 166, 107, 0.18);
 }
 
-/* 账期分组头 */
+/* ---------- 账期分组 ---------- */
+.bill-stack {
+  margin-top: 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
 .group-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  padding: 10rpx 12rpx 0;
-  margin-top: 8rpx;
+  padding: 8rpx 12rpx 0;
+  margin-top: 6rpx;
 }
 
 .group-period {
@@ -218,9 +143,113 @@
   color: #8a7f73;
 }
 
+/* ---------- 账单卡片 ---------- */
+.bill-item {
+  padding: 26rpx 22rpx 26rpx 26rpx;
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.bill-paid {
+  opacity: 0.72;
+}
+
+.bill-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.bill-dot {
+  flex-shrink: 0;
+  width: 18rpx;
+  height: 72rpx;
+  border-radius: 999rpx;
+}
+
+.sapphire { background: linear-gradient(180deg, #395875, #102033); }
+.emerald { background: linear-gradient(180deg, #6f9795, #315f63); }
+.amber { background: linear-gradient(180deg, #ddbd76, #9b743a); }
+
+.bill-name {
+  font-size: 29rpx;
+  font-weight: 900;
+}
+
+.bill-period {
+  margin-top: 8rpx;
+  color: #82786c;
+  font-size: 23rpx;
+}
+
+.bill-side {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.bill-money {
+  font-size: 31rpx;
+  font-weight: 900;
+}
+
+.status {
+  display: inline-flex;
+  margin-top: 8rpx;
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  color: #9b743a;
+  font-size: 21rpx;
+  font-weight: 800;
+  background: rgba(201, 166, 107, 0.16);
+}
+
+.status-paid {
+  color: #5f7f86;
+  background: rgba(95, 127, 134, 0.14);
+}
+
+.status-overdue {
+  color: #c45656;
+  background: rgba(196, 86, 86, 0.12);
+}
+
+.bill-selected {
+  border: 2rpx solid #c9a66b;
+  box-shadow: 0 18rpx 44rpx rgba(155, 116, 58, 0.22);
+}
+
+/* 勾选圈（catchtap，与整卡详情分离） */
+.check-circle {
+  flex-shrink: 0;
+  width: 42rpx;
+  height: 42rpx;
+  border-radius: 50%;
+  border: 3rpx solid rgba(155, 116, 58, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  color: #fffaf2;
+  transition: all 0.15s ease;
+}
+
+.check-on {
+  border-color: #c9a66b;
+  background: linear-gradient(145deg, #e3bd7d, #9b743a);
+  box-shadow: 0 6rpx 16rpx rgba(155, 116, 58, 0.35);
+}
+
+/* 详情箭头（整卡可点的视觉引导） */
+.chevron {
+  flex-shrink: 0;
+  color: rgba(130, 120, 108, 0.55);
+  font-size: 34rpx;
+  font-weight: 300;
+}
+
 .list-end {
   text-align: center;
   color: #b3aa9d;
   font-size: 22rpx;
-  padding: 16rpx 0 8rpx;
+  padding: 14rpx 0 6rpx;
 }

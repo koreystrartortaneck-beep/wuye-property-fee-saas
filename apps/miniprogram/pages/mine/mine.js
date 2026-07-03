@@ -33,7 +33,8 @@ Page({
         .filter((b) => b.status !== 'ACTIVE')
         .map((b) => ({
           id: b.id,
-          name: `${b.communityName} ${b.displayName}`,
+          communityName: b.communityName,
+          displayName: b.displayName,
           statusLabel: b.status === 'PENDING' ? '审核中' : '已驳回',
           rejected: b.status === 'REJECTED',
           rejectReason: b.rejectReason || '',
@@ -44,7 +45,8 @@ Page({
         userName: houses.length > 0 ? `${houses[0].communityName}业主` : '业主',
         houses: houses.map((h) => ({
           houseId: h.houseId,
-          name: `${h.communityName} ${h.displayName}`,
+          communityName: h.communityName,
+          displayName: h.displayName,
           tag: RELATION_LABEL[h.relation] || h.relation,
           active: current && current.houseId === h.houseId,
         })),

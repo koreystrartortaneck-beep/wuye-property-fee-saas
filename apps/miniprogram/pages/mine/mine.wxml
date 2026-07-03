@@ -7,36 +7,38 @@
     </view>
   </view>
 
-  <view class="section-title">我的房屋</view>
-  <view class="house-list">
-    <block wx:for="{{houses}}" wx:key="houseId">
-      <view class="house-card card {{item.active ? 'house-active' : ''}}"
-            data-id="{{item.houseId}}" bindtap="pickHouse">
-        <view>
-          <view class="house-name">{{item.name}}</view>
+  <view class="section-head-row">
+    <view class="section-title">我的房屋</view>
+    <view class="section-hint" wx:if="{{houses.length > 1}}">点击卡片切换当前房屋</view>
+  </view>
+  <scroll-view class="house-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+    <view class="house-row">
+      <block wx:for="{{houses}}" wx:key="houseId">
+        <view class="house-card2 card {{item.active ? 'house-on' : ''}}"
+              data-id="{{item.houseId}}" bindtap="pickHouse">
+          <view class="house-check2" wx:if="{{item.active}}">✓</view>
+          <view class="house-community">{{item.communityName}}</view>
+          <view class="house-title">{{item.displayName}}</view>
           <view class="house-tag">{{item.tag}}</view>
         </view>
-        <view class="house-check" wx:if="{{item.active}}">✓</view>
-      </view>
-    </block>
-    <view wx:if="{{houses.length === 0}}" class="house-card card" bindtap="onMenuTap" data-key="houses">
-      <view>
-        <view class="house-name">尚未绑定房屋</view>
-        <view class="house-tag">点击去绑定</view>
-      </view>
-    </view>
-    <!-- 申请进度 -->
-    <block wx:for="{{pendingBindings}}" wx:key="id">
-      <view class="house-card card pending-card">
-        <view>
-          <view class="house-name">{{item.name}}</view>
+      </block>
+      <!-- 申请进度卡 -->
+      <block wx:for="{{pendingBindings}}" wx:key="id">
+        <view class="house-card2 card house-pending">
+          <view class="house-community">{{item.communityName}}</view>
+          <view class="house-title">{{item.displayName}}</view>
           <view class="house-tag {{item.rejected ? 'tag-rejected' : 'tag-pending'}}">
             {{item.statusLabel}}{{item.rejectReason ? '：' + item.rejectReason : ''}}
           </view>
         </view>
+      </block>
+      <!-- 绑定新房产入口 -->
+      <view class="house-card2 card house-add" bindtap="onMenuTap" data-key="houses">
+        <view class="add-plus">＋</view>
+        <view class="add-text">绑定房屋</view>
       </view>
-    </block>
-  </view>
+    </view>
+  </scroll-view>
 
   <view class="section-title menu-title">服务中心</view>
   <view class="menu-card card">

@@ -1,33 +1,41 @@
 <view class="page bill-page">
-  <view class="nav-title">账单中心</view>
-  <view class="nav-subtitle">{{house ? house.communityName + ' ' + house.displayName : '清晰记录每一笔物业费用'}}</view>
+  <!-- 标题行：标题 + 当前房屋（同一行，省高度） -->
+  <view class="head-row">
+    <view class="nav-title">账单中心</view>
+    <view class="house-pill" wx:if="{{house}}">{{house.displayName}}</view>
+  </view>
 
+  <!-- 汇总细条 -->
   <view class="summary-card">
-    <view>
-      <view class="summary-label">{{selectedIds.length > 0 ? '已选 ' + selectedIds.length + ' 笔' : '待缴合计（' + unpaidCount + ' 笔）'}}</view>
+    <view class="summary-left">
+      <view class="summary-label">{{selectedIds.length > 0 ? '已选 ' + selectedIds.length + ' 笔' : '待缴合计 · ' + unpaidCount + ' 笔'}}</view>
       <view class="summary-amount amount">¥ {{selectedIds.length > 0 ? selectedTotal : unpaidTotal}}</view>
     </view>
     <button class="gold-button summary-btn" bindtap="goPay">{{selectedIds.length > 0 ? '缴纳所选' : '全部缴纳'}}</button>
   </view>
 
-  <view class="tabs card">
-    <block wx:for="{{tabs}}" wx:key="*this">
-      <view class="tab-item {{activeTab === index ? 'tab-active' : ''}}" data-index="{{index}}" bindtap="setTab">{{item}}</view>
+  <!-- 筛选区：状态 + 科目 同卡分两行 -->
+  <view class="filter-panel card">
+    <view class="tabs-row">
+      <block wx:for="{{tabs}}" wx:key="*this">
+        <view class="tab-item {{activeTab === index ? 'tab-active' : ''}}" data-index="{{index}}" bindtap="setTab">{{item}}</view>
+      </block>
+    </view>
+    <block wx:if="{{filters.length > 2}}">
+      <view class="filter-divider"></view>
+      <scroll-view class="chips-row" scroll-x>
+        <view class="chips-inner">
+          <view
+            wx:for="{{filters}}"
+            wx:key="ruleId"
+            class="filter-chip {{activeRuleId === item.ruleId ? 'chip-active' : ''}}"
+            data-id="{{item.ruleId}}"
+            bindtap="setFilter"
+          >{{item.name}}</view>
+        </view>
+      </scroll-view>
     </block>
   </view>
-
-  <!-- 费用科目筛选条 -->
-  <scroll-view wx:if="{{filters.length > 2}}" class="filter-bar" scroll-x enable-flick="{{true}}">
-    <view class="filter-inner">
-      <view
-        wx:for="{{filters}}"
-        wx:key="ruleId"
-        class="filter-chip {{activeRuleId === item.ruleId ? 'chip-active' : ''}}"
-        data-id="{{item.ruleId}}"
-        bindtap="setFilter"
-      >{{item.name}}</view>
-    </view>
-  </scroll-view>
 
   <!-- 按账期分组 -->
   <view class="bill-stack">
