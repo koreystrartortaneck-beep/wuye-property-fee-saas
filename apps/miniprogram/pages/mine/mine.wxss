@@ -3,7 +3,7 @@
 }
 
 .profile-card {
-  margin-top: 4rpx;
+  margin-top: 28rpx;
   padding: 44rpx 36rpx;
   border-radius: 56rpx;
   display: flex;
@@ -44,47 +44,18 @@
   font-weight: 900;
 }
 
-.section-head-row {
+/* ---- 方案3：当前房屋单卡 + 弹出切换 ---- */
+.current-house {
+  padding: 30rpx;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  margin: 36rpx 4rpx 20rpx;
-}
-
-.section-head-row .section-title {
-  margin: 0;
-}
-
-.section-hint {
-  font-size: 22rpx;
-  color: #a89d8f;
-}
-
-/* 横滑房屋卡片 */
-.house-scroll {
-  white-space: nowrap;
-  margin: 0 -32rpx;          /* 让卡片滑出页面边距，更通透 */
-  padding: 0 32rpx;
-  box-sizing: content-box;
-}
-
-.house-row {
-  display: inline-flex;
   gap: 20rpx;
-  padding: 6rpx 32rpx 16rpx 0;
 }
 
-.house-card2 {
-  position: relative;
-  width: 300rpx;
-  flex-shrink: 0;
-  padding: 28rpx 26rpx;
-  white-space: normal;
-}
-
-.house-on {
-  background: linear-gradient(135deg, #fbf0db, #fffaf2 72%);
-  border: 2rpx solid rgba(201, 166, 107, 0.55);
+.ch-left {
+  min-width: 0;
+  flex: 1;
 }
 
 .house-community {
@@ -92,75 +63,83 @@
   color: #8a7f73;
 }
 
-.house-title {
+.ch-title-row {
   margin-top: 8rpx;
-  font-size: 28rpx;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  min-width: 0;
+}
+
+.ch-name {
+  font-size: 30rpx;
   font-weight: 900;
-  line-height: 1.35;
-  min-height: 76rpx;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .house-tag {
+  flex-shrink: 0;
   display: inline-flex;
-  margin-top: 14rpx;
   padding: 6rpx 16rpx;
   border-radius: 999rpx;
   color: #9b743a;
   font-size: 21rpx;
   font-weight: 800;
   background: rgba(201, 166, 107, 0.16);
-  max-width: 100%;
+}
+
+.ch-right {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.ch-count {
+  font-size: 21rpx;
+  color: #a89d8f;
+}
+
+.ch-switch {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  font-weight: 800;
+  color: #9b743a;
+}
+
+/* 申请进度细行 */
+.pending-lines {
+  margin-top: 16rpx;
+  padding: 0 12rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.pending-line {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.pending-dot {
+  flex-shrink: 0;
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #d9a94e;
+}
+
+.dot-rejected {
+  background: #c45656;
+}
+
+.pending-text {
+  font-size: 23rpx;
+  color: #8a7f73;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.house-check2 {
-  position: absolute;
-  top: 20rpx;
-  right: 20rpx;
-  width: 40rpx;
-  height: 40rpx;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 24rpx;
-  font-weight: 900;
-  background: #9b743a;
-}
-
-.house-pending {
-  opacity: 0.9;
-}
-
-/* 绑定新房产入口卡 */
-.house-add {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border: 2rpx dashed rgba(155, 116, 58, 0.4);
-  background: rgba(255, 250, 242, 0.5);
-  box-shadow: none;
-}
-
-.add-plus {
-  font-size: 52rpx;
-  color: #c9a66b;
-  line-height: 1;
-}
-
-.add-text {
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  color: #9b743a;
-  font-weight: 700;
 }
 
 .menu-title {

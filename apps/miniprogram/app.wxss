@@ -85,3 +85,31 @@ button::after {
   font-family: DIN Alternate, SF Pro Display, Arial, sans-serif;
   letter-spacing: -1rpx;
 }
+
+/* ---- 自定义导航（三个 tab 页共用，标题行与系统胶囊同行对齐） ---- */
+.page.has-navbar {
+  padding-top: 0;
+}
+
+.nav-row {
+  display: flex;
+  align-items: center;
+}
+
+.nav-row-title {
+  font-size: 36rpx;
+  font-weight: 800;
+  letter-spacing: -0.5rpx;
+  color: #102033;
+  /* 右侧空间留给系统胶囊 */
+  max-width: 480rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-sub-row {
+  margin-top: 10rpx;
+  color: #8a7f73;
+  font-size: 24rpx;
+}

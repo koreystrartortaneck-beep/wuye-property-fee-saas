@@ -5,10 +5,12 @@ const RELATION_LABEL = { OWNER: '业主', FAMILY: '家属', TENANT: '租客' };
 
 Page({
   data: {
+    nav: { spacerPx: 48, rowPx: 32 },
     userName: '业主',
     phone: '',
     avatarText: '宅',
-    houses: [],
+    currentHouse: null, // {communityName, displayName, tag}
+    houseCount: 0,
     pendingBindings: [],
     menus: [
       { key: 'houses', title: '我的房屋', desc: '绑定新房产或切换' },
@@ -16,6 +18,10 @@ Page({
       { key: 'notify', title: '消息提醒', desc: '出账与逾期自动推送' },
       { key: 'service', title: '联系客服', desc: '物业管家在线协助' },
     ],
+  },
+
+  onLoad() {
+    this.setData({ nav: getApp().globalData.nav });
   },
 
   async onShow() {
@@ -28,7 +34,6 @@ Page({
         request('/owner/my/bindings'),
       ]);
       const current = app.globalData.currentHouse;
-      // 审核中 / 被驳回的申请
       const pendingBindings = bindings
         .filter((b) => b.status !== 'ACTIVE')
         .map((b) => ({
@@ -43,35 +48,55 @@ Page({
         pendingBindings,
         phone: me.phone ? me.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : '未绑定手机号',
         userName: houses.length > 0 ? `${houses[0].communityName}业主` : '业主',
-        houses: houses.map((h) => ({
-          houseId: h.houseId,
-          communityName: h.communityName,
-          displayName: h.displayName,
-          tag: RELATION_LABEL[h.relation] || h.relation,
-          active: current && current.houseId === h.houseId,
-        })),
+        houseCount: houses.length,
+        currentHouse: current
+          ? {
+              communityName: current.communityName,
+              displayName: current.displayName,
+              tag: RELATION_LABEL[current.relation] || current.relation,
+            }
+          : null,
       });
     } catch (e) {
       console.error(e);
     }
   },
 
-  /** 点房屋卡片 → 设为当前房屋 */
-  pickHouse(e) {
-    const houseId = e.currentTarget.dataset.id;
+  /** 点当前房屋卡：弹出切换菜单（末项为绑定新房屋） */
+  switchHouse() {
     const app = getApp();
-    const target = app.globalData.houses.find((h) => h.houseId === houseId);
-    if (!target) return;
-    app.globalData.currentHouse = target;
-    this.setData({
-      houses: this.data.houses.map((h) => ({ ...h, active: h.houseId === houseId })),
+    const houses = app.globalData.houses || [];
+    const items = houses.map((h) => `${h.communityName} ${h.displayName}`);
+    items.push('＋ 绑定新房屋');
+    wx.showActionSheet({
+      itemList: items.slice(0, 6), // 微信上限 6 项
+      success: (res) => {
+        if (res.tapIndex === items.length - 1) {
+          this.goBind();
+          return;
+        }
+        const target = houses[res.tapIndex];
+        if (!target) return;
+        app.globalData.currentHouse = target;
+        this.setData({
+          currentHouse: {
+            communityName: target.communityName,
+            displayName: target.displayName,
+            tag: RELATION_LABEL[target.relation] || target.relation,
+          },
+        });
+        wx.showToast({ title: '已切换当前房屋', icon: 'success' });
+      },
     });
-    wx.showToast({ title: '已切换当前房屋', icon: 'success' });
+  },
+
+  goBind() {
+    wx.navigateTo({ url: '/pages/bind-house/bind-house' });
   },
 
   onMenuTap(e) {
     const key = e.currentTarget.dataset.key;
-    if (key === 'houses') wx.navigateTo({ url: '/pages/bind-house/bind-house' });
+    if (key === 'houses') this.switchHouse();
     if (key === 'payments') wx.navigateTo({ url: '/pages/payments/payments' });
     if (key === 'notify') wx.showToast({ title: '账单生成后将自动推送微信提醒', icon: 'none' });
     if (key === 'service') wx.showToast({ title: '请联系物业服务中心', icon: 'none' });

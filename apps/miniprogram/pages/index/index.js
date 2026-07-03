@@ -5,6 +5,7 @@ const THEMES = ['sapphire', 'emerald', 'amber'];
 
 Page({
   data: {
+    nav: { spacerPx: 48, rowPx: 32 },
     ready: false,
     noHouse: false,
     currentHouse: null,
@@ -17,6 +18,10 @@ Page({
       { title: '缴费记录', desc: '历史付款凭证', icon: '票' },
       { title: '我的房屋', desc: '绑定与切换', icon: '房' },
     ],
+  },
+
+  onLoad() {
+    this.setData({ nav: getApp().globalData.nav });
   },
 
   async onShow() {

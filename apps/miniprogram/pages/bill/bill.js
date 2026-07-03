@@ -7,6 +7,7 @@ const STATUS_LABEL = { UNPAID: '待缴', PAID: '已缴', CANCELED: '已作废' }
 
 Page({
   data: {
+    nav: { spacerPx: 48, rowPx: 32 },
     tabs: ['全部', '待缴', '已缴'],
     activeTab: 1,
     house: null,
@@ -22,6 +23,10 @@ Page({
     selectedTotal: '0.00',
     unpaidCount: 0,
     unpaidTotal: '0.00',
+  },
+
+  onLoad() {
+    this.setData({ nav: getApp().globalData.nav });
   },
 
   async onShow() {

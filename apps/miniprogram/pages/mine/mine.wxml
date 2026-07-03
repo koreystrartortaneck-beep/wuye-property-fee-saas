@@ -1,4 +1,10 @@
-<view class="page mine-page">
+<view class="page mine-page has-navbar">
+  <view style="height: {{nav.spacerPx}}px"></view>
+  <view class="nav-row" style="height: {{nav.rowPx}}px">
+    <view class="nav-row-title">个人中心</view>
+  </view>
+  <view class="nav-sub-row">账户与房屋管理</view>
+
   <view class="profile-card">
     <view class="avatar">{{avatarText}}</view>
     <view>
@@ -7,38 +13,41 @@
     </view>
   </view>
 
-  <view class="section-head-row">
-    <view class="section-title">我的房屋</view>
-    <view class="section-hint" wx:if="{{houses.length > 1}}">点击卡片切换当前房屋</view>
-  </view>
-  <scroll-view class="house-scroll" scroll-x enhanced show-scrollbar="{{false}}">
-    <view class="house-row">
-      <block wx:for="{{houses}}" wx:key="houseId">
-        <view class="house-card2 card {{item.active ? 'house-on' : ''}}"
-              data-id="{{item.houseId}}" bindtap="pickHouse">
-          <view class="house-check2" wx:if="{{item.active}}">✓</view>
-          <view class="house-community">{{item.communityName}}</view>
-          <view class="house-title">{{item.displayName}}</view>
-          <view class="house-tag">{{item.tag}}</view>
-        </view>
-      </block>
-      <!-- 申请进度卡 -->
-      <block wx:for="{{pendingBindings}}" wx:key="id">
-        <view class="house-card2 card house-pending">
-          <view class="house-community">{{item.communityName}}</view>
-          <view class="house-title">{{item.displayName}}</view>
-          <view class="house-tag {{item.rejected ? 'tag-rejected' : 'tag-pending'}}">
-            {{item.statusLabel}}{{item.rejectReason ? '：' + item.rejectReason : ''}}
-          </view>
-        </view>
-      </block>
-      <!-- 绑定新房产入口 -->
-      <view class="house-card2 card house-add" bindtap="onMenuTap" data-key="houses">
-        <view class="add-plus">＋</view>
-        <view class="add-text">绑定房屋</view>
+  <view class="section-title">我的房屋</view>
+
+  <!-- 方案3：只展示当前房屋，点击弹出切换 -->
+  <view class="current-house card" bindtap="switchHouse" wx:if="{{currentHouse}}">
+    <view class="ch-left">
+      <view class="house-community">{{currentHouse.communityName}}</view>
+      <view class="ch-title-row">
+        <text class="ch-name">{{currentHouse.displayName}}</text>
+        <text class="house-tag">{{currentHouse.tag}}</text>
       </view>
     </view>
-  </scroll-view>
+    <view class="ch-right" wx:if="{{houseCount > 1}}">
+      <view class="ch-count">共 {{houseCount}} 套</view>
+      <view class="ch-switch">切换 ⇄</view>
+    </view>
+    <view class="ch-right" wx:else>
+      <view class="ch-switch">管理 ›</view>
+    </view>
+  </view>
+
+  <view class="current-house card" bindtap="goBind" wx:if="{{!currentHouse}}">
+    <view class="ch-left">
+      <view class="house-community">尚未绑定房屋</view>
+      <view class="ch-title-row"><text class="ch-name">点击绑定您的房屋</text></view>
+    </view>
+    <view class="ch-right"><view class="ch-switch">去绑定 ›</view></view>
+  </view>
+
+  <!-- 申请进度（细行，不占大空间） -->
+  <view wx:if="{{pendingBindings.length > 0}}" class="pending-lines">
+    <view class="pending-line" wx:for="{{pendingBindings}}" wx:key="id">
+      <text class="pending-dot {{item.rejected ? 'dot-rejected' : ''}}"></text>
+      <text class="pending-text">{{item.communityName}} {{item.displayName}} · {{item.statusLabel}}{{item.rejectReason ? '（' + item.rejectReason + '）' : ''}}</text>
+    </view>
+  </view>
 
   <view class="section-title menu-title">服务中心</view>
   <view class="menu-card card">

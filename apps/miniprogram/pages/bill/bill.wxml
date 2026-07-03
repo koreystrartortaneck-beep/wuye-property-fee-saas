@@ -1,9 +1,9 @@
-<view class="page bill-page">
-  <!-- 标题行：标题 + 当前房屋（同一行，省高度） -->
-  <view class="head-row">
-    <view class="nav-title">账单中心</view>
-    <view class="house-pill" wx:if="{{house}}">{{house.displayName}}</view>
+<view class="page bill-page has-navbar">
+  <view style="height: {{nav.spacerPx}}px"></view>
+  <view class="nav-row" style="height: {{nav.rowPx}}px">
+    <view class="nav-row-title">账单中心</view>
   </view>
+  <view class="nav-sub-row">{{house ? house.communityName + ' · ' + house.displayName : '清晰记录每一笔物业费用'}}</view>
 
   <!-- 汇总细条 -->
   <view class="summary-card">

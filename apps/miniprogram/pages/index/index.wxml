@@ -1,11 +1,9 @@
-<view class="page index-page">
-  <view class="top-line">
-    <view>
-      <view class="nav-title">{{currentHouse ? currentHouse.communityName : '物业缴费'}}</view>
-      <view class="nav-subtitle">雅致生活 · 从容缴费</view>
-    </view>
-    <view class="profile-orb">宅</view>
+<view class="page index-page has-navbar">
+  <view style="height: {{nav.spacerPx}}px"></view>
+  <view class="nav-row" style="height: {{nav.rowPx}}px">
+    <view class="nav-row-title">{{currentHouse ? currentHouse.communityName : '物业缴费'}}</view>
   </view>
+  <view class="nav-sub-row">雅致生活 · 从容缴费</view>
 
   <!-- 首屏加载态 -->
   <view wx:if="{{!ready}}" class="hero-card">
