@@ -101,4 +101,35 @@ describe('收缴统计与业主绑定查询', () => {
     expect(res.body.data[0].status).toBe('PENDING');
     expect(res.body.data[0].communityName).toBe('统计小区');
   });
+
+  it('账单科目筛选：filters 列表 + ruleId 过滤', async () => {
+    const wx = await request(app.getHttpServer()).post('/api/v1/auth/wx-login').send({ code: 'mock:sts-a1-user' });
+    const ownerToken = wx.body.data.token;
+    const user = await prisma.raw.wxUser.findUnique({ where: { openid: 'sts-a1-user' } });
+    const house = await prisma.raw.house.findFirst({ where: { tenantId } });
+    // 转正绑定后才可查账单
+    await prisma.raw.houseBinding.updateMany({
+      where: { wxUserId: user!.id, houseId: house!.id },
+      data: { status: 'ACTIVE' },
+    });
+
+    const filters = await request(app.getHttpServer())
+      .get(`/api/v1/owner/bills/filters?houseId=${house!.id}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(filters.body.data).toHaveLength(1);
+    expect(filters.body.data[0].name).toBe('物业费');
+
+    const filtered = await request(app.getHttpServer())
+      .get(`/api/v1/owner/bills?houseId=${house!.id}&ruleId=${filters.body.data[0].ruleId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(filtered.body.data.total).toBe(2);
+
+    const none = await request(app.getHttpServer())
+      .get(`/api/v1/owner/bills?houseId=${house!.id}&ruleId=nonexistent`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(none.body.data.total).toBe(0);
+  });
 });

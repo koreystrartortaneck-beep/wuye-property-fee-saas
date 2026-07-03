@@ -16,35 +16,57 @@
     </block>
   </view>
 
+  <!-- 费用科目筛选条 -->
+  <scroll-view wx:if="{{filters.length > 2}}" class="filter-bar" scroll-x enable-flick="{{true}}">
+    <view class="filter-inner">
+      <view
+        wx:for="{{filters}}"
+        wx:key="ruleId"
+        class="filter-chip {{activeRuleId === item.ruleId ? 'chip-active' : ''}}"
+        data-id="{{item.ruleId}}"
+        bindtap="setFilter"
+      >{{item.name}}</view>
+    </view>
+  </scroll-view>
+
+  <!-- 按账期分组 -->
   <view class="bill-stack">
-    <block wx:for="{{bills}}" wx:key="id">
-      <view class="bill-item card {{item.paid ? 'bill-paid' : ''}} {{selectedIds.indexOf(item.id) >= 0 ? 'bill-selected' : ''}}"
-            data-index="{{index}}" bindtap="goDetailByIndex">
-        <!-- 待缴：勾选圈；其他：色条 -->
-        <view wx:if="{{!item.paid}}"
-              class="check-circle {{selectedIds.indexOf(item.id) >= 0 ? 'check-on' : ''}}"
-              data-index="{{index}}" catchtap="toggleSelect">
-          <text wx:if="{{selectedIds.indexOf(item.id) >= 0}}">✓</text>
-        </view>
-        <view wx:else class="bill-dot {{item.theme}}"></view>
-
-        <view class="bill-info">
-          <view class="bill-name">{{item.title}}</view>
-          <view class="bill-period">{{item.subline}}</view>
-        </view>
-
-        <view class="bill-side">
-          <view class="bill-money amount">¥{{item.amount}}</view>
-          <view class="status {{item.paid ? 'status-paid' : ''}} {{item.overdue ? 'status-overdue' : ''}}">{{item.status}}</view>
-        </view>
-        <view class="chevron">›</view>
+    <block wx:for="{{groups}}" wx:key="period" wx:for-item="group">
+      <view class="group-head">
+        <view class="group-period">{{group.period}}</view>
+        <view class="group-subtotal">{{group.count}} 笔 · ¥{{group.subtotal}}</view>
       </view>
+      <block wx:for="{{group.items}}" wx:key="id">
+        <view class="bill-item card {{item.paid ? 'bill-paid' : ''}} {{selectedIds.indexOf(item.id) >= 0 ? 'bill-selected' : ''}}"
+              data-id="{{item.id}}" bindtap="goDetailById">
+          <view wx:if="{{!item.paid}}"
+                class="check-circle {{selectedIds.indexOf(item.id) >= 0 ? 'check-on' : ''}}"
+                data-id="{{item.id}}" catchtap="toggleSelect">
+            <text wx:if="{{selectedIds.indexOf(item.id) >= 0}}">✓</text>
+          </view>
+          <view wx:else class="bill-dot {{item.theme}}"></view>
+
+          <view class="bill-info">
+            <view class="bill-name">{{item.title}}</view>
+            <view class="bill-period">{{item.subline}}</view>
+          </view>
+
+          <view class="bill-side">
+            <view class="bill-money amount">¥{{item.amount}}</view>
+            <view class="status {{item.paid ? 'status-paid' : ''}} {{item.overdue ? 'status-overdue' : ''}}">{{item.status}}</view>
+          </view>
+          <view class="chevron">›</view>
+        </view>
+      </block>
     </block>
+
     <view wx:if="{{bills.length === 0}}" class="bill-item card">
       <view class="bill-info">
         <view class="bill-name">暂无账单</view>
         <view class="bill-period">{{house ? '当前分类下没有账单' : '请先在首页绑定房屋'}}</view>
       </view>
     </view>
+
+    <view wx:if="{{bills.length > 0 && bills.length >= total}}" class="list-end">已显示全部 {{total}} 笔</view>
   </view>
 </view>

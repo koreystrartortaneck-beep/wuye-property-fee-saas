@@ -17,6 +17,11 @@ class ListOwnerBillsQuery extends PageQuery {
   @IsOptional()
   @IsIn(BILL_STATUSES as unknown as string[])
   status?: BillStatus;
+
+  /** 按费用科目（规则）过滤 */
+  @IsOptional()
+  @IsString()
+  ruleId?: string;
 }
 
 @Injectable()
@@ -26,9 +31,28 @@ export class OwnerBillsService {
     private readonly houses: OwnerHousesService,
   ) {}
 
+  /** 该房屋名下出现过的费用科目（筛选条用） */
+  async filters(ownerId: string, houseId: string) {
+    await this.houses.assertOwnerHouse(ownerId, houseId);
+    const grouped = await this.prisma.raw.bill.groupBy({
+      by: ['ruleId'],
+      where: { houseId },
+    });
+    if (grouped.length === 0) return [];
+    const rules = await this.prisma.raw.feeRule.findMany({
+      where: { id: { in: grouped.map((g) => g.ruleId) } },
+      select: { id: true, name: true },
+    });
+    return rules.map((r) => ({ ruleId: r.id, name: r.name }));
+  }
+
   async list(ownerId: string, q: ListOwnerBillsQuery) {
     await this.houses.assertOwnerHouse(ownerId, q.houseId);
-    const where = { houseId: q.houseId, ...(q.status ? { status: q.status } : {}) };
+    const where = {
+      houseId: q.houseId,
+      ...(q.status ? { status: q.status } : {}),
+      ...(q.ruleId ? { ruleId: q.ruleId } : {}),
+    };
     const [list, total] = await Promise.all([
       this.prisma.raw.bill.findMany({
         where,
@@ -91,6 +115,11 @@ export class OwnerBillsController {
   @Get('summary')
   summary(@Current() cur: CurrentOwner, @Query('houseId') houseId?: string) {
     return this.service.summary(cur.ownerId, houseId);
+  }
+
+  @Get('filters')
+  filters(@Current() cur: CurrentOwner, @Query('houseId') houseId: string) {
+    return this.service.filters(cur.ownerId, houseId);
   }
 
   @Get(':id')

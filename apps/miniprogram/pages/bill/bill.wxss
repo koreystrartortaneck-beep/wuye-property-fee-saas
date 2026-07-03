@@ -167,3 +167,60 @@
   font-weight: 300;
   padding-left: 4rpx;
 }
+
+/* 科目筛选条（分组功能新增） */
+.filter-bar {
+  margin-top: 22rpx;
+  white-space: nowrap;
+}
+
+.filter-inner {
+  display: inline-flex;
+  gap: 14rpx;
+  padding: 4rpx 4rpx;
+}
+
+.filter-chip {
+  display: inline-flex;
+  padding: 12rpx 30rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #82786c;
+  background: rgba(255, 250, 242, 0.86);
+  border: 1rpx solid rgba(255, 255, 255, 0.78);
+}
+
+.chip-active {
+  color: #102033;
+  background: linear-gradient(145deg, #fff1c8, #ead0a0);
+  border-color: rgba(201, 166, 107, 0.5);
+}
+
+/* 账期分组头 */
+.group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 10rpx 12rpx 0;
+  margin-top: 8rpx;
+}
+
+.group-period {
+  font-size: 28rpx;
+  font-weight: 900;
+  color: #102033;
+  letter-spacing: 1rpx;
+}
+
+.group-subtotal {
+  font-size: 22rpx;
+  color: #8a7f73;
+}
+
+.list-end {
+  text-align: center;
+  color: #b3aa9d;
+  font-size: 22rpx;
+  padding: 16rpx 0 8rpx;
+}
