@@ -11,8 +11,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: radial-gradient(circle at 90% 0%, rgba(201, 166, 107, 0.72), transparent 30%), linear-gradient(145deg, #102033, #223f59 64%, #5f7f86);
-  box-shadow: 0 22rpx 54rpx rgba(16, 32, 51, 0.2);
+  background: radial-gradient(circle at 90% 0%, rgba(201, 166, 107, 0.72), transparent 30%), linear-gradient(145deg, #2a2144, #3d2f5e 64%, #7b6f95);
+  box-shadow: 0 22rpx 54rpx rgba(42, 33, 68, 0.2);
 }
 
 .summary-label {
@@ -58,14 +58,14 @@
 }
 
 .tab-active {
-  color: #102033;
+  color: #2a2144;
   background: linear-gradient(145deg, #fff1c8, #ead0a0);
 }
 
 .filter-divider {
   height: 1rpx;
   margin: 10rpx 8rpx;
-  background: rgba(16, 32, 51, 0.06);
+  background: rgba(42, 33, 68, 0.06);
 }
 
 .chips-row {
@@ -85,7 +85,7 @@
   font-size: 23rpx;
   font-weight: 600;
   color: #82786c;
-  background: rgba(16, 32, 51, 0.04);
+  background: rgba(42, 33, 68, 0.04);
 }
 
 .chip-active {
@@ -113,7 +113,7 @@
 .group-period {
   font-size: 28rpx;
   font-weight: 900;
-  color: #102033;
+  color: #2a2144;
   letter-spacing: 1rpx;
 }
 
@@ -146,7 +146,7 @@
   border-radius: 999rpx;
 }
 
-.sapphire { background: linear-gradient(180deg, #395875, #102033); }
+.sapphire { background: linear-gradient(180deg, #514271, #2a2144); }
 .emerald { background: linear-gradient(180deg, #6f9795, #315f63); }
 .amber { background: linear-gradient(180deg, #ddbd76, #9b743a); }
 
@@ -183,8 +183,8 @@
 }
 
 .status-paid {
-  color: #5f7f86;
-  background: rgba(95, 127, 134, 0.14);
+  color: #7b6f95;
+  background: rgba(123, 111, 149, 0.14);
 }
 
 .status-overdue {

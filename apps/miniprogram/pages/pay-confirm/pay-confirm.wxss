@@ -8,8 +8,8 @@
   border-radius: 58rpx;
   color: #fff;
   text-align: center;
-  background: radial-gradient(circle at 86% 0%, rgba(201, 166, 107, 0.78), transparent 30%), linear-gradient(145deg, #102033, #263f5a 66%, #5f7f86);
-  box-shadow: 0 34rpx 80rpx rgba(16, 32, 51, 0.24);
+  background: radial-gradient(circle at 86% 0%, rgba(201, 166, 107, 0.78), transparent 30%), linear-gradient(145deg, #2a2144, #443465 66%, #7b6f95);
+  box-shadow: 0 34rpx 80rpx rgba(42, 33, 68, 0.24);
 }
 
 .pay-label {
@@ -53,7 +53,7 @@
   justify-content: space-between;
   color: #5f574d;
   font-size: 26rpx;
-  border-top: 1rpx solid rgba(16, 32, 51, 0.06);
+  border-top: 1rpx solid rgba(42, 33, 68, 0.06);
 }
 
 .method-card {

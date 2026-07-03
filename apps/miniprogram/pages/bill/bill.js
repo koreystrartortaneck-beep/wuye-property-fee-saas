@@ -20,6 +20,7 @@ Page({
     total: 0,
     loadingMore: false,
     selectedIds: [],
+    selMap: {}, // WXML 不支持 indexOf()，用查表渲染选中态
     selectedTotal: '0.00',
     unpaidCount: 0,
     unpaidTotal: '0.00',
@@ -54,7 +55,7 @@ Page({
   },
 
   async reload() {
-    this.setData({ page: 1, bills: [], groups: [], selectedIds: [], selectedTotal: '0.00' });
+    this.setData({ page: 1, bills: [], groups: [], selectedIds: [], selMap: {}, selectedTotal: '0.00' });
     await this.fetchPage(1);
   },
 
@@ -160,10 +161,12 @@ Page({
     const pos = ids.indexOf(id);
     if (pos >= 0) ids.splice(pos, 1);
     else ids.push(id);
+    const selMap = {};
+    for (const i of ids) selMap[i] = true;
     const totalCents = this.data.bills
       .filter((b) => ids.includes(b.id))
       .reduce((s, b) => s + Math.round(Number(b.amount) * 100), 0);
-    this.setData({ selectedIds: ids, selectedTotal: (totalCents / 100).toFixed(2) });
+    this.setData({ selectedIds: ids, selMap, selectedTotal: (totalCents / 100).toFixed(2) });
   },
 
   /** 合并缴纳：勾选的账单，没勾则默认全部未缴 */

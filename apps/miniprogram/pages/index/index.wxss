@@ -30,8 +30,8 @@
   overflow: hidden;
   border-radius: 56rpx;
   color: #fff;
-  background: radial-gradient(circle at 86% 2%, rgba(201, 166, 107, 0.86), transparent 28%), linear-gradient(145deg, #102033, #223f59 58%, #5f7f86);
-  box-shadow: 0 34rpx 80rpx rgba(16, 32, 51, 0.24);
+  background: radial-gradient(circle at 86% 2%, rgba(201, 166, 107, 0.86), transparent 28%), linear-gradient(145deg, #2a2144, #3d2f5e 58%, #7b6f95);
+  box-shadow: 0 34rpx 80rpx rgba(42, 33, 68, 0.24);
 }
 
 .hero-card::after {
@@ -212,7 +212,7 @@
   font-weight: 900;
 }
 
-.sapphire { background: linear-gradient(145deg, #395875, #102033); }
+.sapphire { background: linear-gradient(145deg, #514271, #2a2144); }
 .emerald { background: linear-gradient(145deg, #6f9795, #315f63); }
 .amber { background: linear-gradient(145deg, #ddbd76, #9b743a); }
 
@@ -260,5 +260,5 @@
   color: #fffaf2;
   font-size: 25rpx;
   font-weight: 800;
-  background: #102033;
+  background: #2a2144;
 }

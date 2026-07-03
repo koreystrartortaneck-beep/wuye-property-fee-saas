@@ -45,12 +45,12 @@
         <view class="group-subtotal">{{group.count}} 笔 · ¥{{group.subtotal}}</view>
       </view>
       <block wx:for="{{group.items}}" wx:key="id">
-        <view class="bill-item card {{item.paid ? 'bill-paid' : ''}} {{selectedIds.indexOf(item.id) >= 0 ? 'bill-selected' : ''}}"
+        <view class="bill-item card {{item.paid ? 'bill-paid' : ''}} {{selMap[item.id] ? 'bill-selected' : ''}}"
               data-id="{{item.id}}" bindtap="goDetailById">
           <view wx:if="{{!item.paid}}"
-                class="check-circle {{selectedIds.indexOf(item.id) >= 0 ? 'check-on' : ''}}"
+                class="check-circle {{selMap[item.id] ? 'check-on' : ''}}"
                 data-id="{{item.id}}" catchtap="toggleSelect">
-            <text wx:if="{{selectedIds.indexOf(item.id) >= 0}}">✓</text>
+            <text wx:if="{{selMap[item.id]}}">✓</text>
           </view>
           <view wx:else class="bill-dot {{item.theme}}"></view>
 

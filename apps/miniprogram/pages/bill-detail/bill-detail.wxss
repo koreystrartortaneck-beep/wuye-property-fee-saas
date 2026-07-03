@@ -31,7 +31,7 @@
   margin-top: 26rpx;
   font-size: 72rpx;
   font-weight: 800;
-  color: #102033;
+  color: #2a2144;
 }
 
 .detail-title {
@@ -61,7 +61,7 @@
   display: flex;
   justify-content: space-between;
   padding: 20rpx 0;
-  border-bottom: 1rpx solid rgba(16, 32, 51, 0.06);
+  border-bottom: 1rpx solid rgba(42, 33, 68, 0.06);
   font-size: 26rpx;
 }
 
@@ -74,7 +74,7 @@
 }
 
 .calc-value {
-  color: #102033;
+  color: #2a2144;
   font-weight: 600;
   text-align: right;
   max-width: 420rpx;

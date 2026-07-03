@@ -126,8 +126,8 @@ async function main() {
     update: {},
   });
 
-  // ------- 云璟物业第二楼盘：云璟·翡翠湾（体现一司多盘） -------
-  const feicui = await upsertCommunity(yunjing.id, '云璟·翡翠湾', '翡翠湾路 66 号');
+  // ------- 云璟物业第二楼盘：九紫莲花城（体现一司多盘） -------
+  const feicui = await upsertCommunity(yunjing.id, '九紫莲花城', '莲花大道 9 号');
   await upsertHouse(yunjing.id, feicui.id, {
     type: 'RESIDENCE', code: '5-2-1801', displayName: '5 栋 2 单元 1801',
     building: '5', unit: '2', room: '1801', area: '143.60', ownerName: '林悦', ownerPhone: '13800138000',
