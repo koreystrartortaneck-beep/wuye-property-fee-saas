@@ -6,3 +6,4 @@ dist/
 .DS_Store
 outputs/*.zip
 .workbuddy/
+apps/miniprogram/project.private.config.json
