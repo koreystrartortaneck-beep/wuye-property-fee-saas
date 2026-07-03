@@ -126,6 +126,21 @@ async function main() {
     update: {},
   });
 
+  // ------- 云璟物业第二楼盘：云璟·翡翠湾（体现一司多盘） -------
+  const feicui = await upsertCommunity(yunjing.id, '云璟·翡翠湾', '翡翠湾路 66 号');
+  await upsertHouse(yunjing.id, feicui.id, {
+    type: 'RESIDENCE', code: '5-2-1801', displayName: '5 栋 2 单元 1801',
+    building: '5', unit: '2', room: '1801', area: '143.60', ownerName: '林悦', ownerPhone: '13800138000',
+  });
+  await upsertHouse(yunjing.id, feicui.id, {
+    type: 'RESIDENCE', code: '5-2-1802', displayName: '5 栋 2 单元 1802',
+    area: '98.20', ownerName: '周明', ownerPhone: '13800138002',
+  });
+  await upsertRule(yunjing.id, feicui.id, {
+    name: '物业管理费', houseType: 'RESIDENCE', ruleType: 'AREA_PRICE',
+    params: { unitPrice: 8.8 }, period: 'MONTHLY', billDay: 1, dueDays: 20,
+  });
+
   // ------- 租户 2：示例物业（验证多租户隔离） -------
   const demo = await prisma.tenant.upsert({
     where: { code: 'demo' },
