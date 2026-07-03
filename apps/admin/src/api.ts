@@ -1,6 +1,9 @@
 import { ElMessage } from 'element-plus';
 import { store } from './store';
 
+/** API 前缀：dev 走 Vite 代理 /api/v1；生产可由 VITE_API_BASE 覆盖（如 /wuye/api/v1） */
+const API_BASE = (import.meta as any).env?.VITE_API_BASE || '/api/v1';
+
 /**
  * 统一 API 封装。
  * - 注入 Bearer token；SUPER_ADMIN 切换租户时注入 X-Tenant-Id
@@ -16,7 +19,7 @@ export async function api<T = unknown>(
     headers['X-Tenant-Id'] = store.actingTenantId;
   }
 
-  const res = await fetch(`/api/v1${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: options.method ?? 'GET',
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),

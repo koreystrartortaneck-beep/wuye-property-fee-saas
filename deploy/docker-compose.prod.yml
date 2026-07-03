@@ -1,0 +1,45 @@
+# 生产部署（与服务器上其他项目完全隔离）
+# 用法：docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
+name: wuye
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: property_fee
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:3306:3306"   # 仅本机可见，绝不暴露公网
+    volumes:
+      - wuye-mysql:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/property_fee
+      JWT_SECRET: ${JWT_SECRET}
+      WX_MODE: ${WX_MODE:-mock}
+      WX_APPID: ${WX_APPID:-}
+      WX_SECRET: ${WX_SECRET:-}
+      PAY_MODE: ${PAY_MODE:-mock}
+      TZ: Asia/Shanghai
+      PORT: "3000"
+    ports:
+      - "127.0.0.1:3000:3000"   # 仅供 Nginx 反代
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  wuye-mysql:
