@@ -35,7 +35,14 @@ function rawRequest(path, { method = 'GET', data = {} } = {}) {
  * 40100 时清 token → 重登一次 → 重放请求。
  */
 async function request(path, options = {}, retried = false) {
-  const body = await rawRequest(path, options);
+  let body;
+  try {
+    body = await rawRequest(path, options);
+  } catch (e) {
+    // 网络层失败（域名校验/无网络/服务器不可达）必须可见，不允许"没反应"
+    wx.showToast({ title: '网络连接失败，请检查是否开启开发调试', icon: 'none', duration: 3000 });
+    throw e;
+  }
   if (body.code === 0) return body.data;
 
   if (body.code === 40100 && !retried) {
