@@ -67,7 +67,7 @@
 
     <view class="bill-list">
       <block wx:for="{{bills}}" wx:key="id">
-        <view class="bill-card card">
+        <view class="bill-card card" data-id="{{item.id}}" bindtap="goBillDetail">
           <view class="bill-left">
             <view class="bill-icon {{item.theme}}">{{item.icon}}</view>
             <view>

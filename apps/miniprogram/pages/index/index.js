@@ -97,6 +97,10 @@ Page({
     wx.switchTab({ url: '/pages/bill/bill' });
   },
 
+  goBillDetail(e) {
+    wx.navigateTo({ url: `/pages/bill-detail/bill-detail?id=${e.currentTarget.dataset.id}` });
+  },
+
   /** 立即缴纳：当前房屋全部未缴账单 */
   goPay() {
     if (this.data.unpaidCount === 0) {

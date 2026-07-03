@@ -4,8 +4,8 @@
 
   <view class="summary-card">
     <view>
-      <view class="summary-label">{{selectedIds.length > 0 ? '已选 ' + selectedIds.length + ' 笔' : '合并缴纳'}}</view>
-      <view class="summary-amount amount">¥ {{selectedTotal}}</view>
+      <view class="summary-label">{{selectedIds.length > 0 ? '已选 ' + selectedIds.length + ' 笔' : '待缴合计（' + unpaidCount + ' 笔）'}}</view>
+      <view class="summary-amount amount">¥ {{selectedIds.length > 0 ? selectedTotal : unpaidTotal}}</view>
     </view>
     <button class="gold-button summary-btn" bindtap="goPay">{{selectedIds.length > 0 ? '缴纳所选' : '全部缴纳'}}</button>
   </view>
@@ -19,27 +19,31 @@
   <view class="bill-stack">
     <block wx:for="{{bills}}" wx:key="id">
       <view class="bill-item card {{item.paid ? 'bill-paid' : ''}} {{selectedIds.indexOf(item.id) >= 0 ? 'bill-selected' : ''}}"
-            data-index="{{index}}" bindtap="toggleSelect">
-        <view class="bill-main">
-          <view class="bill-dot {{item.theme}}"></view>
-          <view>
-            <view class="bill-name">{{item.title}}</view>
-            <view class="bill-period">{{item.period}}</view>
-          </view>
+            data-index="{{index}}" bindtap="goDetailByIndex">
+        <!-- 待缴：勾选圈；其他：色条 -->
+        <view wx:if="{{!item.paid}}"
+              class="check-circle {{selectedIds.indexOf(item.id) >= 0 ? 'check-on' : ''}}"
+              data-index="{{index}}" catchtap="toggleSelect">
+          <text wx:if="{{selectedIds.indexOf(item.id) >= 0}}">✓</text>
         </view>
+        <view wx:else class="bill-dot {{item.theme}}"></view>
+
+        <view class="bill-info">
+          <view class="bill-name">{{item.title}}</view>
+          <view class="bill-period">{{item.subline}}</view>
+        </view>
+
         <view class="bill-side">
           <view class="bill-money amount">¥{{item.amount}}</view>
           <view class="status {{item.paid ? 'status-paid' : ''}} {{item.overdue ? 'status-overdue' : ''}}">{{item.status}}</view>
         </view>
-        <view class="detail-entry" data-id="{{item.id}}" catchtap="goDetail">详情 ›</view>
+        <view class="chevron">›</view>
       </view>
     </block>
     <view wx:if="{{bills.length === 0}}" class="bill-item card">
-      <view class="bill-main">
-        <view>
-          <view class="bill-name">暂无账单</view>
-          <view class="bill-period">{{house ? '当前分类下没有账单' : '请先在首页绑定房屋'}}</view>
-        </view>
+      <view class="bill-info">
+        <view class="bill-name">暂无账单</view>
+        <view class="bill-period">{{house ? '当前分类下没有账单' : '请先在首页绑定房屋'}}</view>
       </view>
     </view>
   </view>

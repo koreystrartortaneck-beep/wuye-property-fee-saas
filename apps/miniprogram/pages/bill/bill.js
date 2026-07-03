@@ -16,6 +16,8 @@ Page({
     loadingMore: false,
     selectedIds: [],
     selectedTotal: '0.00',
+    unpaidCount: 0,
+    unpaidTotal: '0.00',
   },
 
   async onShow() {
@@ -44,10 +46,13 @@ Page({
     const now = new Date();
     const mapped = res.list.map((b, i) => {
       const overdue = b.status === 'UNPAID' && new Date(b.dueDate) < now;
+      let subline = b.period;
+      if (b.status === 'PAID' && b.paidAt) subline += ` · 缴于 ${b.paidAt.slice(0, 10)}`;
+      else if (b.status === 'UNPAID') subline += ` · 到期 ${(b.dueDate || '').slice(0, 10)}`;
       return {
         id: b.id,
         title: b.title,
-        period: `${b.period}${b.status === 'PAID' && b.paidAt ? ' · ' + b.paidAt.slice(0, 10) + ' 已缴' : b.status === 'UNPAID' ? ' · 到期 ' + (b.dueDate || '').slice(0, 10) : ''}`,
+        subline,
         amount: Number(b.amount).toFixed(2),
         status: overdue ? '已逾期' : STATUS_LABEL[b.status] || b.status,
         overdue,
@@ -55,10 +60,16 @@ Page({
         theme: THEMES[i % THEMES.length],
       };
     });
+    const bills = page === 1 ? mapped : this.data.bills.concat(mapped);
+    // 已加载列表中未缴部分的合计（汇总卡默认展示）
+    const unpaid = bills.filter((b) => !b.paid);
+    const unpaidCents = unpaid.reduce((s, b) => s + Math.round(Number(b.amount) * 100), 0);
     this.setData({
-      bills: page === 1 ? mapped : this.data.bills.concat(mapped),
+      bills,
       total: res.total,
       page,
+      unpaidCount: unpaid.length,
+      unpaidTotal: (unpaidCents / 100).toFixed(2),
     });
   },
 
@@ -79,20 +90,17 @@ Page({
     wx.stopPullDownRefresh();
   },
 
-  /** 查看账单详情（计费依据） */
-  goDetail(e) {
-    const id = e.currentTarget.dataset.id;
-    wx.navigateTo({ url: `/pages/bill-detail/bill-detail?id=${id}` });
-  },
-
-  /** 勾选/取消未缴账单；已缴账单点击直接看详情 */
-  toggleSelect(e) {
+  /** 整卡点击 → 账单详情（计费依据） */
+  goDetailByIndex(e) {
     const bill = this.data.bills[Number(e.currentTarget.dataset.index)];
     if (!bill) return;
-    if (bill.paid) {
-      wx.navigateTo({ url: `/pages/bill-detail/bill-detail?id=${bill.id}` });
-      return;
-    }
+    wx.navigateTo({ url: `/pages/bill-detail/bill-detail?id=${bill.id}` });
+  },
+
+  /** 左侧勾选圈：选择/取消未缴账单（catchtap，不冒泡到详情） */
+  toggleSelect(e) {
+    const bill = this.data.bills[Number(e.currentTarget.dataset.index)];
+    if (!bill || bill.paid) return;
     const ids = [...this.data.selectedIds];
     const pos = ids.indexOf(bill.id);
     if (pos >= 0) ids.splice(pos, 1);
