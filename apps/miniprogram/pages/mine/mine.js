@@ -9,6 +9,7 @@ Page({
     phone: '',
     avatarText: '宅',
     houses: [],
+    pendingBindings: [],
     menus: [
       { key: 'houses', title: '我的房屋', desc: '绑定新房产或切换' },
       { key: 'payments', title: '缴费记录', desc: '查看历史付款凭证' },
@@ -21,9 +22,24 @@ Page({
     const app = getApp();
     await app.loginReady;
     try {
-      const [me, houses] = await Promise.all([request('/auth/me'), loadMyHouses()]);
+      const [me, houses, bindings] = await Promise.all([
+        request('/auth/me'),
+        loadMyHouses(),
+        request('/owner/my/bindings'),
+      ]);
       const current = app.globalData.currentHouse;
+      // 审核中 / 被驳回的申请
+      const pendingBindings = bindings
+        .filter((b) => b.status !== 'ACTIVE')
+        .map((b) => ({
+          id: b.id,
+          name: `${b.communityName} ${b.displayName}`,
+          statusLabel: b.status === 'PENDING' ? '审核中' : '已驳回',
+          rejected: b.status === 'REJECTED',
+          rejectReason: b.rejectReason || '',
+        }));
       this.setData({
+        pendingBindings,
         phone: me.phone ? me.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : '未绑定手机号',
         userName: houses.length > 0 ? `${houses[0].communityName}业主` : '业主',
         houses: houses.map((h) => ({

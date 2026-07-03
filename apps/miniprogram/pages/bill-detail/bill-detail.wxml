@@ -1,0 +1,30 @@
+<view class="page detail-page" wx:if="{{bill}}">
+  <view class="detail-hero card">
+    <view class="detail-status {{bill.status === 'PAID' ? 'ok' : overdue ? 'bad' : ''}}">{{bill.statusLabel}}</view>
+    <view class="detail-amount amount">¥ {{bill.amount}}</view>
+    <view class="detail-title">{{bill.title}}</view>
+    <view class="detail-house">{{bill.houseName}}</view>
+  </view>
+
+  <view class="calc-card card">
+    <view class="calc-head">计费依据</view>
+    <view class="calc-row" wx:for="{{calcRows}}" wx:key="label">
+      <text class="calc-label">{{item.label}}</text>
+      <text class="calc-value">{{item.value}}</text>
+    </view>
+    <view class="calc-row">
+      <text class="calc-label">账期</text>
+      <text class="calc-value">{{bill.period}}</text>
+    </view>
+    <view class="calc-row">
+      <text class="calc-label">缴费期限</text>
+      <text class="calc-value {{overdue ? 'text-bad' : ''}}">{{bill.dueDate}}{{overdue ? '（已逾期）' : ''}}</text>
+    </view>
+    <view class="calc-row" wx:if="{{bill.paidAt}}">
+      <text class="calc-label">缴费时间</text>
+      <text class="calc-value">{{bill.paidAt}}</text>
+    </view>
+  </view>
+
+  <button wx:if="{{bill.status === 'UNPAID'}}" class="dark-button pay-now" bindtap="goPay">立即缴纳 ¥{{bill.amount}}</button>
+</view>

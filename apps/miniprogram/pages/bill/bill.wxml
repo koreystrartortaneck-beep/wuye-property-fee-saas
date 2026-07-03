@@ -29,8 +29,9 @@
         </view>
         <view class="bill-side">
           <view class="bill-money amount">¥{{item.amount}}</view>
-          <view class="status {{item.paid ? 'status-paid' : ''}}">{{item.status}}</view>
+          <view class="status {{item.paid ? 'status-paid' : ''}} {{item.overdue ? 'status-overdue' : ''}}">{{item.status}}</view>
         </view>
+        <view class="detail-entry" data-id="{{item.id}}" catchtap="goDetail">详情 ›</view>
       </view>
     </block>
     <view wx:if="{{bills.length === 0}}" class="bill-item card">

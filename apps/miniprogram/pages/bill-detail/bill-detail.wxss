@@ -1,0 +1,90 @@
+.page.detail-page {
+  padding-top: 32rpx;
+}
+
+.detail-hero {
+  padding: 48rpx 40rpx;
+  text-align: center;
+}
+
+.detail-status {
+  display: inline-block;
+  padding: 8rpx 28rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  background: rgba(230, 162, 60, 0.14);
+  color: #b8862f;
+}
+
+.detail-status.ok {
+  background: rgba(63, 125, 93, 0.12);
+  color: #3f7d5d;
+}
+
+.detail-status.bad {
+  background: rgba(196, 86, 86, 0.12);
+  color: #c45656;
+}
+
+.detail-amount {
+  margin-top: 26rpx;
+  font-size: 72rpx;
+  font-weight: 800;
+  color: #102033;
+}
+
+.detail-title {
+  margin-top: 12rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.detail-house {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #8a7f73;
+}
+
+.calc-card {
+  margin-top: 28rpx;
+  padding: 36rpx;
+}
+
+.calc-head {
+  font-size: 30rpx;
+  font-weight: 800;
+  margin-bottom: 10rpx;
+}
+
+.calc-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid rgba(16, 32, 51, 0.06);
+  font-size: 26rpx;
+}
+
+.calc-row:last-child {
+  border-bottom: none;
+}
+
+.calc-label {
+  color: #8a7f73;
+}
+
+.calc-value {
+  color: #102033;
+  font-weight: 600;
+  text-align: right;
+  max-width: 420rpx;
+}
+
+.text-bad {
+  color: #c45656;
+}
+
+.pay-now {
+  margin-top: 40rpx;
+  width: 100%;
+}
