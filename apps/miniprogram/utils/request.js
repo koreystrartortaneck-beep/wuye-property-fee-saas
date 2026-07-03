@@ -39,8 +39,9 @@ async function request(path, options = {}, retried = false) {
   try {
     body = await rawRequest(path, options);
   } catch (e) {
-    // 网络层失败（域名校验/无网络/服务器不可达）必须可见，不允许"没反应"
-    wx.showToast({ title: '网络连接失败，请检查是否开启开发调试', icon: 'none', duration: 3000 });
+    // 网络层失败必须可见，且显示原始原因便于定位（域名校验/无网络/服务器不可达）
+    const reason = (e && e.message) || '未知原因';
+    wx.showToast({ title: `网络失败: ${reason}`.slice(0, 60), icon: 'none', duration: 4000 });
     throw e;
   }
   if (body.code === 0) return body.data;
