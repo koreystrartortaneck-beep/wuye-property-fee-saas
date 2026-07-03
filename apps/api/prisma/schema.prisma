@@ -2,7 +2,9 @@
 // 所有金额 DECIMAL(12,2)；租户域表带 tenantId 并建索引
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // 本机 + 服务器容器（Debian bookworm / OpenSSL 3）
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
