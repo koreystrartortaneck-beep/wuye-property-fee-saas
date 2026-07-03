@@ -1,0 +1,358 @@
+// 物业费 SaaS 数据模型（spec §5）
+// 所有金额 DECIMAL(12,2)；租户域表带 tenantId 并建索引
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- 枚举（取值与 @pf/shared 一致） ----------
+
+enum HouseType {
+  RESIDENCE
+  PARKING
+  SHOP
+}
+
+enum RuleType {
+  AREA_PRICE
+  FIXED
+  METER
+  SHARE
+  FORMULA
+}
+
+enum RulePeriod {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum MeterType {
+  WATER
+  ELEC
+  GAS
+}
+
+enum BillStatus {
+  UNPAID
+  PAID
+  CANCELED
+}
+
+enum BillRunStatus {
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum PaymentStatus {
+  CREATED
+  SUCCESS
+  FAILED
+  CLOSED
+  REFUNDED
+}
+
+enum PaymentChannel {
+  MOCK
+  WXPAY
+}
+
+enum BindingStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+}
+
+enum BindingRelation {
+  OWNER
+  FAMILY
+  TENANT
+}
+
+enum BindingSource {
+  PHONE_MATCH
+  APPLY
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  TENANT_ADMIN
+  STAFF
+}
+
+enum NotifyType {
+  BILL_CREATED
+  DUE_SOON
+  OVERDUE
+}
+
+enum NotifyStatus {
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum EntityStatus {
+  ACTIVE
+  DISABLED
+}
+
+// ---------- 租户与组织 ----------
+
+model Tenant {
+  id           String       @id @default(cuid())
+  name         String
+  code         String       @unique
+  contactName  String?
+  contactPhone String?
+  subMchId     String? // 微信支付特约商户号（子项目5）
+  status       EntityStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+
+  admins      AdminUser[]
+  communities Community[]
+}
+
+model AdminUser {
+  id           String       @id @default(cuid())
+  tenantId     String? // null = 平台超管
+  username     String       @unique
+  passwordHash String
+  name         String
+  role         AdminRole
+  status       EntityStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model Community {
+  id        String       @id @default(cuid())
+  tenantId  String
+  name      String
+  address   String?
+  status    EntityStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+  houses House[]
+
+  @@index([tenantId])
+}
+
+model House {
+  id          String       @id @default(cuid())
+  tenantId    String
+  communityId String
+  type        HouseType    @default(RESIDENCE)
+  building    String?
+  unit        String?
+  room        String?
+  code        String // "8-1-2602" / "B2-118"
+  displayName String // "8 栋 1 单元 2602"
+  area        Decimal?     @db.Decimal(10, 2)
+  ownerName   String?
+  ownerPhone  String?
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+
+  community Community      @relation(fields: [communityId], references: [id])
+  bindings  HouseBinding[]
+  bills     Bill[]
+
+  @@unique([communityId, code])
+  @@index([tenantId])
+  @@index([ownerPhone])
+}
+
+// ---------- 业主与绑定 ----------
+
+model WxUser {
+  id        String   @id @default(cuid())
+  openid    String   @unique
+  unionid   String?
+  phone     String?
+  nickname  String?
+  createdAt DateTime @default(now())
+
+  bindings HouseBinding[]
+  payments Payment[]
+
+  @@index([phone])
+}
+
+model HouseBinding {
+  id           String          @id @default(cuid())
+  tenantId     String
+  wxUserId     String
+  houseId      String
+  relation     BindingRelation @default(OWNER)
+  status       BindingStatus   @default(PENDING)
+  source       BindingSource
+  applicantName String?
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  rejectReason String?
+  createdAt    DateTime        @default(now())
+
+  wxUser WxUser @relation(fields: [wxUserId], references: [id])
+  house  House  @relation(fields: [houseId], references: [id])
+
+  @@unique([wxUserId, houseId])
+  @@index([tenantId])
+  @@index([houseId])
+}
+
+// ---------- 计费与账单 ----------
+
+model FeeRule {
+  id          String     @id @default(cuid())
+  tenantId    String
+  communityId String
+  name        String
+  houseType   HouseType  @default(RESIDENCE)
+  ruleType    RuleType
+  params      Json
+  period      RulePeriod @default(MONTHLY)
+  billDay     Int        @default(1) // 1-28
+  dueDays     Int        @default(15)
+  enabled     Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+
+  bills    Bill[]
+  billRuns BillRun[]
+
+  @@index([tenantId])
+  @@index([communityId])
+}
+
+model MeterReading {
+  id        String    @id @default(cuid())
+  tenantId  String
+  houseId   String
+  meterType MeterType
+  period    String // "2026-07"
+  value     Decimal   @db.Decimal(12, 2)
+  prevValue Decimal?  @db.Decimal(12, 2)
+  createdBy String?
+  createdAt DateTime  @default(now())
+
+  @@unique([houseId, meterType, period])
+  @@index([tenantId])
+}
+
+model SharePool {
+  id          String   @id @default(cuid())
+  tenantId    String
+  ruleId      String
+  period      String
+  totalAmount Decimal  @db.Decimal(12, 2)
+  createdAt   DateTime @default(now())
+
+  @@unique([ruleId, period])
+  @@index([tenantId])
+}
+
+model BillRun {
+  id            String        @id @default(cuid())
+  tenantId      String
+  ruleId        String
+  period        String
+  status        BillRunStatus @default(RUNNING)
+  total         Int           @default(0)
+  generated     Int           @default(0)
+  skipped       Int           @default(0)
+  skippedDetail Json?
+  startedAt     DateTime      @default(now())
+  finishedAt    DateTime?
+
+  rule  FeeRule @relation(fields: [ruleId], references: [id])
+  bills Bill[]
+
+  @@unique([ruleId, period])
+  @@index([tenantId])
+}
+
+model Bill {
+  id          String     @id @default(cuid())
+  tenantId    String
+  communityId String
+  houseId     String
+  ruleId      String
+  billRunId   String
+  period      String
+  title       String
+  snapshot    Json
+  amount      Decimal    @db.Decimal(12, 2)
+  status      BillStatus @default(UNPAID)
+  dueDate     DateTime
+  paidAt      DateTime?
+  paymentId   String?
+  createdAt   DateTime   @default(now())
+
+  house   House   @relation(fields: [houseId], references: [id])
+  rule    FeeRule @relation(fields: [ruleId], references: [id])
+  billRun BillRun @relation(fields: [billRunId], references: [id])
+
+  paymentBills PaymentBill[]
+
+  @@unique([ruleId, houseId, period])
+  @@index([tenantId])
+  @@index([houseId, status])
+  @@index([status, dueDate])
+}
+
+// ---------- 支付与通知 ----------
+
+model Payment {
+  id            String         @id @default(cuid())
+  tenantId      String
+  wxUserId      String
+  orderNo       String         @unique
+  totalAmount   Decimal        @db.Decimal(12, 2)
+  channel       PaymentChannel @default(MOCK)
+  status        PaymentStatus  @default(CREATED)
+  transactionId String?
+  paidAt        DateTime?
+  createdAt     DateTime       @default(now())
+
+  wxUser       WxUser        @relation(fields: [wxUserId], references: [id])
+  paymentBills PaymentBill[]
+
+  @@index([tenantId])
+  @@index([wxUserId])
+}
+
+model PaymentBill {
+  paymentId String
+  billId    String
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+  bill    Bill    @relation(fields: [billId], references: [id])
+
+  @@id([paymentId, billId])
+  @@index([billId])
+}
+
+model NotifyLog {
+  id       String       @id @default(cuid())
+  tenantId String
+  wxUserId String?
+  billId   String?
+  type     NotifyType
+  channel  String       @default("MOCK") // WX_SUBSCRIBE | MOCK
+  status   NotifyStatus
+  error    String?
+  sentAt   DateTime     @default(now())
+
+  @@index([tenantId])
+  @@index([billId, type, status])
+}

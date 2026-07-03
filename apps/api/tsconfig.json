@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "baseUrl": ".",
+    "incremental": true,
+    "paths": {
+      "@pf/shared": ["../../packages/shared/src"]
+    }
+  },
+  "include": ["src", "test", "prisma"]
+}
