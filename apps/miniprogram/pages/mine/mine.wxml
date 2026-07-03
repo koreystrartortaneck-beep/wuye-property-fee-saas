@@ -1,6 +1,6 @@
 <view class="page mine-page">
   <view class="profile-card">
-    <view class="avatar">悦</view>
+    <view class="avatar">{{avatarText}}</view>
     <view>
       <view class="profile-name">{{userName}}</view>
       <view class="profile-phone">{{phone}}</view>
@@ -9,8 +9,9 @@
 
   <view class="section-title">我的房屋</view>
   <view class="house-list">
-    <block wx:for="{{houses}}" wx:key="name">
-      <view class="house-card card {{item.active ? 'house-active' : ''}}">
+    <block wx:for="{{houses}}" wx:key="houseId">
+      <view class="house-card card {{item.active ? 'house-active' : ''}}"
+            data-id="{{item.houseId}}" bindtap="pickHouse">
         <view>
           <view class="house-name">{{item.name}}</view>
           <view class="house-tag">{{item.tag}}</view>
@@ -18,12 +19,18 @@
         <view class="house-check" wx:if="{{item.active}}">✓</view>
       </view>
     </block>
+    <view wx:if="{{houses.length === 0}}" class="house-card card" bindtap="onMenuTap" data-key="houses">
+      <view>
+        <view class="house-name">尚未绑定房屋</view>
+        <view class="house-tag">点击去绑定</view>
+      </view>
+    </view>
   </view>
 
   <view class="section-title menu-title">服务中心</view>
   <view class="menu-card card">
     <block wx:for="{{menus}}" wx:key="title">
-      <view class="menu-row">
+      <view class="menu-row" data-key="{{item.key}}" bindtap="onMenuTap">
         <view>
           <view class="menu-name">{{item.title}}</view>
           <view class="menu-desc">{{item.desc}}</view>
