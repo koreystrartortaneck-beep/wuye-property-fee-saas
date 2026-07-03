@@ -21,6 +21,14 @@ export function runWithTenant<T>(tenantId: string | null, fn: () => T | Promise<
   return als.run({ tenantId }, async () => fn());
 }
 
+/**
+ * 将租户上下文绑定到当前请求的异步链路（守卫中使用）。
+ * enterWith 会对当前同步执行及其后续异步延续生效，每个请求互不影响。
+ */
+export function enterTenant(tenantId: string | null): void {
+  als.enterWith({ tenantId });
+}
+
 export function getTenantContext(): { set: boolean; tenantId: string | null } {
   const store = als.getStore();
   if (!store) return { set: false, tenantId: null };
