@@ -111,3 +111,8 @@
   margin-top: 36rpx;
   width: 100%;
 }
+
+/* 原生导航栏下收紧顶部留白 */
+.page.bind-page {
+  padding-top: 32rpx;
+}

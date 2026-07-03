@@ -92,3 +92,8 @@
 .action-btn {
   width: 100%;
 }
+
+/* 原生导航栏下收紧顶部留白 */
+.page.success-page {
+  padding-top: 32rpx;
+}

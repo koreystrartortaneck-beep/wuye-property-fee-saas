@@ -1,3 +1,6 @@
 {
-  "navigationStyle": "custom"
+  "navigationStyle": "default",
+  "navigationBarTitleText": "确认缴费",
+  "navigationBarBackgroundColor": "#FBF6EE",
+  "navigationBarTextStyle": "black"
 }

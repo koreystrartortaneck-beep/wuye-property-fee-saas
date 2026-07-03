@@ -41,3 +41,8 @@
   font-size: 22rpx;
   color: #9a9288;
 }
+
+/* 原生导航栏下收紧顶部留白 */
+.page.payments-page {
+  padding-top: 32rpx;
+}
