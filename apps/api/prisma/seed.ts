@@ -1,9 +1,9 @@
 /**
  * 演示数据 seed（幂等，可反复执行）。
- * 数据延续小程序静态原型：云璟公馆 / 林悦 / 8-1-2602 / B2-118。
+ * 数据延续小程序静态原型：九紫莲花城 / 林悦 / 8-1-2602 / B2-118。
  * 账号：
  *   平台超管  admin / admin123
- *   云璟物业  yunjing / yunjing123
+ *   九紫物业  yunjing / yunjing123
  *   示例物业  demo / demo123
  * 业主（mock 登录）：code = mock:linyue，手机号 code = phone:13800138000
  */
@@ -73,15 +73,15 @@ async function main() {
   // 平台超管
   await upsertAdmin('admin', 'admin123', '平台超管', 'SUPER_ADMIN', null);
 
-  // ------- 租户 1：云璟物业 -------
+  // ------- 租户 1：九紫物业 -------
   const yunjing = await prisma.tenant.upsert({
     where: { code: 'yunjing' },
-    create: { name: '云璟物业', code: 'yunjing', contactName: '客服中心', contactPhone: '400-800-1234' },
+    create: { name: '九紫物业', code: 'yunjing', contactName: '客服中心', contactPhone: '400-800-1234' },
     update: {},
   });
-  await upsertAdmin('yunjing', 'yunjing123', '云璟物业管理员', 'TENANT_ADMIN', yunjing.id);
+  await upsertAdmin('yunjing', 'yunjing123', '九紫物业管理员', 'TENANT_ADMIN', yunjing.id);
 
-  const gongguan = await upsertCommunity(yunjing.id, '云璟公馆', '云璟大道 88 号');
+  const gongguan = await upsertCommunity(yunjing.id, '九紫莲花城', '莲花大道 9 号');
 
   await upsertHouse(yunjing.id, gongguan.id, {
     type: 'RESIDENCE', code: '8-1-2601', displayName: '8 栋 1 单元 2601',
@@ -126,8 +126,8 @@ async function main() {
     update: {},
   });
 
-  // ------- 云璟物业第二楼盘：九紫莲花城（体现一司多盘） -------
-  const feicui = await upsertCommunity(yunjing.id, '九紫莲花城', '莲花大道 9 号');
+  // ------- 九紫物业第二楼盘：莲花半岛（体现一司多盘） -------
+  const feicui = await upsertCommunity(yunjing.id, '莲花半岛', '半岛路 66 号');
   await upsertHouse(yunjing.id, feicui.id, {
     type: 'RESIDENCE', code: '5-2-1801', displayName: '5 栋 2 单元 1801',
     building: '5', unit: '2', room: '1801', area: '143.60', ownerName: '林悦', ownerPhone: '13800138000',
@@ -160,7 +160,7 @@ async function main() {
 
   console.log('✅ seed 完成');
   console.log('   平台超管: admin / admin123');
-  console.log('   云璟物业: yunjing / yunjing123');
+  console.log('   九紫物业: yunjing / yunjing123');
   console.log('   示例物业: demo / demo123');
   console.log('   业主 mock 登录 code: mock:linyue，手机号 code: phone:13800138000');
 }
