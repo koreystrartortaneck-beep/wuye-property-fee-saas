@@ -11,7 +11,7 @@
 .bind-card-desc {
   margin-top: 8rpx;
   font-size: 24rpx;
-  color: #8a7f73;
+  color: #8b8199;
 }
 
 .phone-row {
@@ -26,7 +26,7 @@
   height: 88rpx;
   padding: 0 30rpx;
   border-radius: 999rpx;
-  background: rgba(42, 33, 68, 0.05);
+  background: rgba(37, 28, 56, 0.05);
   font-size: 28rpx;
 }
 
@@ -40,7 +40,7 @@
 
 .option-item {
   padding: 24rpx 8rpx;
-  border-bottom: 1rpx solid rgba(42, 33, 68, 0.06);
+  border-bottom: 1rpx solid rgba(37, 28, 56, 0.06);
 }
 
 .option-main {
@@ -51,13 +51,13 @@
 .option-sub {
   margin-top: 6rpx;
   font-size: 22rpx;
-  color: #8a7f73;
+  color: #8b8199;
 }
 
 .picked-line {
   margin-top: 24rpx;
   font-size: 26rpx;
-  color: #7b6f95;
+  color: #5a4680;
   font-weight: 700;
 }
 
@@ -70,7 +70,7 @@
 .house-option {
   padding: 18rpx 26rpx;
   border-radius: 999rpx;
-  background: rgba(42, 33, 68, 0.05);
+  background: rgba(37, 28, 56, 0.05);
   font-size: 24rpx;
 }
 
@@ -89,7 +89,7 @@
 .form-label {
   width: 170rpx;
   font-size: 26rpx;
-  color: #5c5245;
+  color: #55496b;
 }
 
 .form-input {
@@ -97,7 +97,7 @@
   height: 80rpx;
   padding: 0 26rpx;
   border-radius: 999rpx;
-  background: rgba(42, 33, 68, 0.05);
+  background: rgba(37, 28, 56, 0.05);
   font-size: 26rpx;
   display: flex;
   align-items: center;

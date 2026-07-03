@@ -1,8 +1,8 @@
 page {
   min-height: 100vh;
-  color: #2a2144;
+  color: #251c38;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  background: radial-gradient(circle at 12% 8%, rgba(201, 166, 107, 0.28), transparent 28%), linear-gradient(180deg, #fbf6ee 0%, #f6f0e7 100%);
+  background: radial-gradient(circle at 12% 8%, rgba(201, 166, 107, 0.16), transparent 28%), linear-gradient(180deg, #faf7f2 0%, #f5f1ec 100%);
 }
 
 view, text, button {
@@ -25,7 +25,7 @@ button::after {
 .page {
   min-height: 100vh;
   padding: 88rpx 32rpx 40rpx;
-  background: radial-gradient(circle at 86% 2%, rgba(123, 111, 149, 0.18), transparent 32%), linear-gradient(180deg, #fffaf2 0%, #f6f0e7 72%, #efe3d0 100%);
+  background: radial-gradient(circle at 86% 2%, rgba(90, 70, 128, 0.18), transparent 32%), linear-gradient(180deg, #fdfbf7 0%, #f5f1ec 72%, #ebe5df 100%);
 }
 
 .nav-title {
@@ -33,18 +33,18 @@ button::after {
   line-height: 1.15;
   font-weight: 800;
   letter-spacing: -1rpx;
-  color: #2a2144;
+  color: #251c38;
 }
 
 .nav-subtitle {
   margin-top: 10rpx;
-  color: #8a7f73;
+  color: #8b8199;
   font-size: 24rpx;
 }
 
 .card {
   border-radius: 42rpx;
-  background: rgba(255, 250, 242, 0.86);
+  background: rgba(253, 251, 247, 0.86);
   border: 1rpx solid rgba(255, 255, 255, 0.78);
   box-shadow: 0 28rpx 70rpx rgba(70, 52, 29, 0.1);
 }
@@ -56,7 +56,7 @@ button::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #2a2144;
+  color: #251c38;
   font-size: 28rpx;
   font-weight: 800;
   background: linear-gradient(145deg, #fff1c8, #c9a66b);
@@ -70,15 +70,15 @@ button::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fffaf2;
+  color: #fdfbf7;
   font-size: 28rpx;
   font-weight: 800;
-  background: linear-gradient(145deg, #443465, #2a2144);
-  box-shadow: 0 18rpx 38rpx rgba(42, 33, 68, 0.2);
+  background: linear-gradient(145deg, #3b2b57, #251c38);
+  box-shadow: 0 18rpx 38rpx rgba(37, 28, 56, 0.2);
 }
 
 .muted {
-  color: #82786c;
+  color: #7c7288;
 }
 
 .amount {
@@ -100,7 +100,7 @@ button::after {
   font-size: 36rpx;
   font-weight: 800;
   letter-spacing: -0.5rpx;
-  color: #2a2144;
+  color: #251c38;
   /* 右侧空间留给系统胶囊 */
   max-width: 480rpx;
   overflow: hidden;
@@ -110,6 +110,6 @@ button::after {
 
 .nav-sub-row {
   margin-top: 10rpx;
-  color: #8a7f73;
+  color: #8b8199;
   font-size: 24rpx;
 }

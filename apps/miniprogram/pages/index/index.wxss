@@ -30,8 +30,12 @@
   overflow: hidden;
   border-radius: 56rpx;
   color: #fff;
-  background: radial-gradient(circle at 86% 2%, rgba(201, 166, 107, 0.86), transparent 28%), linear-gradient(145deg, #2a2144, #3d2f5e 58%, #7b6f95);
-  box-shadow: 0 34rpx 80rpx rgba(42, 33, 68, 0.24);
+  /* 金色只做小面积高光；主体交给深紫渐变（避免金压紫变脏棕） */
+  background:
+    radial-gradient(circle at 88% 0%, rgba(232, 207, 160, 0.22), transparent 22%),
+    radial-gradient(circle at 15% 100%, rgba(122, 96, 168, 0.25), transparent 45%),
+    linear-gradient(150deg, #2b2145 0%, #251c38 55%, #3b2b57 100%);
+  box-shadow: 0 34rpx 80rpx rgba(37, 28, 56, 0.24);
 }
 
 .hero-card::after {
@@ -121,7 +125,7 @@
   min-height: 194rpx;
   padding: 26rpx 20rpx;
   border-radius: 38rpx;
-  background: rgba(255, 250, 242, 0.82);
+  background: rgba(253, 251, 247, 0.82);
   border: 1rpx solid rgba(255, 255, 255, 0.78);
   box-shadow: 0 22rpx 48rpx rgba(70, 52, 29, 0.08);
 }
@@ -152,7 +156,7 @@
 .quick-desc {
   margin-top: 8rpx;
   font-size: 22rpx;
-  color: #82786c;
+  color: #7c7288;
 }
 
 .section-head {
@@ -212,7 +216,7 @@
   font-weight: 900;
 }
 
-.sapphire { background: linear-gradient(145deg, #514271, #2a2144); }
+.sapphire { background: linear-gradient(145deg, #4a3870, #251c38); }
 .emerald { background: linear-gradient(145deg, #6f9795, #315f63); }
 .amber { background: linear-gradient(145deg, #ddbd76, #9b743a); }
 
@@ -223,7 +227,7 @@
 
 .bill-desc {
   margin-top: 8rpx;
-  color: #82786c;
+  color: #7c7288;
   font-size: 23rpx;
 }
 
@@ -238,7 +242,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(135deg, #fbf0db, #fffaf2 72%);
+  background: linear-gradient(135deg, #fbf0db, #fdfbf7 72%);
 }
 
 .service-title {
@@ -249,7 +253,7 @@
 
 .service-desc {
   margin-top: 8rpx;
-  color: #82786c;
+  color: #7c7288;
   font-size: 23rpx;
 }
 
@@ -257,8 +261,8 @@
   height: 68rpx;
   padding: 0 30rpx;
   border-radius: 999rpx;
-  color: #fffaf2;
+  color: #fdfbf7;
   font-size: 25rpx;
   font-weight: 800;
-  background: #2a2144;
+  background: #251c38;
 }

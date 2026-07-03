@@ -1,7 +1,7 @@
 {
   "navigationStyle": "default",
   "navigationBarTitleText": "缴费记录",
-  "navigationBarBackgroundColor": "#FBF6EE",
+  "navigationBarBackgroundColor": "#FAF7F2",
   "navigationBarTextStyle": "black",
   "enablePullDownRefresh": true,
   "backgroundTextStyle": "dark"

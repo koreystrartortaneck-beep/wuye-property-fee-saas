@@ -20,7 +20,7 @@
 
 .pay-item-status {
   font-size: 22rpx;
-  color: #8a7f73;
+  color: #8b8199;
 }
 
 .pay-item-status.ok {
@@ -31,7 +31,7 @@
 .pay-item-bills {
   margin-top: 14rpx;
   font-size: 26rpx;
-  color: #5c5245;
+  color: #55496b;
 }
 
 .pay-item-meta {

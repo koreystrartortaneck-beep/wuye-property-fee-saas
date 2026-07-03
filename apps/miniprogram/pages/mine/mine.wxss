@@ -10,8 +10,8 @@
   align-items: center;
   gap: 26rpx;
   color: #fff;
-  background: radial-gradient(circle at 88% 0%, rgba(201, 166, 107, 0.76), transparent 30%), linear-gradient(145deg, #2a2144, #443465 66%, #7b6f95);
-  box-shadow: 0 34rpx 80rpx rgba(42, 33, 68, 0.24);
+  background: radial-gradient(circle at 88% 0%, rgba(201, 166, 107, 0.34), transparent 30%), linear-gradient(150deg, #2b2145 0%, #251c38 55%, #3b2b57 100%);
+  box-shadow: 0 34rpx 80rpx rgba(37, 28, 56, 0.24);
 }
 
 .avatar {
@@ -21,7 +21,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #2a2144;
+  color: #251c38;
   font-size: 40rpx;
   font-weight: 900;
   background: linear-gradient(145deg, #fff1c8, #c9a66b);
@@ -60,7 +60,7 @@
 
 .house-community {
   font-size: 22rpx;
-  color: #8a7f73;
+  color: #8b8199;
 }
 
 .ch-title-row {
@@ -97,7 +97,7 @@
 
 .ch-count {
   font-size: 21rpx;
-  color: #a89d8f;
+  color: #a79eb5;
 }
 
 .ch-switch {
@@ -136,7 +136,7 @@
 
 .pending-text {
   font-size: 23rpx;
-  color: #8a7f73;
+  color: #8b8199;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -155,7 +155,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 1rpx solid rgba(42, 33, 68, 0.06);
+  border-top: 1rpx solid rgba(37, 28, 56, 0.06);
 }
 
 .menu-row:first-child {
@@ -169,7 +169,7 @@
 
 .menu-desc {
   margin-top: 8rpx;
-  color: #82786c;
+  color: #7c7288;
   font-size: 24rpx;
 }
 
