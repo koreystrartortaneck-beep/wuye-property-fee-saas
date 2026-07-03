@@ -1,0 +1,43 @@
+.pay-list {
+  margin-top: 36rpx;
+}
+
+.pay-item {
+  padding: 32rpx 36rpx;
+  margin-bottom: 26rpx;
+}
+
+.pay-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pay-item-amount {
+  font-size: 40rpx;
+  font-weight: 800;
+}
+
+.pay-item-status {
+  font-size: 22rpx;
+  color: #8a7f73;
+}
+
+.pay-item-status.ok {
+  color: #3f7d5d;
+  font-weight: 700;
+}
+
+.pay-item-bills {
+  margin-top: 14rpx;
+  font-size: 26rpx;
+  color: #5c5245;
+}
+
+.pay-item-meta {
+  margin-top: 14rpx;
+  display: flex;
+  justify-content: space-between;
+  font-size: 22rpx;
+  color: #9a9288;
+}

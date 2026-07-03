@@ -1,0 +1,113 @@
+.bind-card {
+  margin-top: 32rpx;
+  padding: 36rpx;
+}
+
+.bind-card-title {
+  font-size: 32rpx;
+  font-weight: 800;
+}
+
+.bind-card-desc {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #8a7f73;
+}
+
+.phone-row {
+  margin-top: 26rpx;
+  display: flex;
+  gap: 20rpx;
+  align-items: center;
+}
+
+.phone-input {
+  flex: 1;
+  height: 88rpx;
+  padding: 0 30rpx;
+  border-radius: 999rpx;
+  background: rgba(16, 32, 51, 0.05);
+  font-size: 28rpx;
+}
+
+.match-btn {
+  flex-shrink: 0;
+}
+
+.option-list {
+  margin-top: 24rpx;
+}
+
+.option-item {
+  padding: 24rpx 8rpx;
+  border-bottom: 1rpx solid rgba(16, 32, 51, 0.06);
+}
+
+.option-main {
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.option-sub {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #8a7f73;
+}
+
+.picked-line {
+  margin-top: 24rpx;
+  font-size: 26rpx;
+  color: #5f7f86;
+  font-weight: 700;
+}
+
+.house-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18rpx;
+}
+
+.house-option {
+  padding: 18rpx 26rpx;
+  border-radius: 999rpx;
+  background: rgba(16, 32, 51, 0.05);
+  font-size: 24rpx;
+}
+
+.house-option-active {
+  background: linear-gradient(145deg, #fff1c8, #c9a66b);
+  font-weight: 800;
+}
+
+.form-row {
+  margin-top: 26rpx;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.form-label {
+  width: 170rpx;
+  font-size: 26rpx;
+  color: #5c5245;
+}
+
+.form-input {
+  flex: 1;
+  height: 80rpx;
+  padding: 0 26rpx;
+  border-radius: 999rpx;
+  background: rgba(16, 32, 51, 0.05);
+  font-size: 26rpx;
+  display: flex;
+  align-items: center;
+}
+
+.picker-value {
+  line-height: 80rpx;
+}
+
+.apply-btn {
+  margin-top: 36rpx;
+  width: 100%;
+}

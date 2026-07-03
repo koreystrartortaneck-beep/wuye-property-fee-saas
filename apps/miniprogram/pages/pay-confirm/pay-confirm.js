@@ -1,18 +1,48 @@
+const { request } = require('../../utils/request');
+
 Page({
   data: {
-    house: "8 栋 1 单元 2602",
-    totalAmount: "2486.80",
-    items: [
-      { name: "物业管理费", amount: "1920.00" },
-      { name: "车位管理费", amount: "360.00" },
-      { name: "公共能耗分摊", amount: "206.80" }
-    ]
+    house: '',
+    totalAmount: '0.00',
+    items: [],
+    paying: false,
   },
-  submitPay() {
-    wx.showLoading({ title: "支付中" });
-    setTimeout(() => {
+
+  onLoad() {
+    const app = getApp();
+    const pending = app.globalData.pendingBills || [];
+    if (pending.length === 0) {
+      wx.showToast({ title: '没有待支付的账单', icon: 'none' });
+      setTimeout(() => wx.navigateBack(), 800);
+      return;
+    }
+    const totalCents = pending.reduce((s, b) => s + Math.round(Number(b.amount) * 100), 0);
+    this.setData({
+      items: pending,
+      totalAmount: (totalCents / 100).toFixed(2),
+      house: app.globalData.currentHouse
+        ? `${app.globalData.currentHouse.communityName} ${app.globalData.currentHouse.displayName}`
+        : '',
+    });
+  },
+
+  async submitPay() {
+    if (this.data.paying) return;
+    this.setData({ paying: true });
+    wx.showLoading({ title: '支付中' });
+    try {
+      const billIds = this.data.items.map((b) => b.id);
+      const order = await request('/owner/payments', { method: 'POST', data: { billIds } });
+      // mock 模式：直接确认；real 模式（子项目5）：wx.requestPayment(order.payParams)
+      if (order.payParams && order.payParams.mock) {
+        await request(`/owner/payments/${order.orderNo}/mock-confirm`, { method: 'POST' });
+      }
+      getApp().globalData.pendingBills = [];
       wx.hideLoading();
-      wx.navigateTo({ url: "/pages/pay-success/pay-success" });
-    }, 700);
-  }
+      wx.redirectTo({ url: `/pages/pay-success/pay-success?orderNo=${order.orderNo}` });
+    } catch (e) {
+      wx.hideLoading();
+      this.setData({ paying: false });
+    }
+  },
 });

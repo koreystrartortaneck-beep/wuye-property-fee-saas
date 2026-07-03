@@ -1,0 +1,23 @@
+<view class="page payments-page">
+  <view class="nav-title">缴费记录</view>
+  <view class="nav-subtitle">每一笔付款均可追溯</view>
+
+  <view class="pay-list">
+    <block wx:for="{{list}}" wx:key="orderNo">
+      <view class="pay-item card">
+        <view class="pay-item-top">
+          <view class="pay-item-amount amount">¥{{item.totalAmount}}</view>
+          <view class="pay-item-status {{item.success ? 'ok' : ''}}">{{item.statusLabel}}</view>
+        </view>
+        <view class="pay-item-bills">{{item.billTitles}}</view>
+        <view class="pay-item-meta">
+          <text>{{item.orderNo}}</text>
+          <text>{{item.time}}</text>
+        </view>
+      </view>
+    </block>
+    <view wx:if="{{list.length === 0}}" class="pay-item card">
+      <view class="pay-item-bills">暂无缴费记录</view>
+    </view>
+  </view>
+</view>

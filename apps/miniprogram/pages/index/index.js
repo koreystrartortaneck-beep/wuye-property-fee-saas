@@ -1,38 +1,100 @@
+const { request } = require('../../utils/request');
+const { loadMyHouses } = require('../../utils/auth');
+
+const THEMES = ['sapphire', 'emerald', 'amber'];
+
 Page({
   data: {
-    communityName: "云璟公馆",
-    currentHouse: "8 栋 1 单元 2602",
-    userName: "林悦",
-    avatarText: "悦",
-    totalAmount: "2486.80",
+    ready: false,
+    noHouse: false,
+    currentHouse: null,
+    houses: [],
+    unpaidTotal: '0.00',
+    unpaidCount: 0,
+    bills: [],
     quickActions: [
-      { title: "账单明细", desc: "3 项待确认", icon: "账", active: true },
-      { title: "电子收据", desc: "一键下载", icon: "票" },
-      { title: "我的房屋", desc: "2 套已绑定", icon: "房" }
+      { title: '账单明细', desc: '查看全部账单', icon: '账', active: true },
+      { title: '缴费记录', desc: '历史付款凭证', icon: '票' },
+      { title: '我的房屋', desc: '绑定与切换', icon: '房' },
     ],
-    bills: [
-      { title: "物业管理费", desc: "2026.07 · 建面 128㎡", amount: "1920.00", icon: "物", theme: "sapphire" },
-      { title: "车位管理费", desc: "B2-118 固定车位", amount: "360.00", icon: "车", theme: "emerald" },
-      { title: "公共能耗分摊", desc: "电梯 / 水泵 / 照明", amount: "206.80", icon: "公", theme: "amber" }
-    ]
   },
+
+  async onShow() {
+    const app = getApp();
+    await app.loginReady;
+    try {
+      const houses = await loadMyHouses();
+      if (houses.length === 0) {
+        this.setData({ ready: true, noHouse: true, bills: [], unpaidTotal: '0.00', unpaidCount: 0 });
+        return;
+      }
+      this.setData({ noHouse: false, houses, currentHouse: app.globalData.currentHouse });
+      await this.loadBills();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      this.setData({ ready: true });
+    }
+  },
+
+  async loadBills() {
+    const house = getApp().globalData.currentHouse;
+    if (!house) return;
+    const [summary, billPage] = await Promise.all([
+      request(`/owner/bills/summary?houseId=${house.houseId}`),
+      request(`/owner/bills?houseId=${house.houseId}&status=UNPAID&pageSize=10`),
+    ]);
+    const bills = billPage.list.map((b, i) => ({
+      id: b.id,
+      title: b.title,
+      desc: `${b.period} · 到期 ${(b.dueDate || '').slice(0, 10)}`,
+      amount: Number(b.amount).toFixed(2),
+      icon: b.title.slice(0, 1),
+      theme: THEMES[i % THEMES.length],
+    }));
+    this.setData({
+      currentHouse: house,
+      unpaidTotal: summary.unpaidTotal,
+      unpaidCount: summary.unpaidCount,
+      bills,
+    });
+  },
+
+  /** 多房切换 */
+  switchHouse() {
+    const { houses } = this.data;
+    if (houses.length <= 1) return;
+    wx.showActionSheet({
+      itemList: houses.map((h) => `${h.communityName} ${h.displayName}`),
+      success: async (res) => {
+        getApp().globalData.currentHouse = houses[res.tapIndex];
+        await this.loadBills();
+      },
+    });
+  },
+
   handleQuickTap(e) {
     const index = Number(e.currentTarget.dataset.index);
-    if (index === 0) {
-      this.goBill();
+    if (index === 0) wx.switchTab({ url: '/pages/bill/bill' });
+    if (index === 1) wx.navigateTo({ url: '/pages/payments/payments' });
+    if (index === 2) wx.navigateTo({ url: '/pages/bind-house/bind-house' });
+  },
+
+  goBind() {
+    wx.navigateTo({ url: '/pages/bind-house/bind-house' });
+  },
+
+  goBill() {
+    wx.switchTab({ url: '/pages/bill/bill' });
+  },
+
+  /** 立即缴纳：当前房屋全部未缴账单 */
+  goPay() {
+    if (this.data.unpaidCount === 0) {
+      wx.showToast({ title: '当前没有待缴账单', icon: 'none' });
       return;
     }
-    if (index === 2) {
-      this.goMine();
-    }
+    getApp().globalData.pendingBills = this.data.bills.map((b) => ({ id: b.id, name: b.title, amount: b.amount }));
+    wx.navigateTo({ url: '/pages/pay-confirm/pay-confirm' });
   },
-  goPay() {
-    wx.navigateTo({ url: "/pages/pay-confirm/pay-confirm" });
-  },
-  goBill() {
-    wx.switchTab({ url: "/pages/bill/bill" });
-  },
-  goMine() {
-    wx.switchTab({ url: "/pages/mine/mine" });
-  }
 });

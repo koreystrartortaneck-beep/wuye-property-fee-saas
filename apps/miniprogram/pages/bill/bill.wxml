@@ -1,13 +1,13 @@
 <view class="page bill-page">
   <view class="nav-title">账单中心</view>
-  <view class="nav-subtitle">清晰记录每一笔物业费用</view>
+  <view class="nav-subtitle">{{house ? house.communityName + ' ' + house.displayName : '清晰记录每一笔物业费用'}}</view>
 
   <view class="summary-card">
     <view>
-      <view class="summary-label">当前待缴总额</view>
-      <view class="summary-amount amount">¥ {{totalAmount}}</view>
+      <view class="summary-label">{{selectedIds.length > 0 ? '已选 ' + selectedIds.length + ' 笔' : '合并缴纳'}}</view>
+      <view class="summary-amount amount">¥ {{selectedTotal}}</view>
     </view>
-    <button class="gold-button summary-btn" bindtap="goPay">合并缴纳</button>
+    <button class="gold-button summary-btn" bindtap="goPay">{{selectedIds.length > 0 ? '缴纳所选' : '全部缴纳'}}</button>
   </view>
 
   <view class="tabs card">
@@ -17,8 +17,9 @@
   </view>
 
   <view class="bill-stack">
-    <block wx:for="{{bills}}" wx:key="title">
-      <view class="bill-item card {{item.paid ? 'bill-paid' : ''}}">
+    <block wx:for="{{bills}}" wx:key="id">
+      <view class="bill-item card {{item.paid ? 'bill-paid' : ''}} {{selectedIds.indexOf(item.id) >= 0 ? 'bill-selected' : ''}}"
+            data-index="{{index}}" bindtap="toggleSelect">
         <view class="bill-main">
           <view class="bill-dot {{item.theme}}"></view>
           <view>
@@ -32,5 +33,13 @@
         </view>
       </view>
     </block>
+    <view wx:if="{{bills.length === 0}}" class="bill-item card">
+      <view class="bill-main">
+        <view>
+          <view class="bill-name">暂无账单</view>
+          <view class="bill-period">{{house ? '当前分类下没有账单' : '请先在首页绑定房屋'}}</view>
+        </view>
+      </view>
+    </view>
   </view>
 </view>
