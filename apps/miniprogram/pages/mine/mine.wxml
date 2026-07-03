@@ -25,6 +25,17 @@
         <view class="house-tag">点击去绑定</view>
       </view>
     </view>
+    <!-- 申请进度 -->
+    <block wx:for="{{pendingBindings}}" wx:key="id">
+      <view class="house-card card pending-card">
+        <view>
+          <view class="house-name">{{item.name}}</view>
+          <view class="house-tag {{item.rejected ? 'tag-rejected' : 'tag-pending'}}">
+            {{item.statusLabel}}{{item.rejectReason ? '：' + item.rejectReason : ''}}
+          </view>
+        </view>
+      </view>
+    </block>
   </view>
 
   <view class="section-title menu-title">服务中心</view>

@@ -125,3 +125,16 @@
   font-size: 48rpx;
   line-height: 1;
 }
+
+/* 申请进度（打磨新增） */
+.pending-card {
+  opacity: 0.92;
+}
+
+.tag-pending {
+  color: #b8862f;
+}
+
+.tag-rejected {
+  color: #c45656;
+}

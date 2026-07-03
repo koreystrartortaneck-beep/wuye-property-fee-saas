@@ -42,7 +42,8 @@ Page({
     if (!house) return;
     const [summary, billPage] = await Promise.all([
       request(`/owner/bills/summary?houseId=${house.houseId}`),
-      request(`/owner/bills?houseId=${house.houseId}&status=UNPAID&pageSize=10`),
+      // pageSize 需覆盖全部未缴账单（goPay 用它合并下单）
+      request(`/owner/bills?houseId=${house.houseId}&status=UNPAID&pageSize=50`),
     ]);
     const bills = billPage.list.map((b, i) => ({
       id: b.id,
@@ -58,6 +59,14 @@ Page({
       unpaidCount: summary.unpaidCount,
       bills,
     });
+  },
+
+  async onPullDownRefresh() {
+    try {
+      await this.loadBills();
+    } finally {
+      wx.stopPullDownRefresh();
+    }
   },
 
   /** 多房切换 */

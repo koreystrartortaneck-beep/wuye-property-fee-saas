@@ -45,4 +45,13 @@ Page({
     await this.fetchPage(this.data.page + 1);
     this.setData({ loadingMore: false });
   },
+
+  async onPullDownRefresh() {
+    try {
+      this.setData({ page: 1, list: [] });
+      await this.fetchPage(1);
+    } finally {
+      wx.stopPullDownRefresh();
+    }
+  },
 });
