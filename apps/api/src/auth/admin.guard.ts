@@ -2,11 +2,11 @@ import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Request } from 'express';
 import { ErrorCode } from '@pf/shared';
 import { BizException } from '../common/biz.exception';
-import { enterTenant } from '../tenant/tenant-cls';
 import { AdminJwtPayload, AuthService } from './auth.service';
 
 /**
- * 管理端守卫：校验 admin JWT，注入 req.current，并把租户上下文绑定到请求。
+ * 管理端守卫：校验 admin JWT，注入 req.current。
+ * 租户上下文由 TenantContextInterceptor 依据 req.current 绑定。
  * SUPER_ADMIN 默认平台视角（null），可用 X-Tenant-Id 头切换到指定租户。
  */
 @Injectable()
@@ -27,7 +27,6 @@ export class AdminGuard implements CanActivate {
     }
 
     req.current = { adminId: payload.sub, tenantId, role: payload.role };
-    enterTenant(tenantId);
     return true;
   }
 }

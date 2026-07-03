@@ -22,11 +22,12 @@ export function runWithTenant<T>(tenantId: string | null, fn: () => T | Promise<
 }
 
 /**
- * 将租户上下文绑定到当前请求的异步链路（守卫中使用）。
- * enterWith 会对当前同步执行及其后续异步延续生效，每个请求互不影响。
+ * 同步版：在租户上下文中执行 fn 并返回其同步结果。
+ * 供拦截器包裹 next.handle().subscribe(...) 使用——
+ * 注意不能在 async 守卫里用 enterWith（await 返回后调用方会恢复原上下文）。
  */
-export function enterTenant(tenantId: string | null): void {
-  als.enterWith({ tenantId });
+export function runWithTenantSync<T>(tenantId: string | null, fn: () => T): T {
+  return als.run({ tenantId }, fn);
 }
 
 export function getTenantContext(): { set: boolean; tenantId: string | null } {
