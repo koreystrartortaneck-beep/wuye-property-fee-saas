@@ -1,0 +1,127 @@
+.bill-page {
+  padding-bottom: 48rpx;
+}
+
+.summary-card {
+  margin-top: 34rpx;
+  padding: 42rpx 36rpx;
+  border-radius: 52rpx;
+  color: #fff;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  background: radial-gradient(circle at 90% 0%, rgba(201, 166, 107, 0.72), transparent 30%), linear-gradient(145deg, #102033, #223f59 64%, #5f7f86);
+  box-shadow: 0 32rpx 78rpx rgba(16, 32, 51, 0.24);
+}
+
+.summary-label {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 24rpx;
+  letter-spacing: 4rpx;
+}
+
+.summary-amount {
+  margin-top: 12rpx;
+  font-size: 62rpx;
+  font-weight: 900;
+}
+
+.summary-btn {
+  height: 76rpx;
+  padding: 0 28rpx;
+  font-size: 25rpx;
+}
+
+.tabs {
+  margin-top: 28rpx;
+  padding: 10rpx;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8rpx;
+}
+
+.tab-item {
+  height: 70rpx;
+  border-radius: 999rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #82786c;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.tab-active {
+  color: #102033;
+  background: linear-gradient(145deg, #fff1c8, #ead0a0);
+}
+
+.bill-stack {
+  margin-top: 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+}
+
+.bill-item {
+  padding: 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bill-paid {
+  opacity: 0.72;
+}
+
+.bill-main {
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+}
+
+.bill-dot {
+  width: 22rpx;
+  height: 88rpx;
+  border-radius: 999rpx;
+}
+
+.sapphire { background: linear-gradient(180deg, #395875, #102033); }
+.emerald { background: linear-gradient(180deg, #6f9795, #315f63); }
+.amber { background: linear-gradient(180deg, #ddbd76, #9b743a); }
+
+.bill-name {
+  font-size: 30rpx;
+  font-weight: 900;
+}
+
+.bill-period {
+  margin-top: 10rpx;
+  color: #82786c;
+  font-size: 24rpx;
+}
+
+.bill-side {
+  text-align: right;
+}
+
+.bill-money {
+  font-size: 32rpx;
+  font-weight: 900;
+}
+
+.status {
+  display: inline-flex;
+  margin-top: 10rpx;
+  padding: 8rpx 16rpx;
+  border-radius: 999rpx;
+  color: #9b743a;
+  font-size: 22rpx;
+  font-weight: 800;
+  background: rgba(201, 166, 107, 0.16);
+}
+
+.status-paid {
+  color: #5f7f86;
+  background: rgba(95, 127, 134, 0.14);
+}

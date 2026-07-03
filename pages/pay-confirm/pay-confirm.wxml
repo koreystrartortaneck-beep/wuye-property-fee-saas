@@ -1,0 +1,33 @@
+<view class="page confirm-page">
+  <view class="nav-title">确认缴费</view>
+  <view class="nav-subtitle">请核对房屋与账单信息</view>
+
+  <view class="pay-card">
+    <view class="pay-label">应付金额</view>
+    <view class="pay-amount amount">¥ {{totalAmount}}</view>
+    <view class="pay-house">{{house}}</view>
+  </view>
+
+  <view class="detail-card card">
+    <view class="detail-title">费用明细</view>
+    <block wx:for="{{items}}" wx:key="name">
+      <view class="detail-row">
+        <text>{{item.name}}</text>
+        <text class="amount">¥{{item.amount}}</text>
+      </view>
+    </block>
+  </view>
+
+  <view class="method-card card">
+    <view class="method-left">
+      <view class="wechat-icon">微</view>
+      <view>
+        <view class="method-title">微信支付</view>
+        <view class="method-desc">安全加密 · 实时到账</view>
+      </view>
+    </view>
+    <view class="check-dot">✓</view>
+  </view>
+
+  <button class="dark-button submit-btn" bindtap="submitPay">确认支付 ¥{{totalAmount}}</button>
+</view>

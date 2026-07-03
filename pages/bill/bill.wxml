@@ -1,0 +1,36 @@
+<view class="page bill-page">
+  <view class="nav-title">账单中心</view>
+  <view class="nav-subtitle">清晰记录每一笔物业费用</view>
+
+  <view class="summary-card">
+    <view>
+      <view class="summary-label">当前待缴总额</view>
+      <view class="summary-amount amount">¥ {{totalAmount}}</view>
+    </view>
+    <button class="gold-button summary-btn" bindtap="goPay">合并缴纳</button>
+  </view>
+
+  <view class="tabs card">
+    <block wx:for="{{tabs}}" wx:key="*this">
+      <view class="tab-item {{activeTab === index ? 'tab-active' : ''}}" data-index="{{index}}" bindtap="setTab">{{item}}</view>
+    </block>
+  </view>
+
+  <view class="bill-stack">
+    <block wx:for="{{bills}}" wx:key="title">
+      <view class="bill-item card {{item.paid ? 'bill-paid' : ''}}">
+        <view class="bill-main">
+          <view class="bill-dot {{item.theme}}"></view>
+          <view>
+            <view class="bill-name">{{item.title}}</view>
+            <view class="bill-period">{{item.period}}</view>
+          </view>
+        </view>
+        <view class="bill-side">
+          <view class="bill-money amount">¥{{item.amount}}</view>
+          <view class="status {{item.paid ? 'status-paid' : ''}}">{{item.status}}</view>
+        </view>
+      </view>
+    </block>
+  </view>
+</view>

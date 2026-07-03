@@ -1,0 +1,94 @@
+.success-page {
+  padding-bottom: 56rpx;
+}
+
+.success-card {
+  margin-top: 64rpx;
+  padding: 64rpx 36rpx 54rpx;
+  border-radius: 62rpx;
+  text-align: center;
+  color: #fff;
+  background: radial-gradient(circle at 80% 4%, rgba(201, 166, 107, 0.78), transparent 30%), linear-gradient(145deg, #102033, #263f5a 62%, #5f7f86);
+  box-shadow: 0 34rpx 80rpx rgba(16, 32, 51, 0.24);
+}
+
+.success-ring {
+  width: 150rpx;
+  height: 150rpx;
+  margin: 0 auto;
+  padding: 16rpx;
+  border-radius: 50%;
+  border: 1rpx solid rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.success-check {
+  width: 118rpx;
+  height: 118rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #102033;
+  font-size: 62rpx;
+  font-weight: 900;
+  background: linear-gradient(145deg, #fff1c8, #c9a66b);
+}
+
+.success-title {
+  margin-top: 34rpx;
+  font-size: 44rpx;
+  font-weight: 900;
+}
+
+.success-desc {
+  margin-top: 12rpx;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 26rpx;
+}
+
+.success-amount {
+  margin-top: 28rpx;
+  font-size: 66rpx;
+  font-weight: 900;
+}
+
+.receipt-card {
+  margin-top: 30rpx;
+  padding: 34rpx;
+}
+
+.receipt-title {
+  margin-bottom: 18rpx;
+  font-size: 32rpx;
+  font-weight: 900;
+}
+
+.receipt-row {
+  min-height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+  color: #82786c;
+  font-size: 25rpx;
+  border-top: 1rpx solid rgba(16, 32, 51, 0.06);
+}
+
+.receipt-row text:last-child {
+  color: #102033;
+  font-weight: 700;
+  text-align: right;
+}
+
+.action-row {
+  margin-top: 34rpx;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22rpx;
+}
+
+.ghost-btn,
+.action-btn {
+  width: 100%;
+}

@@ -1,0 +1,37 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/bill/bill",
+    "pages/pay-confirm/pay-confirm",
+    "pages/pay-success/pay-success",
+    "pages/mine/mine"
+  ],
+  "window": {
+    "navigationStyle": "custom",
+    "backgroundColor": "#F6F0E7",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "custom": false,
+    "color": "#9A9288",
+    "selectedColor": "#9B743A",
+    "backgroundColor": "#FFFAF2",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/bill/bill",
+        "text": "账单"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

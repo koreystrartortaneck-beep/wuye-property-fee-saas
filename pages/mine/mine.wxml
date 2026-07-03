@@ -1,0 +1,35 @@
+<view class="page mine-page">
+  <view class="profile-card">
+    <view class="avatar">悦</view>
+    <view>
+      <view class="profile-name">{{userName}}</view>
+      <view class="profile-phone">{{phone}}</view>
+    </view>
+  </view>
+
+  <view class="section-title">我的房屋</view>
+  <view class="house-list">
+    <block wx:for="{{houses}}" wx:key="name">
+      <view class="house-card card {{item.active ? 'house-active' : ''}}">
+        <view>
+          <view class="house-name">{{item.name}}</view>
+          <view class="house-tag">{{item.tag}}</view>
+        </view>
+        <view class="house-check" wx:if="{{item.active}}">✓</view>
+      </view>
+    </block>
+  </view>
+
+  <view class="section-title menu-title">服务中心</view>
+  <view class="menu-card card">
+    <block wx:for="{{menus}}" wx:key="title">
+      <view class="menu-row">
+        <view>
+          <view class="menu-name">{{item.title}}</view>
+          <view class="menu-desc">{{item.desc}}</view>
+        </view>
+        <view class="arrow">›</view>
+      </view>
+    </block>
+  </view>
+</view>

@@ -1,0 +1,388 @@
+<div class="phone-stage">
+  <div class="phone-shell">
+    <div class="screen">
+      <div class="status-bar">
+        <span>9:52</span>
+        <div class="status-icons"><span></span><span></span><span></span></div>
+      </div>
+
+      <section class="hero-card glass-card">
+        <div class="hero-top">
+          <div>
+            <p class="eyebrow">云璟公馆 · 物业服务</p>
+            <h1>优雅缴费<br>从容生活</h1>
+          </div>
+          <div class="avatar-orb">悦</div>
+        </div>
+        <div class="house-chip">
+          <span class="dot"></span>
+          8 栋 1 单元 2602
+        </div>
+        <div class="amount-panel">
+          <p>本期应缴</p>
+          <div class="amount-row">
+            <strong>¥ 2,486.80</strong>
+            <button>立即缴纳</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="quick-grid">
+        <article class="quick-card active">
+          <div class="icon">账</div>
+          <strong>账单明细</strong>
+          <span>3 项待确认</span>
+        </article>
+        <article class="quick-card">
+          <div class="icon">票</div>
+          <strong>电子收据</strong>
+          <span>一键下载</span>
+        </article>
+        <article class="quick-card">
+          <div class="icon">房</div>
+          <strong>我的房屋</strong>
+          <span>2 套已绑定</span>
+        </article>
+      </section>
+
+      <section class="section-head">
+        <div>
+          <p>费用组成</p>
+          <h2>本月账单</h2>
+        </div>
+        <a>查看全部</a>
+      </section>
+
+      <section class="bill-list">
+        <article class="bill-card">
+          <div class="bill-left">
+            <div class="bill-icon sapphire">物</div>
+            <div>
+              <strong>物业管理费</strong>
+              <span>2026.07 · 建面 128㎡</span>
+            </div>
+          </div>
+          <b>¥1,920.00</b>
+        </article>
+        <article class="bill-card">
+          <div class="bill-left">
+            <div class="bill-icon emerald">车</div>
+            <div>
+              <strong>车位管理费</strong>
+              <span>B2-118 固定车位</span>
+            </div>
+          </div>
+          <b>¥360.00</b>
+        </article>
+        <article class="bill-card">
+          <div class="bill-left">
+            <div class="bill-icon amber">公</div>
+            <div>
+              <strong>公共能耗分摊</strong>
+              <span>电梯 / 水泵 / 照明</span>
+            </div>
+          </div>
+          <b>¥206.80</b>
+        </article>
+      </section>
+
+      <section class="luxury-card">
+        <div>
+          <p>尊享服务</p>
+          <h3>开通自动提醒，避免逾期</h3>
+          <span>每月账单生成后自动推送微信提醒</span>
+        </div>
+        <button>开启</button>
+      </section>
+
+      <nav class="tabbar">
+        <div class="tab active"><span>⌂</span><b>首页</b></div>
+        <div class="tab"><span>◈</span><b>账单</b></div>
+        <div class="tab"><span>✦</span><b>服务</b></div>
+        <div class="tab"><span>☻</span><b>我的</b></div>
+      </nav>
+    </div>
+  </div>
+
+  <aside class="design-notes">
+    <p class="note-kicker">Design System</p>
+    <h2>高端卡片风格视觉方案</h2>
+    <p>整体采用「暖白底 + 香槟金 + 深墨蓝」的雅致配色，卡片使用柔和阴影、磨砂层次和大圆角，适合物业缴费这种既要可信又要有品质感的民生支付场景。</p>
+    <div class="palette">
+      <span style="background:#f7f1e8"></span>
+      <span style="background:#c9a66b"></span>
+      <span style="background:#102033"></span>
+      <span style="background:#5f7f86"></span>
+    </div>
+    <ul>
+      <li>首页优先展示房屋、应缴金额和立即缴纳按钮，减少用户决策成本。</li>
+      <li>费用明细采用高级列表卡片，金额右对齐，账单信息一眼可读。</li>
+      <li>底部导航保留 4 个核心入口：首页、账单、服务、我的。</li>
+      <li>后续可扩展报修、公告、访客、停车缴费等模块。</li>
+    </ul>
+  </aside>
+</div>
+
+<style>
+  :root {
+    --bg: #f6f0e7;
+    --paper: #fffaf2;
+    --paper-2: #fbf5eb;
+    --ink: #102033;
+    --muted: #7b756d;
+    --gold: #c9a66b;
+    --gold-deep: #9b743a;
+    --blue: #162a42;
+    --green: #5f7f86;
+    --line: rgba(16,32,51,.08);
+    --shadow: 0 22px 60px rgba(65, 49, 29, .16);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background:
+      radial-gradient(circle at 14% 10%, rgba(201,166,107,.28), transparent 30%),
+      radial-gradient(circle at 88% 18%, rgba(95,127,134,.2), transparent 32%),
+      linear-gradient(135deg, #fbf6ee, #efe3d0 52%, #f7f1e8);
+    color: var(--ink);
+  }
+  .phone-stage {
+    min-height: 100vh;
+    padding: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 52px;
+  }
+  .phone-shell {
+    width: 390px;
+    height: 812px;
+    padding: 12px;
+    border-radius: 48px;
+    background: linear-gradient(145deg, #26344a, #0d1624);
+    box-shadow: 0 34px 90px rgba(16,32,51,.32), inset 0 0 0 1px rgba(255,255,255,.16);
+  }
+  .screen {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+    border-radius: 38px;
+    background:
+      linear-gradient(180deg, rgba(255,250,242,.94), rgba(247,241,232,.98)),
+      var(--bg);
+    padding: 16px 18px 86px;
+  }
+  .screen:before {
+    content: "";
+    position: absolute;
+    inset: -120px -100px auto auto;
+    width: 280px;
+    height: 280px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(201,166,107,.34), rgba(201,166,107,0) 68%);
+    pointer-events: none;
+  }
+  .status-bar {
+    position: relative;
+    z-index: 2;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .status-icons { display: flex; gap: 5px; align-items: center; }
+  .status-icons span { display:block; width: 17px; height: 8px; border-radius: 99px; border: 1.5px solid var(--ink); opacity:.75; }
+  .status-icons span:nth-child(2) { width: 13px; }
+  .status-icons span:nth-child(3) { width: 22px; background: var(--ink); }
+  .glass-card {
+    position: relative;
+    z-index: 1;
+    border: 1px solid rgba(255,255,255,.62);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(20px);
+  }
+  .hero-card {
+    margin-top: 10px;
+    padding: 24px 22px 20px;
+    min-height: 244px;
+    border-radius: 32px;
+    color: #fff;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,.16), rgba(255,255,255,0) 40%),
+      radial-gradient(circle at 85% 4%, rgba(201,166,107,.8), transparent 28%),
+      linear-gradient(145deg, #102033, #223f59 58%, #5f7f86);
+    overflow: hidden;
+  }
+  .hero-card:after {
+    content: "";
+    position: absolute;
+    right: -48px;
+    bottom: -88px;
+    width: 230px;
+    height: 230px;
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 999px;
+    box-shadow: inset 0 0 60px rgba(255,255,255,.06);
+  }
+  .hero-top { display:flex; justify-content:space-between; gap: 16px; }
+  .eyebrow, .amount-panel p, .section-head p, .luxury-card p, .note-kicker {
+    margin: 0;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    font-size: 11px;
+    color: rgba(255,255,255,.72);
+  }
+  h1 { margin: 10px 0 0; font-size: 34px; line-height: 1.14; letter-spacing: -.04em; font-weight: 800; }
+  .avatar-orb {
+    width: 46px;
+    height: 46px;
+    border-radius: 18px;
+    display:grid;
+    place-items:center;
+    background: linear-gradient(145deg, #f1d69a, #a87b38);
+    color: #fff8e9;
+    font-weight: 800;
+    box-shadow: 0 14px 28px rgba(0,0,0,.18);
+  }
+  .house-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 26px;
+    padding: 8px 12px;
+    border-radius: 99px;
+    font-size: 13px;
+    color: rgba(255,255,255,.86);
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.16);
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #d8bd7f; box-shadow: 0 0 0 5px rgba(216,189,127,.14); }
+  .amount-panel {
+    position: relative;
+    z-index: 1;
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255,255,255,.16);
+  }
+  .amount-row { display:flex; justify-content:space-between; align-items:flex-end; gap:14px; margin-top: 8px; }
+  .amount-row strong { font-size: 30px; letter-spacing: -.04em; }
+  button {
+    border: 0;
+    cursor: pointer;
+    font-family: inherit;
+    border-radius: 999px;
+    font-weight: 800;
+  }
+  .amount-row button {
+    padding: 12px 16px;
+    color: #172235;
+    background: linear-gradient(145deg, #fff1c8, #c9a66b);
+    box-shadow: 0 12px 24px rgba(0,0,0,.18);
+    white-space: nowrap;
+  }
+  .quick-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap: 11px; margin: 16px 0 18px; }
+  .quick-card {
+    padding: 14px 10px;
+    min-height: 106px;
+    border-radius: 24px;
+    background: rgba(255,250,242,.78);
+    border: 1px solid rgba(255,255,255,.72);
+    box-shadow: 0 14px 34px rgba(70, 52, 29, .08);
+  }
+  .quick-card.active { background: linear-gradient(180deg, #fff9ed, #f1e1c5); }
+  .icon, .bill-icon {
+    width: 34px;
+    height: 34px;
+    display:grid;
+    place-items:center;
+    border-radius: 14px;
+    font-weight: 900;
+  }
+  .icon { color: var(--gold-deep); background: rgba(201,166,107,.18); }
+  .quick-card strong, .quick-card span { display:block; }
+  .quick-card strong { margin-top: 10px; font-size: 13px; }
+  .quick-card span { margin-top: 4px; font-size: 11px; color: var(--muted); }
+  .section-head { display:flex; justify-content:space-between; align-items:end; margin: 8px 2px 12px; }
+  .section-head p { color: var(--gold-deep); }
+  .section-head h2 { margin: 4px 0 0; font-size: 22px; letter-spacing: -.03em; }
+  .section-head a { color: var(--gold-deep); font-size: 13px; font-weight: 700; }
+  .bill-list { display:flex; flex-direction:column; gap: 10px; }
+  .bill-card {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding: 14px;
+    border-radius: 23px;
+    background: rgba(255,250,242,.82);
+    border: 1px solid rgba(255,255,255,.74);
+    box-shadow: 0 16px 36px rgba(70, 52, 29, .08);
+  }
+  .bill-left { display:flex; align-items:center; gap: 12px; min-width: 0; }
+  .bill-left strong, .bill-left span { display:block; }
+  .bill-left strong { font-size: 14px; }
+  .bill-left span { margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .bill-card b { font-size: 15px; color: var(--ink); white-space: nowrap; }
+  .bill-icon { color:#fff; }
+  .sapphire { background: linear-gradient(145deg, #395875, #102033); }
+  .emerald { background: linear-gradient(145deg, #6f9795, #315f63); }
+  .amber { background: linear-gradient(145deg, #ddbd76, #9b743a); }
+  .luxury-card {
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: 26px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    background: linear-gradient(135deg, #fbf0db, #fffaf2 72%);
+    border: 1px solid rgba(255,255,255,.75);
+    box-shadow: 0 18px 40px rgba(70, 52, 29, .1);
+  }
+  .luxury-card p { color: var(--gold-deep); }
+  .luxury-card h3 { margin: 5px 0 4px; font-size: 15px; }
+  .luxury-card span { font-size: 12px; color: var(--muted); }
+  .luxury-card button { padding: 10px 16px; color: #fff; background: var(--blue); }
+  .tabbar {
+    position:absolute;
+    left: 18px;
+    right: 18px;
+    bottom: 16px;
+    height: 62px;
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    align-items:center;
+    border-radius: 26px;
+    background: rgba(255,250,242,.88);
+    border: 1px solid rgba(255,255,255,.8);
+    box-shadow: 0 18px 44px rgba(16,32,51,.14);
+    backdrop-filter: blur(18px);
+  }
+  .tab { text-align:center; color: #9a9288; font-size: 11px; }
+  .tab span, .tab b { display:block; }
+  .tab span { font-size: 18px; line-height:1; margin-bottom: 5px; }
+  .tab.active { color: var(--gold-deep); }
+  .design-notes {
+    max-width: 460px;
+    padding: 34px;
+    border-radius: 34px;
+    background: rgba(255,250,242,.72);
+    border: 1px solid rgba(255,255,255,.78);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px);
+  }
+  .note-kicker { color: var(--gold-deep); }
+  .design-notes h2 { margin: 8px 0 12px; font-size: 36px; line-height:1.1; letter-spacing:-.05em; }
+  .design-notes p { color: #5e574f; line-height:1.8; }
+  .palette { display:flex; gap: 12px; margin: 22px 0; }
+  .palette span { width: 58px; height: 58px; border-radius: 18px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06), 0 10px 24px rgba(0,0,0,.08); }
+  .design-notes ul { margin: 0; padding-left: 18px; color: #5e574f; line-height: 1.9; }
+  @media (max-width: 900px) {
+    .phone-stage { padding: 24px; flex-direction: column; }
+    .design-notes { max-width: 390px; }
+  }
+</style>

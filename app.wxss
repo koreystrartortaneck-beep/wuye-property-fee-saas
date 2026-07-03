@@ -1,0 +1,87 @@
+page {
+  min-height: 100vh;
+  color: #102033;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background: radial-gradient(circle at 12% 8%, rgba(201, 166, 107, 0.28), transparent 28%), linear-gradient(180deg, #fbf6ee 0%, #f6f0e7 100%);
+}
+
+view, text, button {
+  box-sizing: border-box;
+}
+
+button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  line-height: 1;
+  background: transparent;
+  font-family: inherit;
+}
+
+button::after {
+  border: 0;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 88rpx 32rpx 40rpx;
+  background: radial-gradient(circle at 86% 2%, rgba(95, 127, 134, 0.18), transparent 32%), linear-gradient(180deg, #fffaf2 0%, #f6f0e7 72%, #efe3d0 100%);
+}
+
+.nav-title {
+  font-size: 42rpx;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -1rpx;
+  color: #102033;
+}
+
+.nav-subtitle {
+  margin-top: 10rpx;
+  color: #8a7f73;
+  font-size: 24rpx;
+}
+
+.card {
+  border-radius: 42rpx;
+  background: rgba(255, 250, 242, 0.86);
+  border: 1rpx solid rgba(255, 255, 255, 0.78);
+  box-shadow: 0 28rpx 70rpx rgba(70, 52, 29, 0.1);
+}
+
+.gold-button {
+  height: 88rpx;
+  padding: 0 38rpx;
+  border-radius: 999rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #172235;
+  font-size: 28rpx;
+  font-weight: 800;
+  background: linear-gradient(145deg, #fff1c8, #c9a66b);
+  box-shadow: 0 18rpx 38rpx rgba(155, 116, 58, 0.24);
+}
+
+.dark-button {
+  height: 88rpx;
+  padding: 0 38rpx;
+  border-radius: 999rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fffaf2;
+  font-size: 28rpx;
+  font-weight: 800;
+  background: linear-gradient(145deg, #263f5a, #102033);
+  box-shadow: 0 18rpx 38rpx rgba(16, 32, 51, 0.2);
+}
+
+.muted {
+  color: #82786c;
+}
+
+.amount {
+  font-family: DIN Alternate, SF Pro Display, Arial, sans-serif;
+  letter-spacing: -1rpx;
+}

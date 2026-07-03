@@ -1,0 +1,111 @@
+.confirm-page {
+  padding-bottom: 56rpx;
+}
+
+.pay-card {
+  margin-top: 36rpx;
+  padding: 54rpx 38rpx;
+  border-radius: 58rpx;
+  color: #fff;
+  text-align: center;
+  background: radial-gradient(circle at 86% 0%, rgba(201, 166, 107, 0.78), transparent 30%), linear-gradient(145deg, #102033, #263f5a 66%, #5f7f86);
+  box-shadow: 0 34rpx 80rpx rgba(16, 32, 51, 0.24);
+}
+
+.pay-label {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 24rpx;
+  letter-spacing: 5rpx;
+}
+
+.pay-amount {
+  margin-top: 18rpx;
+  font-size: 74rpx;
+  font-weight: 900;
+}
+
+.pay-house {
+  display: inline-flex;
+  margin-top: 24rpx;
+  padding: 14rpx 24rpx;
+  border-radius: 999rpx;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 25rpx;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.detail-card,
+.method-card {
+  margin-top: 26rpx;
+  padding: 32rpx;
+}
+
+.detail-title {
+  margin-bottom: 16rpx;
+  font-size: 31rpx;
+  font-weight: 900;
+}
+
+.detail-row {
+  height: 74rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #5f574d;
+  font-size: 26rpx;
+  border-top: 1rpx solid rgba(16, 32, 51, 0.06);
+}
+
+.method-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.method-left {
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+}
+
+.wechat-icon {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 900;
+  background: linear-gradient(145deg, #6f9795, #315f63);
+}
+
+.method-title {
+  font-size: 29rpx;
+  font-weight: 900;
+}
+
+.method-desc {
+  margin-top: 8rpx;
+  color: #82786c;
+  font-size: 24rpx;
+}
+
+.check-dot {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 24rpx;
+  font-weight: 900;
+  background: #9b743a;
+}
+
+.submit-btn {
+  margin-top: 36rpx;
+  width: 100%;
+}

@@ -1,0 +1,127 @@
+.mine-page {
+  padding-bottom: 48rpx;
+}
+
+.profile-card {
+  margin-top: 4rpx;
+  padding: 44rpx 36rpx;
+  border-radius: 56rpx;
+  display: flex;
+  align-items: center;
+  gap: 26rpx;
+  color: #fff;
+  background: radial-gradient(circle at 88% 0%, rgba(201, 166, 107, 0.76), transparent 30%), linear-gradient(145deg, #102033, #263f5a 66%, #5f7f86);
+  box-shadow: 0 34rpx 80rpx rgba(16, 32, 51, 0.24);
+}
+
+.avatar {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #102033;
+  font-size: 40rpx;
+  font-weight: 900;
+  background: linear-gradient(145deg, #fff1c8, #c9a66b);
+}
+
+.profile-name {
+  font-size: 40rpx;
+  font-weight: 900;
+}
+
+.profile-phone {
+  margin-top: 10rpx;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 25rpx;
+}
+
+.section-title {
+  margin: 36rpx 4rpx 20rpx;
+  font-size: 38rpx;
+  font-weight: 900;
+}
+
+.house-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.house-card {
+  padding: 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.house-active {
+  background: linear-gradient(135deg, #fbf0db, #fffaf2 72%);
+}
+
+.house-name {
+  font-size: 29rpx;
+  font-weight: 900;
+}
+
+.house-tag {
+  display: inline-flex;
+  margin-top: 12rpx;
+  padding: 8rpx 16rpx;
+  border-radius: 999rpx;
+  color: #9b743a;
+  font-size: 22rpx;
+  font-weight: 800;
+  background: rgba(201, 166, 107, 0.16);
+}
+
+.house-check {
+  width: 46rpx;
+  height: 46rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 900;
+  background: #9b743a;
+}
+
+.menu-title {
+  margin-top: 42rpx;
+}
+
+.menu-card {
+  padding: 8rpx 30rpx;
+}
+
+.menu-row {
+  min-height: 112rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1rpx solid rgba(16, 32, 51, 0.06);
+}
+
+.menu-row:first-child {
+  border-top: 0;
+}
+
+.menu-name {
+  font-size: 29rpx;
+  font-weight: 900;
+}
+
+.menu-desc {
+  margin-top: 8rpx;
+  color: #82786c;
+  font-size: 24rpx;
+}
+
+.arrow {
+  color: #c9a66b;
+  font-size: 48rpx;
+  line-height: 1;
+}
