@@ -1,8 +1,16 @@
+const { ensureLogin } = require('./utils/auth');
+
 App({
   globalData: {
-    communityName: "云璟公馆",
-    currentHouse: "8 栋 1 单元 2602",
-    userName: "林悦",
-    totalAmount: "2486.80"
-  }
+    user: null, // {id, hasPhone}
+    houses: [], // GET /owner/my/houses
+    currentHouse: null,
+  },
+
+  onLaunch() {
+    this.loginReady = ensureLogin().catch((e) => {
+      console.error('登录失败', e);
+      return null;
+    });
+  },
 });
