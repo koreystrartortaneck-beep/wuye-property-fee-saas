@@ -97,6 +97,25 @@ export class OwnerHousesService {
     });
   }
 
+  /** 本人全部绑定（含审核中/已驳回，供「我的」页展示进度） */
+  async myBindings(ownerId: string) {
+    const bindings = await this.prisma.raw.houseBinding.findMany({
+      where: { wxUserId: ownerId },
+      include: { house: { include: { community: { select: { name: true } } } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return bindings.map((b) => ({
+      id: b.id,
+      status: b.status,
+      relation: b.relation,
+      rejectReason: b.rejectReason,
+      houseId: b.houseId,
+      displayName: b.house.displayName,
+      communityName: b.house.community.name,
+      createdAt: b.createdAt,
+    }));
+  }
+
   async myHouses(ownerId: string) {
     const bindings = await this.prisma.raw.houseBinding.findMany({
       where: { wxUserId: ownerId, status: 'ACTIVE' },
@@ -145,5 +164,10 @@ export class OwnerHousesController {
   @Get('my/houses')
   mine(@Current() cur: CurrentOwner) {
     return this.service.myHouses(cur.ownerId);
+  }
+
+  @Get('my/bindings')
+  myBindings(@Current() cur: CurrentOwner) {
+    return this.service.myBindings(cur.ownerId);
   }
 }
