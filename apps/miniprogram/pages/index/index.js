@@ -14,10 +14,11 @@ Page({
     unpaidCount: 0,
     bills: [],
     quickActions: [
-      { title: '账单明细', desc: '查看全部账单', icon: '账', active: true },
-      { title: '缴费记录', desc: '历史付款凭证', icon: '票' },
-      { title: '我的房屋', desc: '绑定与切换', icon: '房' },
+      { title: '报事报修', desc: '拍照一键上报', icon: '修', active: true },
+      { title: '访客邀请', desc: '生成通行码', icon: '客' },
+      { title: '社区公告', desc: '物业最新通知', icon: '告' },
     ],
+    latestAnn: null, // 最新公告条
   },
 
   onLoad() {
@@ -45,10 +46,11 @@ Page({
   async loadBills() {
     const house = getApp().globalData.currentHouse;
     if (!house) return;
-    const [summary, billPage] = await Promise.all([
+    const [summary, billPage, anns] = await Promise.all([
       request(`/owner/bills/summary?houseId=${house.houseId}`),
       // pageSize 需覆盖全部未缴账单（goPay 用它合并下单）
       request(`/owner/bills?houseId=${house.houseId}&status=UNPAID&pageSize=50`),
+      request(`/owner/announcements?houseId=${house.houseId}`).catch(() => []),
     ]);
     const bills = billPage.list.map((b, i) => ({
       id: b.id,
@@ -63,6 +65,7 @@ Page({
       unpaidTotal: summary.unpaidTotal,
       unpaidCount: summary.unpaidCount,
       bills,
+      latestAnn: anns.length > 0 ? { id: anns[0].id, title: anns[0].title } : null,
     });
   },
 
@@ -89,9 +92,17 @@ Page({
 
   handleQuickTap(e) {
     const index = Number(e.currentTarget.dataset.index);
-    if (index === 0) wx.switchTab({ url: '/pages/bill/bill' });
-    if (index === 1) wx.navigateTo({ url: '/pages/payments/payments' });
-    if (index === 2) wx.navigateTo({ url: '/pages/bind-house/bind-house' });
+    if (index === 0) wx.navigateTo({ url: '/pages/ticket-create/ticket-create' });
+    if (index === 1) wx.navigateTo({ url: '/pages/visitor/visitor' });
+    if (index === 2) wx.navigateTo({ url: '/pages/announcements/announcements' });
+  },
+
+  goAnn() {
+    wx.navigateTo({
+      url: this.data.latestAnn
+        ? `/pages/announcement-detail/announcement-detail?id=${this.data.latestAnn.id}`
+        : '/pages/announcements/announcements',
+    });
   },
 
   goBind() {

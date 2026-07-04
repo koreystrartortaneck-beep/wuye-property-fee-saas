@@ -1,0 +1,52 @@
+<view class="page tdetail-page" wx:if="{{ticket}}">
+  <view class="td-card card">
+    <view class="td-top">
+      <view class="td-type">{{ticket.typeLabel}}</view>
+      <view class="td-status s-{{ticket.status}}">{{ticket.statusLabel}}</view>
+    </view>
+    <view class="td-content">{{ticket.content}}</view>
+    <view class="td-imgs" wx:if="{{ticket.images.length > 0}}">
+      <image wx:for="{{ticket.images}}" wx:key="*this" src="{{item}}" mode="aspectFill"
+             data-src="{{item}}" bindtap="previewImage" />
+    </view>
+    <view class="td-meta">{{ticket.houseName}} · {{ticket.time}}</view>
+  </view>
+
+  <!-- 进度时间线 -->
+  <view class="td-card card">
+    <view class="td-title">处理进度</view>
+    <view class="tl">
+      <view wx:for="{{timeline}}" wx:key="label" class="tl-row">
+        <view class="tl-dot {{item.done ? 'tl-on' : ''}}"></view>
+        <view class="tl-body">
+          <view class="tl-label {{item.done ? 'tl-label-on' : ''}}">{{item.label}}</view>
+          <view class="tl-time">{{item.time}}</view>
+        </view>
+      </view>
+    </view>
+    <view wx:if="{{ticket.replyContent}}" class="td-reply">
+      <view class="td-reply-head">物业回复</view>
+      <view class="td-reply-body">{{ticket.replyContent}}</view>
+    </view>
+  </view>
+
+  <!-- 评价 -->
+  <view class="td-card card" wx:if="{{ticket.status === 'DONE'}}">
+    <view class="td-title">服务评价</view>
+    <block wx:if="{{ticket.rating}}">
+      <view class="stars">
+        <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="star {{item <= ticket.rating ? 'star-on' : ''}}">★</text>
+      </view>
+      <view class="rate-comment" wx:if="{{ticket.ratingComment}}">{{ticket.ratingComment}}</view>
+    </block>
+    <block wx:else>
+      <view class="stars">
+        <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this"
+              class="star {{item <= ratingInput ? 'star-on' : ''}}"
+              data-star="{{item}}" bindtap="setRating">★</text>
+      </view>
+      <input class="rate-input" placeholder="说点什么（选填）" value="{{ratingComment}}" bindinput="onRatingComment" />
+      <button class="gold-button rate-btn" bindtap="submitRating">提交评价</button>
+    </block>
+  </view>
+</view>

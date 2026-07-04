@@ -137,12 +137,13 @@ model AdminUser {
 }
 
 model Community {
-  id        String       @id @default(cuid())
-  tenantId  String
-  name      String
-  address   String?
-  status    EntityStatus @default(ACTIVE)
-  createdAt DateTime     @default(now())
+  id           String       @id @default(cuid())
+  tenantId     String
+  name         String
+  address      String?
+  servicePhone String? // 管家/客服电话
+  status       EntityStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
 
   tenant Tenant  @relation(fields: [tenantId], references: [id])
   houses House[]
@@ -166,9 +167,11 @@ model House {
   status      EntityStatus @default(ACTIVE)
   createdAt   DateTime     @default(now())
 
-  community Community      @relation(fields: [communityId], references: [id])
-  bindings  HouseBinding[]
-  bills     Bill[]
+  community     Community      @relation(fields: [communityId], references: [id])
+  bindings      HouseBinding[]
+  bills         Bill[]
+  tickets       Ticket[]
+  visitorPasses VisitorPass[]
 
   @@unique([communityId, code])
   @@index([tenantId])
@@ -187,23 +190,24 @@ model WxUser {
 
   bindings HouseBinding[]
   payments Payment[]
+  tickets  Ticket[]
 
   @@index([phone])
 }
 
 model HouseBinding {
-  id           String          @id @default(cuid())
-  tenantId     String
-  wxUserId     String
-  houseId      String
-  relation     BindingRelation @default(OWNER)
-  status       BindingStatus   @default(PENDING)
-  source       BindingSource
+  id            String          @id @default(cuid())
+  tenantId      String
+  wxUserId      String
+  houseId       String
+  relation      BindingRelation @default(OWNER)
+  status        BindingStatus   @default(PENDING)
+  source        BindingSource
   applicantName String?
-  reviewedBy   String?
-  reviewedAt   DateTime?
-  rejectReason String?
-  createdAt    DateTime        @default(now())
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  rejectReason  String?
+  createdAt     DateTime        @default(now())
 
   wxUser WxUser @relation(fields: [wxUserId], references: [id])
   house  House  @relation(fields: [houseId], references: [id])
@@ -357,4 +361,93 @@ model NotifyLog {
 
   @@index([tenantId])
   @@index([billId, type, status])
+}
+
+// ---------- 二期：工单 / 访客 / 公告 ----------
+
+enum TicketType {
+  REPAIR
+  COMPLAINT
+  SUGGESTION
+}
+
+enum TicketStatus {
+  PENDING
+  PROCESSING
+  DONE
+  CLOSED
+}
+
+enum PassStatus {
+  ACTIVE
+  USED
+  EXPIRED
+  CANCELED
+}
+
+enum AnnouncementStatus {
+  PUBLISHED
+  REVOKED
+}
+
+model Ticket {
+  id            String       @id @default(cuid())
+  tenantId      String
+  communityId   String
+  houseId       String
+  wxUserId      String
+  type          TicketType
+  content       String       @db.Text
+  images        Json // 图片 URL 数组
+  status        TicketStatus @default(PENDING)
+  assigneeName  String?
+  replyContent  String?      @db.Text
+  processedAt   DateTime?
+  doneAt        DateTime?
+  rating        Int? // 完成后业主评分 1-5
+  ratingComment String?
+  createdAt     DateTime     @default(now())
+
+  house  House  @relation(fields: [houseId], references: [id])
+  wxUser WxUser @relation(fields: [wxUserId], references: [id])
+
+  @@index([tenantId])
+  @@index([houseId])
+  @@index([status])
+}
+
+model VisitorPass {
+  id           String     @id @default(cuid())
+  tenantId     String
+  communityId  String
+  houseId      String
+  wxUserId     String
+  visitorName  String
+  visitorPhone String?
+  plateNo      String?
+  visitDate    DateTime // 到访日（当天有效）
+  code         String // 6 位数字通行码
+  status       PassStatus @default(ACTIVE)
+  usedAt       DateTime?
+  createdAt    DateTime   @default(now())
+
+  house House @relation(fields: [houseId], references: [id])
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([visitDate])
+}
+
+model Announcement {
+  id          String             @id @default(cuid())
+  tenantId    String
+  communityId String? // null = 公司全部小区
+  title       String
+  content     String             @db.Text
+  pinned      Boolean            @default(false)
+  status      AnnouncementStatus @default(PUBLISHED)
+  createdBy   String?
+  publishedAt DateTime           @default(now())
+
+  @@index([tenantId])
 }

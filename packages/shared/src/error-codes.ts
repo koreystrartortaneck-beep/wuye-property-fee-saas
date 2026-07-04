@@ -31,6 +31,11 @@ export const ErrorCode = {
   BILL_NOT_PAYABLE: { code: 43001, message: '账单不可支付' },
   PAYMENT_STATE_INVALID: { code: 43002, message: '订单状态不允许该操作' },
 
+  // 44xxx 工单与访客
+  TICKET_STATE_INVALID: { code: 44001, message: '工单状态不允许该操作' },
+  PASS_STATE_INVALID: { code: 44002, message: '通行码状态不允许该操作' },
+  UPLOAD_INVALID: { code: 44003, message: '文件类型或大小不符合要求' },
+
   // 50xxx
   INTERNAL: { code: 50000, message: '服务器内部错误' },
 } as const satisfies Record<string, ErrorCodeDef>;

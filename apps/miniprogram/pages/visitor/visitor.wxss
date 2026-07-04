@@ -1,0 +1,113 @@
+.page.visitor-page {
+  padding-top: 32rpx;
+}
+
+.v-card {
+  padding: 32rpx;
+}
+
+.v-title {
+  font-size: 32rpx;
+  font-weight: 900;
+  margin-bottom: 8rpx;
+}
+
+.v-form-row {
+  margin-top: 22rpx;
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+}
+
+.v-label {
+  width: 150rpx;
+  font-size: 26rpx;
+  color: #55496b;
+  flex-shrink: 0;
+}
+
+.v-input {
+  flex: 1;
+  height: 80rpx;
+  padding: 0 26rpx;
+  border-radius: 999rpx;
+  background: rgba(37, 28, 56, 0.05);
+  font-size: 26rpx;
+}
+
+.picker-view {
+  line-height: 80rpx;
+}
+
+.v-btn {
+  margin-top: 34rpx;
+  width: 100%;
+}
+
+.v-section {
+  margin: 36rpx 4rpx 20rpx;
+  font-size: 32rpx;
+  font-weight: 900;
+}
+
+.pass-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.pass-item {
+  padding: 28rpx;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.pass-dim {
+  opacity: 0.6;
+}
+
+.pass-code {
+  flex-shrink: 0;
+  font-size: 44rpx;
+  font-weight: 900;
+  letter-spacing: 4rpx;
+  color: #9b743a;
+}
+
+.pass-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pass-name {
+  font-size: 28rpx;
+  font-weight: 800;
+}
+
+.pass-meta {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #8b8199;
+}
+
+.pass-side {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.pass-status {
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.ps-ACTIVE { color: #3f7d5d; }
+.ps-USED { color: #9a92a3; }
+.ps-EXPIRED { color: #b8862f; }
+.ps-CANCELED { color: #c45656; }
+
+.pass-cancel {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #c45656;
+}

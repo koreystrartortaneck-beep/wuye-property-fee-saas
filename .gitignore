@@ -7,3 +7,4 @@ dist/
 outputs/*.zip
 .workbuddy/
 apps/miniprogram/project.private.config.json
+apps/api/uploads/

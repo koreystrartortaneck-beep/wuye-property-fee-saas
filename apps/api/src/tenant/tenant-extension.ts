@@ -15,6 +15,9 @@ export const TENANT_MODELS = new Set([
   'Bill',
   'Payment',
   'NotifyLog',
+  'Ticket',
+  'VisitorPass',
+  'Announcement',
 ]);
 
 /** 无上下文时读操作使用的不可能命中的租户值 */

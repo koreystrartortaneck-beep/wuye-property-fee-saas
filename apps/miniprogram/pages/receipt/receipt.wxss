@@ -1,0 +1,94 @@
+.page.receipt-page {
+  padding-top: 40rpx;
+}
+
+.rc-card {
+  position: relative;
+  padding: 48rpx 40rpx;
+  overflow: hidden;
+}
+
+.rc-head {
+  text-align: center;
+}
+
+.rc-org {
+  font-size: 38rpx;
+  font-weight: 900;
+  letter-spacing: 10rpx;
+  color: #251c38;
+}
+
+.rc-sub {
+  margin-top: 6rpx;
+  font-size: 20rpx;
+  letter-spacing: 6rpx;
+  color: #a79eb5;
+}
+
+.rc-amount-block {
+  margin-top: 36rpx;
+  text-align: center;
+}
+
+.rc-amount-label {
+  font-size: 22rpx;
+  color: #8b8199;
+}
+
+.rc-amount {
+  margin-top: 10rpx;
+  font-size: 64rpx;
+  font-weight: 900;
+  color: #251c38;
+}
+
+.rc-divider {
+  height: 0;
+  border-top: 2rpx dashed rgba(37, 28, 56, 0.14);
+  margin: 30rpx 0;
+}
+
+.rc-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 12rpx 0;
+  font-size: 26rpx;
+}
+
+.rc-item {
+  color: #8b8199;
+}
+
+.rc-val {
+  color: #251c38;
+  font-weight: 600;
+  max-width: 420rpx;
+  text-align: right;
+}
+
+/* 收讫章 */
+.rc-stamp {
+  position: absolute;
+  right: 36rpx;
+  bottom: 110rpx;
+  width: 150rpx;
+  height: 150rpx;
+  border: 5rpx solid rgba(196, 86, 86, 0.75);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44rpx;
+  font-weight: 900;
+  color: rgba(196, 86, 86, 0.8);
+  transform: rotate(-18deg);
+  letter-spacing: 4rpx;
+}
+
+.rc-tip {
+  margin-top: 30rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: #a79eb5;
+}

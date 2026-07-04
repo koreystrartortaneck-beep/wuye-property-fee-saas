@@ -4,10 +4,10 @@
 
   <view class="pay-list">
     <block wx:for="{{list}}" wx:key="orderNo">
-      <view class="pay-item card">
+      <view class="pay-item card" data-index="{{index}}" bindtap="goReceipt">
         <view class="pay-item-top">
           <view class="pay-item-amount amount">¥{{item.totalAmount}}</view>
-          <view class="pay-item-status {{item.success ? 'ok' : ''}}">{{item.statusLabel}}</view>
+          <view class="pay-item-status {{item.success ? 'ok' : ''}}">{{item.statusLabel}}{{item.success ? ' · 收据 ›' : ''}}</view>
         </view>
         <view class="pay-item-bills">{{item.billTitles}}</view>
         <view class="pay-item-meta">

@@ -13,6 +13,10 @@ class CreateCommunityDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  @IsOptional()
+  @IsString()
+  servicePhone?: string;
 }
 
 class UpdateCommunityDto {
@@ -23,6 +27,10 @@ class UpdateCommunityDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  @IsOptional()
+  @IsString()
+  servicePhone?: string;
 
   @IsOptional()
   @IsIn(['ACTIVE', 'DISABLED'])

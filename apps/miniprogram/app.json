@@ -7,7 +7,14 @@
     "pages/mine/mine",
     "pages/bind-house/bind-house",
     "pages/payments/payments",
-    "pages/bill-detail/bill-detail"
+    "pages/bill-detail/bill-detail",
+    "pages/tickets/tickets",
+    "pages/ticket-create/ticket-create",
+    "pages/ticket-detail/ticket-detail",
+    "pages/announcements/announcements",
+    "pages/announcement-detail/announcement-detail",
+    "pages/visitor/visitor",
+    "pages/receipt/receipt"
   ],
   "window": {
     "navigationStyle": "custom",

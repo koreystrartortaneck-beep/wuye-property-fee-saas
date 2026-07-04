@@ -55,6 +55,13 @@
       </block>
     </view>
 
+    <!-- 最新公告条 -->
+    <view wx:if="{{latestAnn}}" class="ann-bar card" bindtap="goAnn">
+      <view class="ann-bar-icon">告</view>
+      <view class="ann-bar-title">{{latestAnn.title}}</view>
+      <view class="ann-bar-arrow">›</view>
+    </view>
+
     <view class="section-head">
       <view>
         <view class="section-kicker">待缴费用</view>
