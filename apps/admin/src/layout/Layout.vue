@@ -7,6 +7,9 @@
         <el-menu-item index="/communities">小区管理</el-menu-item>
         <el-menu-item index="/houses">房产管理</el-menu-item>
         <el-menu-item index="/bindings">绑定审核</el-menu-item>
+        <el-menu-item index="/tickets">报事报修</el-menu-item>
+        <el-menu-item index="/announcements">社区公告</el-menu-item>
+        <el-menu-item index="/visitor-passes">访客通行</el-menu-item>
         <el-menu-item index="/fee-rules">收费规则</el-menu-item>
         <el-menu-item index="/meters">抄表录入</el-menu-item>
         <el-menu-item index="/share-pools">公摊录入</el-menu-item>

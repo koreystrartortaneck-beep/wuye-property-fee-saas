@@ -33,6 +33,7 @@
       <el-form label-width="70px">
         <el-form-item label="名称"><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="地址"><el-input v-model="form.address" /></el-form-item>
+        <el-form-item label="管家电话"><el-input v-model="form.servicePhone" placeholder="业主端「联系管家」直拨此号" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialog = false">取消</el-button>
@@ -61,7 +62,7 @@ const pageSize = 20;
 const loading = ref(false);
 const dialog = ref(false);
 const editing = ref<Community | null>(null);
-const form = ref({ name: '', address: '' });
+const form = ref({ name: '', address: '', servicePhone: '' });
 
 async function load() {
   loading.value = true;
@@ -76,13 +77,13 @@ async function load() {
 
 function openCreate() {
   editing.value = null;
-  form.value = { name: '', address: '' };
+  form.value = { name: '', address: '', servicePhone: '' };
   dialog.value = true;
 }
 
 function openEdit(row: Community) {
   editing.value = row;
-  form.value = { name: row.name, address: row.address ?? '' };
+  form.value = { name: row.name, address: row.address ?? '', servicePhone: (row as any).servicePhone ?? '' };
   dialog.value = true;
 }
 
