@@ -32,7 +32,15 @@ Page({
         this.setData({ ready: true, noHouse: true, unpaidTotal: '0.00', unpaidCount: 0, annList: [] });
         return;
       }
-      this.setData({ noHouse: false, houses, currentHouse: app.globalData.currentHouse });
+      const nextHouse = app.globalData.currentHouse;
+      // 房屋变了：先清掉上一个房屋的内容，杜绝"新房屋标题 + 旧房屋数据"同框
+      const houseChanged = !this.data.currentHouse || this.data.currentHouse.houseId !== nextHouse.houseId;
+      this.setData({
+        noHouse: false,
+        houses,
+        currentHouse: nextHouse,
+        ...(houseChanged ? { annList: [], unpaidTotal: '0.00', unpaidCount: 0, paidUp: false } : {}),
+      });
       await this.loadHome();
     } catch (e) {
       console.error(e);
@@ -85,7 +93,16 @@ Page({
     wx.showActionSheet({
       itemList: houses.map((h) => `${h.communityName} ${h.displayName}`),
       success: async (res) => {
-        getApp().globalData.currentHouse = houses[res.tapIndex];
+        const target = houses[res.tapIndex];
+        getApp().globalData.currentHouse = target;
+        // 先清旧数据再加载，避免切换瞬间的脏渲染
+        this.setData({
+          currentHouse: target,
+          annList: [],
+          unpaidTotal: '0.00',
+          unpaidCount: 0,
+          paidUp: false,
+        });
         await this.loadHome();
       },
     });
