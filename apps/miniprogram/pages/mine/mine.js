@@ -13,10 +13,12 @@ Page({
     houseCount: 0,
     pendingBindings: [],
     menus: [
-      { key: 'houses', title: '我的房屋', desc: '绑定新房产或切换' },
+      { key: 'tickets', title: '我的工单', desc: '报修与投诉建议进度' },
+      { key: 'visitor', title: '访客邀请', desc: '生成访客通行码' },
+      { key: 'announcements', title: '社区公告', desc: '物业最新通知' },
       { key: 'payments', title: '缴费记录', desc: '查看历史付款凭证' },
-      { key: 'notify', title: '消息提醒', desc: '出账与逾期自动推送' },
-      { key: 'service', title: '联系客服', desc: '物业管家在线协助' },
+      { key: 'houses', title: '我的房屋', desc: '绑定新房产或切换' },
+      { key: 'service', title: '联系管家', desc: '一键拨打物业电话' },
     ],
   },
 
@@ -98,7 +100,14 @@ Page({
     const key = e.currentTarget.dataset.key;
     if (key === 'houses') this.switchHouse();
     if (key === 'payments') wx.navigateTo({ url: '/pages/payments/payments' });
-    if (key === 'notify') wx.showToast({ title: '账单生成后将自动推送微信提醒', icon: 'none' });
-    if (key === 'service') wx.showToast({ title: '请联系物业服务中心', icon: 'none' });
+    if (key === 'tickets') wx.navigateTo({ url: '/pages/tickets/tickets' });
+    if (key === 'visitor') wx.navigateTo({ url: '/pages/visitor/visitor' });
+    if (key === 'announcements') wx.navigateTo({ url: '/pages/announcements/announcements' });
+    if (key === 'service') {
+      const house = getApp().globalData.currentHouse;
+      const phone = house && house.servicePhone;
+      if (phone) wx.makePhoneCall({ phoneNumber: phone });
+      else wx.showToast({ title: '物业暂未配置管家电话', icon: 'none' });
+    }
   },
 });

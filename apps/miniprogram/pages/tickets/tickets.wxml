@@ -1,0 +1,22 @@
+<view class="page tickets-page">
+  <view class="ticket-list">
+    <block wx:for="{{list}}" wx:key="id">
+      <view class="ticket-item card" data-id="{{item.id}}" bindtap="goDetail">
+        <view class="ticket-top">
+          <view class="ticket-type {{item.type === 'REPAIR' ? 't-repair' : item.type === 'COMPLAINT' ? 't-complaint' : 't-suggest'}}">{{item.typeLabel}}</view>
+          <view class="ticket-status s-{{item.status}}">{{item.statusLabel}}{{item.status === 'DONE' && !item.rated ? ' · 待评价' : ''}}</view>
+        </view>
+        <view class="ticket-content">{{item.content}}</view>
+        <view class="ticket-meta">
+          <text>{{item.houseName}}</text>
+          <text>{{item.time}}</text>
+        </view>
+      </view>
+    </block>
+    <view wx:if="{{list.length === 0}}" class="ticket-item card">
+      <view class="ticket-content">还没有工单，点击下方按钮提交报修或建议</view>
+    </view>
+  </view>
+
+  <button class="dark-button fab-btn" bindtap="goCreate">＋ 新工单</button>
+</view>

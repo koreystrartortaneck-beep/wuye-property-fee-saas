@@ -1,0 +1,31 @@
+<view class="page receipt-page" wx:if="{{r}}">
+  <view class="rc-card card">
+    <view class="rc-head">
+      <view class="rc-org">电 子 收 据</view>
+      <view class="rc-sub">RECEIPT</view>
+    </view>
+
+    <view class="rc-amount-block">
+      <view class="rc-amount-label">实收金额（元）</view>
+      <view class="rc-amount amount">¥ {{r.totalAmount}}</view>
+    </view>
+
+    <view class="rc-divider"></view>
+
+    <view class="rc-row" wx:for="{{r.items}}" wx:key="title">
+      <text class="rc-item">{{item.title}}</text>
+      <text class="rc-val amount">¥{{item.amount}}</text>
+    </view>
+
+    <view class="rc-divider"></view>
+
+    <view class="rc-row"><text class="rc-item">缴费房屋</text><text class="rc-val">{{r.houseName}}</text></view>
+    <view class="rc-row"><text class="rc-item">订单编号</text><text class="rc-val">{{r.orderNo}}</text></view>
+    <view class="rc-row"><text class="rc-item">支付时间</text><text class="rc-val">{{r.paidAt}}</text></view>
+    <view class="rc-row"><text class="rc-item">支付方式</text><text class="rc-val">微信支付</text></view>
+
+    <view class="rc-stamp" wx:if="{{r.success}}">收讫</view>
+  </view>
+
+  <view class="rc-tip">长按屏幕截图，即可保存此收据凭证</view>
+</view>

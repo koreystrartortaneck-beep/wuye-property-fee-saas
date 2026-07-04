@@ -1,0 +1,33 @@
+.page.annd-page {
+  padding-top: 32rpx;
+}
+
+.annd-card {
+  padding: 40rpx 36rpx;
+}
+
+.annd-title {
+  font-size: 36rpx;
+  font-weight: 900;
+  color: #251c38;
+  line-height: 1.4;
+}
+
+.annd-date {
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: #a79eb5;
+}
+
+.annd-divider {
+  height: 1rpx;
+  background: rgba(37, 28, 56, 0.08);
+  margin: 28rpx 0;
+}
+
+.annd-content {
+  font-size: 29rpx;
+  line-height: 1.8;
+  color: #3d3350;
+  white-space: pre-wrap;
+}

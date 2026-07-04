@@ -31,4 +31,9 @@ Page({
   viewBill() {
     wx.switchTab({ url: '/pages/bill/bill' });
   },
+
+  viewReceipt() {
+    if (!this.data.orderNo) return;
+    wx.navigateTo({ url: `/pages/receipt/receipt?orderNo=${this.data.orderNo}` });
+  },
 });

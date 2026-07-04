@@ -1,0 +1,166 @@
+.page.tdetail-page {
+  padding-top: 32rpx;
+}
+
+.td-card {
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+}
+
+.td-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.td-type {
+  padding: 6rpx 18rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 800;
+  color: #9b743a;
+  background: rgba(201, 166, 107, 0.16);
+}
+
+.td-status {
+  font-size: 24rpx;
+  font-weight: 800;
+}
+
+.s-PENDING { color: #b8862f; }
+.s-PROCESSING { color: #5a4680; }
+.s-DONE { color: #3f7d5d; }
+.s-CLOSED { color: #9a92a3; }
+
+.td-content {
+  margin-top: 20rpx;
+  font-size: 29rpx;
+  line-height: 1.6;
+  color: #251c38;
+}
+
+.td-imgs {
+  margin-top: 20rpx;
+  display: flex;
+  gap: 16rpx;
+}
+
+.td-imgs image {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 16rpx;
+}
+
+.td-meta {
+  margin-top: 20rpx;
+  font-size: 22rpx;
+  color: #8b8199;
+}
+
+.td-title {
+  font-size: 30rpx;
+  font-weight: 800;
+  margin-bottom: 22rpx;
+}
+
+/* 时间线 */
+.tl-row {
+  display: flex;
+  gap: 20rpx;
+  padding-bottom: 30rpx;
+  position: relative;
+}
+
+.tl-row:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 11rpx;
+  top: 28rpx;
+  bottom: 0;
+  width: 2rpx;
+  background: rgba(37, 28, 56, 0.1);
+}
+
+.tl-dot {
+  flex-shrink: 0;
+  width: 24rpx;
+  height: 24rpx;
+  border-radius: 50%;
+  margin-top: 4rpx;
+  background: rgba(37, 28, 56, 0.12);
+}
+
+.tl-on {
+  background: linear-gradient(145deg, #e3bd7d, #9b743a);
+}
+
+.tl-label {
+  font-size: 27rpx;
+  color: #8b8199;
+}
+
+.tl-label-on {
+  color: #251c38;
+  font-weight: 700;
+}
+
+.tl-time {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #a79eb5;
+}
+
+.td-reply {
+  margin-top: 8rpx;
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: rgba(201, 166, 107, 0.1);
+}
+
+.td-reply-head {
+  font-size: 24rpx;
+  font-weight: 800;
+  color: #9b743a;
+}
+
+.td-reply-body {
+  margin-top: 10rpx;
+  font-size: 27rpx;
+  line-height: 1.6;
+  color: #251c38;
+}
+
+/* 评分 */
+.stars {
+  display: flex;
+  gap: 14rpx;
+}
+
+.star {
+  font-size: 56rpx;
+  color: rgba(37, 28, 56, 0.15);
+}
+
+.star-on {
+  color: #e3a935;
+}
+
+.rate-comment {
+  margin-top: 14rpx;
+  font-size: 26rpx;
+  color: #7c7288;
+}
+
+.rate-input {
+  margin-top: 24rpx;
+  height: 80rpx;
+  padding: 0 26rpx;
+  border-radius: 999rpx;
+  background: rgba(37, 28, 56, 0.05);
+  font-size: 26rpx;
+}
+
+.rate-btn {
+  margin-top: 26rpx;
+  width: 100%;
+}

@@ -1,0 +1,111 @@
+.page.create-page {
+  padding-top: 32rpx;
+}
+
+.type-tabs {
+  padding: 10rpx;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8rpx;
+}
+
+.type-tab {
+  height: 68rpx;
+  border-radius: 999rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #7c7288;
+  font-size: 27rpx;
+  font-weight: 700;
+}
+
+.type-on {
+  color: #251c38;
+  background: linear-gradient(145deg, #fff1c8, #ead0a0);
+}
+
+.form-card {
+  margin-top: 24rpx;
+  padding: 32rpx;
+}
+
+.form-label {
+  font-size: 26rpx;
+  font-weight: 800;
+  color: #251c38;
+  margin: 26rpx 0 16rpx;
+}
+
+.form-label:first-child {
+  margin-top: 0;
+}
+
+.house-pick {
+  height: 84rpx;
+  line-height: 84rpx;
+  padding: 0 28rpx;
+  border-radius: 20rpx;
+  background: rgba(37, 28, 56, 0.05);
+  font-size: 27rpx;
+}
+
+.content-input {
+  width: 100%;
+  min-height: 220rpx;
+  padding: 24rpx 28rpx;
+  border-radius: 20rpx;
+  background: rgba(37, 28, 56, 0.05);
+  font-size: 27rpx;
+  box-sizing: border-box;
+}
+
+.img-row {
+  display: flex;
+  gap: 18rpx;
+}
+
+.img-box {
+  position: relative;
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 18rpx;
+  overflow: hidden;
+}
+
+.img-box image {
+  width: 100%;
+  height: 100%;
+}
+
+.img-del {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 0 0 0 18rpx;
+  background: rgba(37, 28, 56, 0.65);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+}
+
+.img-add {
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 18rpx;
+  border: 2rpx dashed rgba(155, 116, 58, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 52rpx;
+  color: #c9a66b;
+}
+
+.submit-btn {
+  margin-top: 40rpx;
+  width: 100%;
+}

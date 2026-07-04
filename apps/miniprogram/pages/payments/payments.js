@@ -54,4 +54,11 @@ Page({
       wx.stopPullDownRefresh();
     }
   },
+
+  /** 支付成功的订单 → 电子收据 */
+  goReceipt(e) {
+    const item = this.data.list[Number(e.currentTarget.dataset.index)];
+    if (!item || !item.success) return;
+    wx.navigateTo({ url: `/pages/receipt/receipt?orderNo=${item.orderNo}` });
+  },
 });

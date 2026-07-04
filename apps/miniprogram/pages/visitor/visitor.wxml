@@ -1,0 +1,48 @@
+<view class="page visitor-page">
+  <view class="v-card card">
+    <view class="v-title">邀请访客</view>
+    <view class="v-form-row">
+      <view class="v-label">到访房屋</view>
+      <picker range="{{houses}}" range-key="displayName" value="{{houseIndex}}" bindchange="onHouseChange">
+        <view class="v-input picker-view">
+          {{houses.length ? houses[houseIndex].displayName : '请先绑定房屋'}} ›
+        </view>
+      </picker>
+    </view>
+    <view class="v-form-row">
+      <view class="v-label">访客姓名</view>
+      <input class="v-input" placeholder="必填" value="{{visitorName}}" bindinput="onName" />
+    </view>
+    <view class="v-form-row">
+      <view class="v-label">车牌号</view>
+      <input class="v-input" placeholder="驾车到访时填写（选填）" value="{{plateNo}}" bindinput="onPlate" />
+    </view>
+    <view class="v-form-row">
+      <view class="v-label">到访日期</view>
+      <picker mode="date" start="{{todayStr}}" value="{{visitDate}}" bindchange="onDate">
+        <view class="v-input picker-view">{{visitDate}} ›</view>
+      </picker>
+    </view>
+    <button class="dark-button v-btn" bindtap="create">生成通行码</button>
+  </view>
+
+  <view class="v-section">我的通行码</view>
+  <view class="pass-list">
+    <block wx:for="{{list}}" wx:key="id">
+      <view class="pass-item card {{item.status !== 'ACTIVE' ? 'pass-dim' : ''}}">
+        <view class="pass-code amount" data-code="{{item.code}}" bindtap="copyCode">{{item.code}}</view>
+        <view class="pass-info">
+          <view class="pass-name">{{item.visitorName}}{{item.plateNo ? ' · ' + item.plateNo : ''}}</view>
+          <view class="pass-meta">{{item.houseName}} · {{item.date}}</view>
+        </view>
+        <view class="pass-side">
+          <view class="pass-status ps-{{item.status}}">{{item.statusLabel}}</view>
+          <view wx:if="{{item.status === 'ACTIVE'}}" class="pass-cancel" data-id="{{item.id}}" catchtap="cancel">取消</view>
+        </view>
+      </view>
+    </block>
+    <view wx:if="{{list.length === 0}}" class="pass-item card">
+      <view class="pass-info"><view class="pass-meta">暂无通行码，为访客生成一个吧</view></view>
+    </view>
+  </view>
+</view>

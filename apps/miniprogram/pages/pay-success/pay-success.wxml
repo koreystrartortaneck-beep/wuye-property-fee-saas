@@ -29,7 +29,7 @@
   </view>
 
   <view class="action-row">
-    <button class="gold-button ghost-btn" bindtap="viewBill">查看账单</button>
+    <button class="gold-button ghost-btn" bindtap="viewReceipt">电子收据</button>
     <button class="dark-button action-btn" bindtap="backHome">返回首页</button>
   </view>
 </view>

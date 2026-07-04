@@ -266,3 +266,43 @@
   font-weight: 800;
   background: #251c38;
 }
+
+/* 最新公告条（二期新增） */
+.ann-bar {
+  margin-top: 26rpx;
+  padding: 22rpx 28rpx;
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+}
+
+.ann-bar-icon {
+  flex-shrink: 0;
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  font-weight: 900;
+  color: #251c38;
+  background: linear-gradient(145deg, #fff1c8, #c9a66b);
+}
+
+.ann-bar-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #251c38;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ann-bar-arrow {
+  flex-shrink: 0;
+  color: rgba(130, 120, 140, 0.55);
+  font-size: 32rpx;
+}

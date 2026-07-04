@@ -1,0 +1,17 @@
+<view class="page ann-page">
+  <view class="ann-list">
+    <block wx:for="{{list}}" wx:key="id">
+      <view class="ann-item card" data-id="{{item.id}}" bindtap="goDetail">
+        <view class="ann-title-row">
+          <text wx:if="{{item.pinned}}" class="ann-pin">置顶</text>
+          <text class="ann-title">{{item.title}}</text>
+        </view>
+        <view class="ann-preview">{{item.preview}}</view>
+        <view class="ann-date">{{item.date}}</view>
+      </view>
+    </block>
+    <view wx:if="{{list.length === 0}}" class="ann-item card">
+      <view class="ann-preview">暂无公告</view>
+    </view>
+  </view>
+</view>

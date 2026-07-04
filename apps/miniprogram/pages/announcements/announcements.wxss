@@ -1,0 +1,48 @@
+.page.ann-page {
+  padding-top: 32rpx;
+}
+
+.ann-list {
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+}
+
+.ann-item {
+  padding: 30rpx;
+}
+
+.ann-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.ann-pin {
+  flex-shrink: 0;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  font-weight: 800;
+  color: #9b743a;
+  background: rgba(201, 166, 107, 0.16);
+}
+
+.ann-title {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #251c38;
+}
+
+.ann-preview {
+  margin-top: 14rpx;
+  font-size: 25rpx;
+  color: #7c7288;
+  line-height: 1.5;
+}
+
+.ann-date {
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: #a79eb5;
+}

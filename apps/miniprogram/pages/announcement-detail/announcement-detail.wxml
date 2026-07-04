@@ -1,0 +1,8 @@
+<view class="page annd-page" wx:if="{{ann}}">
+  <view class="annd-card card">
+    <view class="annd-title">{{ann.title}}</view>
+    <view class="annd-date">{{ann.date}}</view>
+    <view class="annd-divider"></view>
+    <text class="annd-content" user-select>{{ann.content}}</text>
+  </view>
+</view>
