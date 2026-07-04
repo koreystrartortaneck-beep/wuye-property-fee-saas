@@ -44,3 +44,14 @@ export type NotifyType = (typeof NOTIFY_TYPES)[number];
 
 export const NOTIFY_STATUSES = ['SENT', 'FAILED', 'SKIPPED'] as const;
 export type NotifyStatus = (typeof NOTIFY_STATUSES)[number];
+
+// ---------- 二期：工单 / 访客 / 公告 ----------
+
+export const TICKET_TYPES = ['REPAIR', 'COMPLAINT', 'SUGGESTION'] as const;
+export type TicketType = (typeof TICKET_TYPES)[number];
+
+export const TICKET_STATUSES = ['PENDING', 'PROCESSING', 'DONE', 'CLOSED'] as const;
+export type TicketStatus = (typeof TICKET_STATUSES)[number];
+
+export const PASS_STATUSES = ['ACTIVE', 'USED', 'EXPIRED', 'CANCELED'] as const;
+export type PassStatus = (typeof PASS_STATUSES)[number];
