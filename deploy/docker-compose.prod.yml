@@ -35,11 +35,15 @@ services:
       PAY_MODE: ${PAY_MODE:-mock}
       TZ: Asia/Shanghai
       PORT: "3000"
+      UPLOAD_DIR: /app/uploads
     ports:
       - "127.0.0.1:3000:3000"   # 仅供 Nginx 反代
+    volumes:
+      - wuye-uploads:/app/uploads   # 报修图片等上传资源
     depends_on:
       mysql:
         condition: service_healthy
 
 volumes:
   wuye-mysql:
+  wuye-uploads:
