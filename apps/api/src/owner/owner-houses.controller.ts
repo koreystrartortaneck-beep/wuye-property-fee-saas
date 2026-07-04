@@ -120,7 +120,7 @@ export class OwnerHousesService {
     const bindings = await this.prisma.raw.houseBinding.findMany({
       where: { wxUserId: ownerId, status: 'ACTIVE' },
       include: {
-        house: { include: { community: { select: { name: true } } } },
+        house: { include: { community: { select: { name: true, servicePhone: true } } } },
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -133,6 +133,7 @@ export class OwnerHousesService {
       area: b.house.area,
       communityId: b.house.communityId,
       communityName: b.house.community.name,
+      servicePhone: b.house.community.servicePhone,
     }));
   }
 }

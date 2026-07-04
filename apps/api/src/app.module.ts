@@ -6,8 +6,10 @@ import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.module';
 import { NotifyModule } from './notify/notify.module';
 import { PaymentModule } from './payment/payment.module';
+import { AnnouncementsModule } from './announcements/announcements.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { UploadModule } from './upload/upload.module';
+import { VisitorsModule } from './visitors/visitors.module';
 import { HealthController } from './health.controller';
 import { OwnerModule } from './owner/owner.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -27,6 +29,8 @@ import { WxModule } from './wx/wx.module';
     PaymentModule,
     UploadModule,
     TicketsModule,
+    AnnouncementsModule,
+    VisitorsModule,
   ],
   controllers: [HealthController],
 })
