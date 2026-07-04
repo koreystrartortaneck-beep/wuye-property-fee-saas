@@ -29,22 +29,24 @@
 
   <!-- 正常态 -->
   <block wx:if="{{ready && !noHouse}}">
+    <!-- ① 缴费中心：账单的唯一入口 -->
     <view class="hero-card">
       <view class="hero-kicker">PROPERTY SERVICE</view>
-      <view class="hero-title">优雅缴费\n从容生活</view>
+      <view class="hero-title">{{paidUp ? '本期缴清\n生活从容' : '优雅缴费\n从容生活'}}</view>
       <view class="house-chip" bindtap="switchHouse">
         <view class="chip-dot"></view>
         <text>{{currentHouse.displayName}}{{houses.length > 1 ? ' ⇄' : ''}}</text>
       </view>
       <view class="amount-panel">
-        <view class="panel-label">待缴合计（{{unpaidCount}} 笔）</view>
+        <view class="panel-label">{{paidUp ? '本期费用已全部缴清' : '待缴合计（' + unpaidCount + ' 笔）'}}</view>
         <view class="amount-row">
-          <view class="hero-amount amount">¥ {{unpaidTotal}}</view>
-          <button class="gold-button pay-btn" bindtap="goPay">立即缴纳</button>
+          <view class="hero-amount amount">{{paidUp ? '✓' : '¥ ' + unpaidTotal}}</view>
+          <button class="gold-button pay-btn" bindtap="heroAction">{{paidUp ? '查看账单' : '立即缴纳'}}</button>
         </view>
       </view>
     </view>
 
+    <!-- ② 快捷服务 -->
     <view class="quick-grid">
       <block wx:for="{{quickActions}}" wx:key="title">
         <view class="quick-card {{item.active ? 'quick-active' : ''}}" data-index="{{index}}" bindtap="handleQuickTap">
@@ -55,40 +57,29 @@
       </block>
     </view>
 
-    <!-- 最新公告条 -->
-    <view wx:if="{{latestAnn}}" class="ann-bar card" bindtap="goAnn">
-      <view class="ann-bar-icon">告</view>
-      <view class="ann-bar-title">{{latestAnn.title}}</view>
-      <view class="ann-bar-arrow">›</view>
-    </view>
-
+    <!-- ③ 社区动态 -->
     <view class="section-head">
       <view>
-        <view class="section-kicker">待缴费用</view>
-        <view class="section-title">本期账单</view>
+        <view class="section-kicker">{{currentHouse.communityName}}</view>
+        <view class="section-title">社区动态</view>
       </view>
-      <view class="section-more" bindtap="goBill">查看全部</view>
+      <view class="section-more" bindtap="goAnnList">查看全部</view>
     </view>
 
-    <view class="bill-list">
-      <block wx:for="{{bills}}" wx:key="id">
-        <view class="bill-card card" data-id="{{item.id}}" bindtap="goBillDetail">
-          <view class="bill-left">
-            <view class="bill-icon {{item.theme}}">{{item.icon}}</view>
-            <view>
-              <view class="bill-title">{{item.title}}</view>
-              <view class="bill-desc">{{item.desc}}</view>
-            </view>
+    <view class="home-ann-list">
+      <block wx:for="{{annList}}" wx:key="id">
+        <view class="home-ann-item card" data-id="{{item.id}}" bindtap="goAnnDetail">
+          <view class="ha-title-row">
+            <text wx:if="{{item.pinned}}" class="ha-pin">置顶</text>
+            <text class="ha-title">{{item.title}}</text>
+            <text class="ha-date">{{item.date}}</text>
           </view>
-          <view class="bill-amount amount">¥{{item.amount}}</view>
+          <view class="ha-preview">{{item.preview}}</view>
         </view>
       </block>
-      <view wx:if="{{bills.length === 0}}" class="service-card card">
-        <view>
-          <view class="service-kicker">全部缴清</view>
-          <view class="service-title">当前房屋没有待缴账单</view>
-          <view class="service-desc">账单生成后将自动推送微信提醒</view>
-        </view>
+      <view wx:if="{{annList.length === 0}}" class="home-ann-item card ha-empty">
+        <view class="ha-title-row"><text class="ha-title">物业还没有发布公告</text></view>
+        <view class="ha-preview">停水停电、消防演练等社区通知会第一时间出现在这里</view>
       </view>
     </view>
   </block>

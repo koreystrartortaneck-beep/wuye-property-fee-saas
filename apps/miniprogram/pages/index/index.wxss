@@ -306,3 +306,63 @@
   color: rgba(130, 120, 140, 0.55);
   font-size: 32rpx;
 }
+
+/* ===== 社区动态（首页改版：替代原账单列表区） ===== */
+.home-ann-list {
+  margin-top: 4rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.home-ann-item {
+  padding: 28rpx 30rpx;
+}
+
+.ha-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.ha-pin {
+  flex-shrink: 0;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  font-weight: 800;
+  color: #9b743a;
+  background: rgba(201, 166, 107, 0.16);
+}
+
+.ha-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 29rpx;
+  font-weight: 800;
+  color: #251c38;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ha-date {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  color: #a79eb5;
+}
+
+.ha-preview {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #7c7288;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.ha-empty {
+  opacity: 0.85;
+}
