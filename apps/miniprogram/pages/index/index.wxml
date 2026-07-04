@@ -38,9 +38,13 @@
         <text>{{currentHouse.displayName}}{{houses.length > 1 ? ' ⇄' : ''}}</text>
       </view>
       <view class="amount-panel">
-        <view class="panel-label">{{paidUp ? '本期费用已全部缴清' : '待缴合计（' + unpaidCount + ' 笔）'}}</view>
+        <view class="panel-label">{{paidUp ? '本期费用已全部缴清，下期账单将自动提醒' : '待缴合计（' + unpaidCount + ' 笔）'}}</view>
         <view class="amount-row">
-          <view class="hero-amount amount">{{paidUp ? '✓' : '¥ ' + unpaidTotal}}</view>
+          <view wx:if="{{!paidUp}}" class="hero-amount amount">¥ {{unpaidTotal}}</view>
+          <view wx:else class="paid-badge">
+            <view class="pb-check">✓</view>
+            <text>已缴清</text>
+          </view>
           <button class="gold-button pay-btn" bindtap="heroAction">{{paidUp ? '查看账单' : '立即缴纳'}}</button>
         </view>
       </view>
