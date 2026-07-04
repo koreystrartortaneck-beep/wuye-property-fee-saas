@@ -82,6 +82,21 @@ async function main() {
   await upsertAdmin('yunjing', 'yunjing123', '九紫物业管理员', 'TENANT_ADMIN', yunjing.id);
 
   const gongguan = await upsertCommunity(yunjing.id, '九紫莲花城', '莲花大道 9 号');
+  await prisma.community.update({ where: { id: gongguan.id }, data: { servicePhone: '400-800-1234' } });
+
+  // 演示公告（幂等：同名存在则跳过）
+  const annExists = await prisma.announcement.findFirst({ where: { tenantId: yunjing.id, title: '关于小区消防演练的通知' } });
+  if (!annExists) {
+    await prisma.announcement.create({
+      data: {
+        tenantId: yunjing.id,
+        communityId: gongguan.id,
+        title: '关于小区消防演练的通知',
+        content: '各位业主：\n本周六上午 10:00 将在小区中心广场进行消防演练，届时会有警报声与烟雾，请勿惊慌。\n演练期间请配合物业工作人员引导，感谢您的支持。\n\n九紫物业服务中心',
+        pinned: true,
+      },
+    });
+  }
 
   await upsertHouse(yunjing.id, gongguan.id, {
     type: 'RESIDENCE', code: '8-1-2601', displayName: '8 栋 1 单元 2601',
