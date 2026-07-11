@@ -11,6 +11,7 @@ import { TicketsModule } from './tickets/tickets.module';
 import { UploadModule } from './upload/upload.module';
 import { VisitorsModule } from './visitors/visitors.module';
 import { WorkLogsModule } from './work-logs/work-logs.module';
+import { ServicesModule } from './services/services.module';
 import { HealthController } from './health.controller';
 import { OwnerModule } from './owner/owner.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -33,6 +34,7 @@ import { WxModule } from './wx/wx.module';
     AnnouncementsModule,
     VisitorsModule,
     WorkLogsModule,
+    ServicesModule,
   ],
   controllers: [HealthController],
 })
