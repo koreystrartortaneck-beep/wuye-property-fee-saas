@@ -35,6 +35,29 @@ export async function api<T = unknown>(
   throw Object.assign(new Error(json.message), { code: json.code });
 }
 
+/** 上传单张图片到 /admin/upload，返回服务器相对 URL */
+export async function uploadImage(file: File): Promise<string> {
+  const headers: Record<string, string> = {};
+  if (store.token) headers.Authorization = `Bearer ${store.token}`;
+  if (store.profile?.role === 'SUPER_ADMIN' && store.actingTenantId) {
+    headers['X-Tenant-Id'] = store.actingTenantId;
+  }
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${API_BASE}/admin/upload`, { method: 'POST', headers, body: form });
+  const json = await res.json();
+  if (json.code === 0) return json.data.url as string;
+  ElMessage.error(json.message || '上传失败');
+  throw new Error(json.message);
+}
+
+/** 图片相对路径 → 可访问 URL（dev 走代理，生产走 VITE_API_BASE 同源） */
+export function imgUrl(rel: string): string {
+  if (!rel) return '';
+  if (rel.startsWith('http')) return rel;
+  return API_BASE.replace(/\/api\/v1$/, '') + rel;
+}
+
 export interface Page<T> {
   list: T[];
   total: number;

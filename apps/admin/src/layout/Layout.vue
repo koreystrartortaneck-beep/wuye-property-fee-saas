@@ -10,6 +10,9 @@
         <el-menu-item index="/tickets">报事报修</el-menu-item>
         <el-menu-item index="/announcements">社区公告</el-menu-item>
         <el-menu-item index="/visitor-passes">访客通行</el-menu-item>
+        <el-menu-item index="/work-logs">工作照片墙</el-menu-item>
+        <el-menu-item index="/services">生活服务</el-menu-item>
+        <el-menu-item index="/coupons">优惠券</el-menu-item>
         <el-menu-item index="/fee-rules">收费规则</el-menu-item>
         <el-menu-item index="/meters">抄表录入</el-menu-item>
         <el-menu-item index="/share-pools">公摊录入</el-menu-item>

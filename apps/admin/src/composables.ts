@@ -41,3 +41,33 @@ export function currentMonth(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
+
+// ---------- 三期标签 ----------
+
+export const WORK_CATEGORY_LABEL: Record<string, string> = {
+  INSPECTION: '日常巡检',
+  CLEANING: '保洁',
+  GREENING: '绿化',
+  SECURITY: '安保',
+  REPAIR: '维修',
+  OTHER: '其他',
+};
+
+export const SERVICE_ORDER_STATUS_LABEL: Record<string, string> = {
+  PENDING: '待接单',
+  ACCEPTED: '已接单',
+  DONE: '已完成',
+  CANCELED: '已取消',
+};
+
+export const COUPON_TYPE_LABEL: Record<string, string> = {
+  DISCOUNT: '满减抵扣',
+  SERVICE: '服务券',
+  GIFT: '礼品券',
+};
+
+/** 今天 'YYYY-MM-DD' */
+export function today(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
