@@ -1,0 +1,95 @@
+.page.book-page {
+  padding-top: 28rpx;
+}
+
+.book-hero {
+  padding: 36rpx;
+}
+
+.bh-name {
+  font-size: 34rpx;
+  font-weight: 900;
+  color: #251c38;
+}
+
+.bh-price {
+  margin-top: 14rpx;
+  font-size: 48rpx;
+  font-weight: 900;
+  color: #9b743a;
+  font-family: DIN Alternate, sans-serif;
+}
+
+.bh-cur {
+  font-size: 26rpx;
+}
+
+.bh-unit {
+  font-size: 24rpx;
+  color: #a79eb5;
+  font-weight: 500;
+}
+
+.bh-desc {
+  margin-top: 14rpx;
+  font-size: 25rpx;
+  color: #7c7288;
+  line-height: 1.5;
+}
+
+.book-form {
+  margin-top: 24rpx;
+  padding: 12rpx 32rpx;
+}
+
+.bf-row {
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+  min-height: 100rpx;
+  border-bottom: 1rpx solid rgba(37, 28, 56, 0.06);
+}
+
+.bf-row:last-child {
+  border-bottom: none;
+}
+
+.bf-row-top {
+  align-items: flex-start;
+  padding: 24rpx 0;
+}
+
+.bf-label {
+  width: 140rpx;
+  flex-shrink: 0;
+  font-size: 27rpx;
+  color: #55496b;
+  font-weight: 600;
+}
+
+.bf-input {
+  flex: 1;
+  font-size: 27rpx;
+}
+
+.picker-v {
+  color: #251c38;
+}
+
+.bf-textarea {
+  flex: 1;
+  height: 140rpx;
+  font-size: 27rpx;
+}
+
+.book-submit {
+  margin-top: 40rpx;
+  width: 100%;
+}
+
+.book-tip {
+  margin-top: 20rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: #a79eb5;
+}

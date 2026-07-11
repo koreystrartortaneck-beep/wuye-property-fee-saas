@@ -1,0 +1,34 @@
+<view class="page work-page">
+  <scroll-view class="filter-bar" scroll-x>
+    <view class="filter-inner">
+      <view
+        wx:for="{{filters}}"
+        wx:key="value"
+        class="filter-chip {{activeCat === item.value ? 'chip-on' : ''}}"
+        data-cat="{{item.value}}"
+        bindtap="setCat"
+      >{{item.label}}</view>
+    </view>
+  </scroll-view>
+
+  <view class="work-list">
+    <block wx:for="{{list}}" wx:key="id">
+      <view class="work-item card" data-id="{{item.id}}" bindtap="goDetail">
+        <image class="work-cover" src="{{item.cover}}" mode="aspectFill" />
+        <view class="work-body">
+          <view class="work-top">
+            <text class="work-cat">{{item.category}}</text>
+            <text wx:if="{{item.count > 1}}" class="work-count">共 {{item.count}} 图</text>
+          </view>
+          <view class="work-title">{{item.title}}</view>
+          <view class="work-desc" wx:if="{{item.desc}}">{{item.desc}}</view>
+          <view class="work-meta">{{item.staffName}}{{item.staffName ? ' · ' : ''}}{{item.time}}</view>
+        </view>
+      </view>
+    </block>
+    <view wx:if="{{list.length === 0}}" class="work-empty card">
+      <view class="we-title">暂无物业公示</view>
+      <view class="we-desc">物业的日常巡检、保洁、维修工作照片会展示在这里</view>
+    </view>
+  </view>
+</view>

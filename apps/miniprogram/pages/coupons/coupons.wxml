@@ -1,0 +1,60 @@
+<view class="page cpn-page">
+  <view class="cpn-tabs card">
+    <view class="cpn-tab {{tab === 0 ? 'tab-on' : ''}}" data-tab="0" bindtap="switchTab">可领取</view>
+    <view class="cpn-tab {{tab === 1 ? 'tab-on' : ''}}" data-tab="1" bindtap="switchTab">我的卡券</view>
+  </view>
+
+  <!-- 可领取 -->
+  <block wx:if="{{tab === 0}}">
+    <view class="cpn-list">
+      <block wx:for="{{available}}" wx:key="id">
+        <view class="ticket {{item.soldOut ? 'ticket-dim' : ''}}">
+          <view class="ticket-left">
+            <view class="ticket-value"><text class="tv-cur">¥</text>{{item.big}}</view>
+            <view class="ticket-sub">{{item.sub}}</view>
+          </view>
+          <view class="ticket-mid">
+            <view class="ticket-name">{{item.name}}</view>
+            <view class="ticket-desc" wx:if="{{item.desc}}">{{item.desc}}</view>
+            <view class="ticket-valid">有效期至 {{item.validTo}} · 剩 {{item.remaining}} 张</view>
+          </view>
+          <view class="ticket-right">
+            <button class="gold-button ticket-btn" wx:if="{{!item.soldOut && item.claimedByMe === 0}}" data-id="{{item.id}}" bindtap="claim">领取</button>
+            <view wx:elif="{{item.claimedByMe > 0}}" class="ticket-got">已领取</view>
+            <view wx:else class="ticket-out">已领完</view>
+          </view>
+        </view>
+      </block>
+      <view wx:if="{{available.length === 0}}" class="cpn-empty card">
+        <view class="ce-title">暂无可领取优惠券</view>
+        <view class="ce-desc">物业发放物业费抵扣、服务券后会出现在这里</view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 我的卡券 -->
+  <block wx:else>
+    <view class="cpn-list">
+      <block wx:for="{{mine}}" wx:key="id">
+        <view class="ticket {{item.status !== 'UNUSED' ? 'ticket-dim' : ''}}">
+          <view class="ticket-left">
+            <view class="ticket-value"><text class="tv-cur">¥</text>{{item.big}}</view>
+            <view class="ticket-sub">{{item.sub}}</view>
+          </view>
+          <view class="ticket-mid">
+            <view class="ticket-name">{{item.name}}</view>
+            <view class="ticket-code" data-code="{{item.code}}" bindtap="copyCode">券码 {{item.code}}（点击复制）</view>
+            <view class="ticket-valid">有效期至 {{item.validTo}}</view>
+          </view>
+          <view class="ticket-right">
+            <view class="ticket-status ts-{{item.status}}">{{item.statusLabel}}</view>
+          </view>
+        </view>
+      </block>
+      <view wx:if="{{mine.length === 0}}" class="cpn-empty card">
+        <view class="ce-title">还没有卡券</view>
+        <view class="ce-desc">去「可领取」看看物业发了哪些福利</view>
+      </view>
+    </view>
+  </block>
+</view>

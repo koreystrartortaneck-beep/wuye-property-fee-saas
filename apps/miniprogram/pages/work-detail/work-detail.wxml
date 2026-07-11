@@ -1,0 +1,18 @@
+<view class="page wd-page" wx:if="{{log}}">
+  <view class="wd-card card">
+    <view class="wd-cat">{{log.category}}</view>
+    <view class="wd-title">{{log.title}}</view>
+    <view class="wd-meta">{{log.staffName}}{{log.staffName ? ' · ' : ''}}{{log.time}}</view>
+    <view class="wd-desc" wx:if="{{log.description}}">{{log.description}}</view>
+    <view class="wd-imgs">
+      <image
+        wx:for="{{log.images}}"
+        wx:key="*this"
+        src="{{item}}"
+        mode="widthFix"
+        data-src="{{item}}"
+        bindtap="preview"
+      />
+    </view>
+  </view>
+</view>

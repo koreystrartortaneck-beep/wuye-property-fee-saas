@@ -173,6 +173,45 @@ async function main() {
     params: { unitPrice: 1.8 }, period: 'MONTHLY', billDay: 1, dueDays: 20,
   });
 
+  // ------- 三期演示数据：工作照片墙 / 生活服务 / 卡券（幂等） -------
+  if (!(await prisma.workLog.findFirst({ where: { tenantId: yunjing.id, title: '早班消防巡检' } }))) {
+    await prisma.workLog.create({
+      data: {
+        tenantId: yunjing.id, communityId: gongguan.id, category: 'INSPECTION', title: '早班消防巡检',
+        description: '对 8 栋楼道消防栓、灭火器逐层检查，均在有效期内。', staffName: '安保 王队',
+        images: ['/uploads/demo/inspect1.jpg', '/uploads/demo/inspect2.jpg'],
+      },
+    });
+    await prisma.workLog.create({
+      data: {
+        tenantId: yunjing.id, communityId: gongguan.id, category: 'GREENING', title: '中心花园修剪',
+        description: '完成中心花园绿篱修剪与浇灌。', staffName: '绿化 李师傅',
+        images: ['/uploads/demo/green1.jpg'],
+      },
+    });
+  }
+  if (!(await prisma.serviceItem.findFirst({ where: { tenantId: yunjing.id, name: '日常保洁' } }))) {
+    await prisma.serviceItem.create({ data: { tenantId: yunjing.id, communityId: gongguan.id, name: '日常保洁', category: '保洁', price: '60.00', unit: '元/时段', description: '专业保洁 2 小时上门，含厨卫深度清洁', sortOrder: 1 } });
+    await prisma.serviceItem.create({ data: { tenantId: yunjing.id, communityId: gongguan.id, name: '油烟机清洗', category: '清洗', price: '80.00', unit: '元/台', description: '拆洗油烟机，恢复吸力', sortOrder: 2 } });
+    await prisma.serviceItem.create({ data: { tenantId: yunjing.id, communityId: gongguan.id, name: '窗帘清洗', category: '清洗', price: '30.00', unit: '元/米', description: '上门取送，专业清洗', sortOrder: 3 } });
+  }
+  if (!(await prisma.coupon.findFirst({ where: { tenantId: yunjing.id, name: '物业费满500减20' } }))) {
+    await prisma.coupon.create({
+      data: {
+        tenantId: yunjing.id, communityId: gongguan.id, name: '物业费满500减20', type: 'DISCOUNT',
+        faceValue: '20.00', threshold: '500.00', description: '缴纳物业费满 500 元可用，每户限领 1 张',
+        totalQty: 200, perUserLimit: 1, validFrom: new Date('2026-01-01'), validTo: new Date('2026-12-31T23:59:59'),
+      },
+    });
+    await prisma.coupon.create({
+      data: {
+        tenantId: yunjing.id, communityId: null, name: '报修免上门费券', type: 'SERVICE',
+        description: '有偿维修时可免除上门费', totalQty: 500, perUserLimit: 2,
+        validFrom: new Date('2026-01-01'), validTo: new Date('2026-12-31T23:59:59'),
+      },
+    });
+  }
+
   console.log('✅ seed 完成');
   console.log('   平台超管: admin / admin123');
   console.log('   九紫物业: yunjing / yunjing123');
