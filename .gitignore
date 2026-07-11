@@ -6,5 +6,6 @@ dist/
 .DS_Store
 outputs/*.zip
 .workbuddy/
+.worktrees/
 apps/miniprogram/project.private.config.json
 apps/api/uploads/
