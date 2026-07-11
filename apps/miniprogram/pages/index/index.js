@@ -96,7 +96,7 @@ Page({
       unpaidTotal: summary.unpaidTotal,
       unpaidCount: summary.unpaidCount,
       paidUp: summary.unpaidCount === 0,
-      feed: buildFeed(anns, works.list).slice(0, 8),
+      feed: buildFeed(anns, works.list).slice(0, 3),
     });
   },
 

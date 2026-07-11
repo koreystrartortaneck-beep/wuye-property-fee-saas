@@ -40,5 +40,6 @@
       <view class="fe-title">暂无内容</view>
       <view class="fe-desc">物业公告与日常工作照片会在这里持续更新</view>
     </view>
+    <view wx:if="{{feed.length > 0}}" class="feed-end">已显示全部 {{feed.length}} 条</view>
   </view>
 </view>

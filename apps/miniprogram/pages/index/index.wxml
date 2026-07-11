@@ -50,12 +50,9 @@
       </view>
     </view>
 
-    <!-- ② 社区动态：公告 + 物业公示 混排一条流 -->
+    <!-- ② 社区动态：公告 + 物业公示 混排一条流（首页只放最近 3 条摘要） -->
     <view class="section-head">
-      <view>
-        <view class="section-kicker">{{currentHouse.communityName}}</view>
-        <view class="section-title">社区动态</view>
-      </view>
+      <view class="section-title">社区动态</view>
       <view class="section-more" bindtap="goFeed">查看全部</view>
     </view>
 

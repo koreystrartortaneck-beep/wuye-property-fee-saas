@@ -170,3 +170,10 @@
   color: #8b8199;
   line-height: 1.5;
 }
+
+.feed-end {
+  text-align: center;
+  color: #b3aa9d;
+  font-size: 22rpx;
+  padding: 20rpx 0 6rpx;
+}
