@@ -1,0 +1,44 @@
+<view class="page community-page">
+  <scroll-view class="filter-bar" scroll-x>
+    <view class="filter-inner">
+      <view
+        wx:for="{{filters}}"
+        wx:key="value"
+        class="filter-chip {{active === item.value ? 'chip-on' : ''}}"
+        data-value="{{item.value}}"
+        bindtap="setFilter"
+      >{{item.label}}</view>
+    </view>
+  </scroll-view>
+
+  <view class="feed-list">
+    <block wx:for="{{feed}}" wx:key="id">
+      <view wx:if="{{item.type === 'work'}}" class="feed-work card" data-id="{{item.id}}" data-type="work" bindtap="goItem">
+        <image class="fw-cover" src="{{item.cover}}" mode="aspectFill" />
+        <view class="fw-body">
+          <view class="fw-title-row">
+            <text class="fw-tag">{{item.tag}}</text>
+            <text class="fw-title">{{item.title}}</text>
+          </view>
+          <view class="fw-preview" wx:if="{{item.preview}}">{{item.preview}}</view>
+          <view class="fw-foot">
+            <text wx:if="{{item.count > 1}}">共 {{item.count}} 张</text>
+            <text class="fw-date">{{item.date}}</text>
+          </view>
+        </view>
+      </view>
+      <view wx:else class="ann-card card" data-id="{{item.id}}" data-type="ann" bindtap="goItem">
+        <view class="ac-title-row">
+          <text wx:if="{{item.pinned}}" class="ac-pin">置顶</text>
+          <text class="ac-title">{{item.title}}</text>
+        </view>
+        <view class="ac-preview">{{item.preview}}</view>
+        <view class="ac-date">{{item.date}}</view>
+      </view>
+    </block>
+    <view wx:if="{{feed.length === 0}}" class="feed-empty card">
+      <view class="fe-title">暂无内容</view>
+      <view class="fe-desc">物业公告与日常工作照片会在这里持续更新</view>
+    </view>
+  </view>
+</view>

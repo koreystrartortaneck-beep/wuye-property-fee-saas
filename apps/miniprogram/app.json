@@ -20,7 +20,8 @@
     "pages/work-detail/work-detail",
     "pages/services/services",
     "pages/service-book/service-book",
-    "pages/coupons/coupons"
+    "pages/coupons/coupons",
+    "pages/community/community"
   ],
   "window": {
     "navigationStyle": "custom",

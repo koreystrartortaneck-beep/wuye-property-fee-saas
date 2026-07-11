@@ -50,35 +50,32 @@
       </view>
     </view>
 
-    <!-- ② 物业公示（进门即见：物业都在干什么） -->
-    <view wx:if="{{workPhotos.length > 0}}" class="section-head">
-      <view>
-        <view class="section-kicker">公开透明</view>
-        <view class="section-title">物业公示</view>
-      </view>
-      <view class="section-more" bindtap="goWorkWall">查看全部</view>
-    </view>
-    <scroll-view wx:if="{{workPhotos.length > 0}}" class="work-strip" scroll-x>
-      <view class="work-strip-inner">
-        <view class="work-photo" wx:for="{{workPhotos}}" wx:key="id" data-id="{{item.id}}" bindtap="goWorkDetail">
-          <image class="work-photo-img" src="{{item.cover}}" mode="aspectFill" />
-          <view class="work-photo-tag">{{item.tag}}</view>
-        </view>
-      </view>
-    </scroll-view>
-
-    <!-- ③ 社区动态 -->
+    <!-- ② 社区动态：公告 + 物业公示 混排一条流 -->
     <view class="section-head">
       <view>
         <view class="section-kicker">{{currentHouse.communityName}}</view>
         <view class="section-title">社区动态</view>
       </view>
-      <view class="section-more" bindtap="goAnnList">查看全部</view>
+      <view class="section-more" bindtap="goFeed">查看全部</view>
     </view>
 
     <view class="home-ann-list">
-      <block wx:for="{{annList}}" wx:key="id">
-        <view class="home-ann-item card" data-id="{{item.id}}" bindtap="goAnnDetail">
+      <block wx:for="{{feed}}" wx:key="id">
+        <!-- 物业公示：带图卡片 -->
+        <view wx:if="{{item.type === 'work'}}" class="feed-work card" data-id="{{item.id}}" data-type="work" bindtap="goFeedItem">
+          <image class="fw-cover" src="{{item.cover}}" mode="aspectFill" />
+          <view class="fw-body">
+            <view class="ha-title-row">
+              <text class="fw-tag">{{item.tag}}</text>
+              <text class="ha-title">{{item.title}}</text>
+              <text class="ha-date">{{item.date}}</text>
+            </view>
+            <view class="ha-preview" wx:if="{{item.preview}}">{{item.preview}}</view>
+            <view class="fw-count" wx:if="{{item.count > 1}}">共 {{item.count}} 张实拍</view>
+          </view>
+        </view>
+        <!-- 公告：纯文字卡片 -->
+        <view wx:else class="home-ann-item card" data-id="{{item.id}}" data-type="ann" bindtap="goFeedItem">
           <view class="ha-title-row">
             <text wx:if="{{item.pinned}}" class="ha-pin">置顶</text>
             <text class="ha-title">{{item.title}}</text>
@@ -87,9 +84,9 @@
           <view class="ha-preview">{{item.preview}}</view>
         </view>
       </block>
-      <view wx:if="{{annList.length === 0}}" class="home-ann-item card ha-empty">
-        <view class="ha-title-row"><text class="ha-title">物业还没有发布公告</text></view>
-        <view class="ha-preview">停水停电、消防演练等社区通知会第一时间出现在这里</view>
+      <view wx:if="{{feed.length === 0}}" class="home-ann-item card ha-empty">
+        <view class="ha-title-row"><text class="ha-title">暂无社区动态</text></view>
+        <view class="ha-preview">物业公告、日常巡检保洁的工作照片会第一时间出现在这里</view>
       </view>
     </view>
   </block>

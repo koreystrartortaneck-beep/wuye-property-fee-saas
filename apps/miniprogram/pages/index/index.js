@@ -2,6 +2,37 @@ const { request } = require('../../utils/request');
 const { imageUrl } = require('../../utils/upload');
 const { loadMyHouses } = require('../../utils/auth');
 
+const WORK_CAT = { INSPECTION: '巡检', CLEANING: '保洁', GREENING: '绿化', SECURITY: '安保', REPAIR: '维修', OTHER: '公示' };
+
+/** 公告 + 物业公示 混排成一条社区动态流（公告置顶优先，其余按时间倒序） */
+function buildFeed(anns, works) {
+  const annItems = (anns || []).map((a) => ({
+    type: 'ann',
+    id: a.id,
+    title: a.title,
+    preview: (a.content || '').replace(/\n+/g, ' ').slice(0, 56),
+    pinned: a.pinned,
+    date: (a.publishedAt || '').slice(5, 10).replace('-', '/'),
+    ts: Date.parse(a.publishedAt) || 0,
+  }));
+  const workItems = (works || [])
+    .filter((w) => (w.images || []).length > 0)
+    .map((w) => ({
+      type: 'work',
+      id: w.id,
+      title: w.title || WORK_CAT[w.category] || '物业公示',
+      preview: w.description || '',
+      tag: WORK_CAT[w.category] || '公示',
+      cover: imageUrl(w.images[0]),
+      count: (w.images || []).length,
+      date: (w.createdAt || '').slice(5, 10).replace('-', '/'),
+      ts: Date.parse(w.createdAt) || 0,
+    }));
+  const pinned = annItems.filter((a) => a.pinned).sort((x, y) => y.ts - x.ts);
+  const rest = annItems.filter((a) => !a.pinned).concat(workItems).sort((x, y) => y.ts - x.ts);
+  return pinned.concat(rest);
+}
+
 Page({
   data: {
     nav: { spacerPx: 48, rowPx: 32 },
@@ -12,8 +43,7 @@ Page({
     unpaidTotal: '0.00',
     unpaidCount: 0,
     paidUp: false, // 本期已缴清
-    workPhotos: [], // 物业公示照片（进门即见）
-    annList: [], // 社区动态（最多 3 条完整卡片）
+    feed: [], // 社区动态：公告 + 物业公示混排
   },
 
   onLoad() {
@@ -26,7 +56,7 @@ Page({
     try {
       const houses = await loadMyHouses();
       if (houses.length === 0) {
-        this.setData({ ready: true, noHouse: true, unpaidTotal: '0.00', unpaidCount: 0, annList: [], workPhotos: [] });
+        this.setData({ ready: true, noHouse: true, unpaidTotal: '0.00', unpaidCount: 0, feed: [] });
         return;
       }
       const nextHouse = app.globalData.currentHouse;
@@ -36,7 +66,7 @@ Page({
         noHouse: false,
         houses,
         currentHouse: nextHouse,
-        ...(houseChanged ? { annList: [], workPhotos: [], unpaidTotal: '0.00', unpaidCount: 0, paidUp: false } : {}),
+        ...(houseChanged ? { feed: [], unpaidTotal: '0.00', unpaidCount: 0, paidUp: false } : {}),
       });
       await this.loadHome();
     } catch (e) {
@@ -61,24 +91,12 @@ Page({
       name: b.title,
       amount: Number(b.amount).toFixed(2),
     }));
-    // 物业公示：把每条工作记录的首图铺成横滑照片墙
-    const CAT = { INSPECTION: '巡检', CLEANING: '保洁', GREENING: '绿化', SECURITY: '安保', REPAIR: '维修', OTHER: '公示' };
-    const workPhotos = works.list
-      .filter((w) => (w.images || []).length > 0)
-      .map((w) => ({ id: w.id, cover: imageUrl(w.images[0]), tag: CAT[w.category] || '公示' }));
     this.setData({
       currentHouse: house,
       unpaidTotal: summary.unpaidTotal,
       unpaidCount: summary.unpaidCount,
       paidUp: summary.unpaidCount === 0,
-      workPhotos,
-      annList: anns.slice(0, 3).map((a) => ({
-        id: a.id,
-        title: a.title,
-        preview: (a.content || '').replace(/\n+/g, ' ').slice(0, 56),
-        pinned: a.pinned,
-        date: (a.publishedAt || '').slice(5, 10).replace('-', '/'),
-      })),
+      feed: buildFeed(anns, works.list).slice(0, 8),
     });
   },
 
@@ -112,20 +130,16 @@ Page({
     });
   },
 
-  goWorkWall() {
-    wx.navigateTo({ url: '/pages/work-wall/work-wall' });
+  /** 社区动态「查看全部」→ 统一动态流页 */
+  goFeed() {
+    wx.navigateTo({ url: '/pages/community/community' });
   },
 
-  goWorkDetail(e) {
-    wx.navigateTo({ url: `/pages/work-detail/work-detail?id=${e.currentTarget.dataset.id}` });
-  },
-
-  goAnnList() {
-    wx.navigateTo({ url: '/pages/announcements/announcements' });
-  },
-
-  goAnnDetail(e) {
-    wx.navigateTo({ url: `/pages/announcement-detail/announcement-detail?id=${e.currentTarget.dataset.id}` });
+  /** 点击一条动态：按类型进对应详情 */
+  goFeedItem(e) {
+    const { id, type } = e.currentTarget.dataset;
+    if (type === 'work') wx.navigateTo({ url: `/pages/work-detail/work-detail?id=${id}` });
+    else wx.navigateTo({ url: `/pages/announcement-detail/announcement-detail?id=${id}` });
   },
 
   goBind() {

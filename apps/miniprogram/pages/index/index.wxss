@@ -407,42 +407,42 @@
   background: linear-gradient(145deg, #fff1c8, #c9a66b);
 }
 
-/* ===== 物业公示横滑照片墙（首页新增） ===== */
-.work-strip {
-  margin-top: 4rpx;
-  white-space: nowrap;
+/* ===== 社区动态·物业公示卡片（带图，与公告卡混排） ===== */
+.feed-work {
+  display: flex;
+  gap: 22rpx;
+  padding: 22rpx;
+  align-items: stretch;
 }
 
-.work-strip-inner {
-  display: inline-flex;
-  gap: 18rpx;
-  padding: 4rpx 0 8rpx;
-}
-
-.work-photo {
-  position: relative;
-  width: 240rpx;
-  height: 180rpx;
-  border-radius: 24rpx;
-  overflow: hidden;
+.fw-cover {
+  width: 190rpx;
+  height: 150rpx;
+  border-radius: 20rpx;
   flex-shrink: 0;
   background: rgba(37, 28, 56, 0.06);
-  box-shadow: 0 16rpx 40rpx rgba(70, 52, 29, 0.08);
 }
 
-.work-photo-img {
-  width: 100%;
-  height: 100%;
+.fw-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.work-photo-tag {
-  position: absolute;
-  left: 14rpx;
-  bottom: 14rpx;
+.fw-tag {
+  flex-shrink: 0;
   padding: 4rpx 16rpx;
   border-radius: 999rpx;
   font-size: 20rpx;
-  font-weight: 700;
+  font-weight: 800;
   color: #fff;
-  background: rgba(37, 28, 56, 0.6);
+  background: linear-gradient(145deg, #6d5b93, #3b2b57);
+}
+
+.fw-count {
+  margin-top: auto;
+  padding-top: 8rpx;
+  font-size: 21rpx;
+  color: #a79eb5;
 }
