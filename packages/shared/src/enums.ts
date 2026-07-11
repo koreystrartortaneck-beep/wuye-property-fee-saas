@@ -55,3 +55,17 @@ export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
 export const PASS_STATUSES = ['ACTIVE', 'USED', 'EXPIRED', 'CANCELED'] as const;
 export type PassStatus = (typeof PASS_STATUSES)[number];
+
+// ---------- 三期：工作照片墙 / 生活服务 / 卡券 ----------
+
+export const WORK_CATEGORIES = ['INSPECTION', 'CLEANING', 'GREENING', 'SECURITY', 'REPAIR', 'OTHER'] as const;
+export type WorkCategory = (typeof WORK_CATEGORIES)[number];
+
+export const SERVICE_ORDER_STATUSES = ['PENDING', 'ACCEPTED', 'DONE', 'CANCELED'] as const;
+export type ServiceOrderStatus = (typeof SERVICE_ORDER_STATUSES)[number];
+
+export const COUPON_TYPES = ['DISCOUNT', 'SERVICE', 'GIFT'] as const;
+export type CouponType = (typeof COUPON_TYPES)[number];
+
+export const USER_COUPON_STATUSES = ['UNUSED', 'USED', 'EXPIRED'] as const;
+export type UserCouponStatus = (typeof USER_COUPON_STATUSES)[number];

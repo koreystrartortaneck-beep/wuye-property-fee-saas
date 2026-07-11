@@ -36,6 +36,13 @@ export const ErrorCode = {
   PASS_STATE_INVALID: { code: 44002, message: '通行码状态不允许该操作' },
   UPLOAD_INVALID: { code: 44003, message: '文件类型或大小不符合要求' },
 
+  // 45xxx 生活服务与卡券
+  SERVICE_ORDER_STATE_INVALID: { code: 45001, message: '预约单状态不允许该操作' },
+  SERVICE_UNAVAILABLE: { code: 45002, message: '该服务已下架' },
+  COUPON_SOLD_OUT: { code: 45003, message: '优惠券已领完' },
+  COUPON_LIMIT_REACHED: { code: 45004, message: '已达到领取上限' },
+  COUPON_STATE_INVALID: { code: 45005, message: '优惠券状态不允许该操作' },
+
   // 50xxx
   INTERNAL: { code: 50000, message: '服务器内部错误' },
 } as const satisfies Record<string, ErrorCodeDef>;

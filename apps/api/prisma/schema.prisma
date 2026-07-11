@@ -172,6 +172,7 @@ model House {
   bills         Bill[]
   tickets       Ticket[]
   visitorPasses VisitorPass[]
+  serviceOrders ServiceOrder[]
 
   @@unique([communityId, code])
   @@index([tenantId])
@@ -450,4 +451,135 @@ model Announcement {
   publishedAt DateTime           @default(now())
 
   @@index([tenantId])
+}
+
+// ---------- 三期：工作照片墙 / 生活服务 / 卡券 ----------
+
+enum WorkCategory {
+  INSPECTION // 日常巡检
+  CLEANING // 保洁
+  GREENING // 绿化
+  SECURITY // 安保
+  REPAIR // 维修
+  OTHER // 其他
+}
+
+enum ServiceOrderStatus {
+  PENDING // 待接单
+  ACCEPTED // 已接单
+  DONE // 已完成
+  CANCELED // 已取消
+}
+
+enum CouponType {
+  DISCOUNT // 满减/抵扣（可抵物业费）
+  SERVICE // 服务券（免上门费等）
+  GIFT // 礼品券
+}
+
+enum UserCouponStatus {
+  UNUSED
+  USED
+  EXPIRED
+}
+
+model WorkLog {
+  id          String       @id @default(cuid())
+  tenantId    String
+  communityId String
+  category    WorkCategory @default(OTHER)
+  title       String?
+  description String?      @db.Text
+  images      Json // 图片 URL 数组
+  staffName   String?
+  createdBy   String?
+  createdAt   DateTime     @default(now())
+
+  @@index([tenantId])
+  @@index([communityId])
+}
+
+model ServiceItem {
+  id          String   @id @default(cuid())
+  tenantId    String
+  communityId String? // null = 公司全部小区
+  name        String
+  category    String?
+  price       Decimal  @db.Decimal(10, 2)
+  unit        String   @default("元/次")
+  description String?  @db.Text
+  coverImage  String?
+  enabled     Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  orders ServiceOrder[]
+
+  @@index([tenantId])
+}
+
+model ServiceOrder {
+  id            String             @id @default(cuid())
+  tenantId      String
+  communityId   String
+  houseId       String
+  wxUserId      String
+  serviceItemId String
+  serviceName   String // 快照
+  price         Decimal            @db.Decimal(10, 2) // 快照
+  unit          String // 快照
+  contactName   String
+  contactPhone  String
+  expectDate    DateTime
+  remark        String?
+  status        ServiceOrderStatus @default(PENDING)
+  acceptedAt    DateTime?
+  doneAt        DateTime?
+  createdAt     DateTime           @default(now())
+
+  house       House       @relation(fields: [houseId], references: [id])
+  serviceItem ServiceItem @relation(fields: [serviceItemId], references: [id])
+
+  @@index([tenantId])
+  @@index([houseId])
+  @@index([status])
+}
+
+model Coupon {
+  id           String     @id @default(cuid())
+  tenantId     String
+  communityId  String? // null = 公司全部小区
+  name         String
+  type         CouponType @default(DISCOUNT)
+  faceValue    Decimal?   @db.Decimal(10, 2) // 抵扣/面额
+  threshold    Decimal?   @db.Decimal(10, 2) // 满减门槛
+  description  String?    @db.Text
+  totalQty     Int // 发行总量
+  claimedQty   Int        @default(0)
+  perUserLimit Int        @default(1)
+  validFrom    DateTime
+  validTo      DateTime
+  enabled      Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+
+  userCoupons UserCoupon[]
+
+  @@index([tenantId])
+}
+
+model UserCoupon {
+  id        String           @id @default(cuid())
+  tenantId  String
+  couponId  String
+  wxUserId  String
+  code      String // 核销码
+  status    UserCouponStatus @default(UNUSED)
+  claimedAt DateTime         @default(now())
+  usedAt    DateTime?
+
+  coupon Coupon @relation(fields: [couponId], references: [id])
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([wxUserId])
 }
