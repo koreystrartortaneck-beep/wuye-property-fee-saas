@@ -1,0 +1,51 @@
+<view class="page svc-page">
+  <view class="svc-tabs card">
+    <view class="svc-tab {{tab === 0 ? 'tab-on' : ''}}" data-tab="0" bindtap="switchTab">服务菜单</view>
+    <view class="svc-tab {{tab === 1 ? 'tab-on' : ''}}" data-tab="1" bindtap="switchTab">我的预约</view>
+  </view>
+
+  <!-- 服务菜单 -->
+  <block wx:if="{{tab === 0}}">
+    <view class="svc-list">
+      <block wx:for="{{items}}" wx:key="id">
+        <view class="svc-item card">
+          <image wx:if="{{item.cover}}" class="svc-cover" src="{{item.cover}}" mode="aspectFill" />
+          <view wx:else class="svc-cover svc-cover-ph">{{item.name[0]}}</view>
+          <view class="svc-body">
+            <view class="svc-name">{{item.name}}</view>
+            <view class="svc-desc">{{item.desc}}</view>
+            <view class="svc-bottom">
+              <view class="svc-price"><text class="svc-cur">¥</text>{{item.price}}<text class="svc-unit"> {{item.unit}}</text></view>
+              <button class="gold-button svc-btn" data-index="{{index}}" bindtap="book">预约</button>
+            </view>
+          </view>
+        </view>
+      </block>
+      <view wx:if="{{items.length === 0}}" class="svc-empty card">
+        <view class="se-title">暂无可预约服务</view>
+        <view class="se-desc">物业上线保洁、清洗等上门服务后会出现在这里</view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 我的预约 -->
+  <block wx:else>
+    <view class="svc-list">
+      <block wx:for="{{orders}}" wx:key="id">
+        <view class="order-item card">
+          <view class="order-top">
+            <view class="order-name">{{item.name}}</view>
+            <view class="order-status s-{{item.status}}">{{item.statusLabel}}</view>
+          </view>
+          <view class="order-meta">期望上门 {{item.date}} · ¥{{item.price}} {{item.unit}}</view>
+          <view class="order-remark" wx:if="{{item.remark}}">备注：{{item.remark}}</view>
+          <view wx:if="{{item.status === 'PENDING'}}" class="order-cancel" data-id="{{item.id}}" bindtap="cancelOrder">取消预约</view>
+        </view>
+      </block>
+      <view wx:if="{{orders.length === 0}}" class="svc-empty card">
+        <view class="se-title">还没有预约</view>
+        <view class="se-desc">在「服务菜单」里选择需要的上门服务</view>
+      </view>
+    </view>
+  </block>
+</view>

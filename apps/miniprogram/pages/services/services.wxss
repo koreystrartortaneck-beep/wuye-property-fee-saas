@@ -1,0 +1,174 @@
+.page.svc-page {
+  padding-top: 24rpx;
+}
+
+.svc-tabs {
+  display: flex;
+  padding: 10rpx;
+  margin-bottom: 22rpx;
+}
+
+.svc-tab {
+  flex: 1;
+  height: 64rpx;
+  border-radius: 999rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #7c7288;
+}
+
+.tab-on {
+  color: #251c38;
+  background: linear-gradient(145deg, #fff1c8, #ead0a0);
+}
+
+.svc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+}
+
+.svc-item {
+  display: flex;
+  gap: 22rpx;
+  padding: 24rpx;
+}
+
+.svc-cover {
+  width: 170rpx;
+  height: 170rpx;
+  border-radius: 20rpx;
+  flex-shrink: 0;
+  background: rgba(37, 28, 56, 0.06);
+}
+
+.svc-cover-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 56rpx;
+  font-weight: 900;
+  color: #c9a66b;
+  background: linear-gradient(145deg, #fbf0db, #fffaf2);
+}
+
+.svc-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.svc-name {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #251c38;
+}
+
+.svc-desc {
+  margin-top: 8rpx;
+  font-size: 23rpx;
+  color: #7c7288;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.svc-bottom {
+  margin-top: auto;
+  padding-top: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.svc-price {
+  font-size: 40rpx;
+  font-weight: 900;
+  color: #9b743a;
+  font-family: DIN Alternate, sans-serif;
+}
+
+.svc-cur {
+  font-size: 24rpx;
+}
+
+.svc-unit {
+  font-size: 22rpx;
+  color: #a79eb5;
+  font-weight: 500;
+}
+
+.svc-btn {
+  height: 64rpx;
+  padding: 0 34rpx;
+  font-size: 25rpx;
+}
+
+/* 我的预约 */
+.order-item {
+  padding: 28rpx;
+}
+
+.order-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.order-name {
+  font-size: 29rpx;
+  font-weight: 800;
+  color: #251c38;
+}
+
+.order-status {
+  font-size: 23rpx;
+  font-weight: 700;
+}
+
+.s-PENDING { color: #b8862f; }
+.s-ACCEPTED { color: #5a4680; }
+.s-DONE { color: #3f7d5d; }
+.s-CANCELED { color: #9a92a3; }
+
+.order-meta {
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  color: #7c7288;
+}
+
+.order-remark {
+  margin-top: 8rpx;
+  font-size: 23rpx;
+  color: #8b8199;
+}
+
+.order-cancel {
+  margin-top: 16rpx;
+  font-size: 23rpx;
+  color: #c45656;
+}
+
+.svc-empty {
+  padding: 60rpx 40rpx;
+  text-align: center;
+}
+
+.se-title {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #251c38;
+}
+
+.se-desc {
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  color: #8b8199;
+  line-height: 1.5;
+}

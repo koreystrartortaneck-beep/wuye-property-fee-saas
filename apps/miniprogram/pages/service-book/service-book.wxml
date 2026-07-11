@@ -1,0 +1,31 @@
+<view class="page book-page" wx:if="{{item}}">
+  <view class="book-hero card">
+    <view class="bh-name">{{item.name}}</view>
+    <view class="bh-price"><text class="bh-cur">¥</text>{{item.price}}<text class="bh-unit"> {{item.unit}}</text></view>
+    <view class="bh-desc" wx:if="{{item.desc}}">{{item.desc}}</view>
+  </view>
+
+  <view class="book-form card">
+    <view class="bf-row">
+      <view class="bf-label">联系人</view>
+      <input class="bf-input" placeholder="上门服务联系人" value="{{contactName}}" bindinput="onName" />
+    </view>
+    <view class="bf-row">
+      <view class="bf-label">手机号</view>
+      <input class="bf-input" type="number" maxlength="11" placeholder="接单后物业致电" value="{{contactPhone}}" bindinput="onPhone" />
+    </view>
+    <view class="bf-row">
+      <view class="bf-label">期望上门</view>
+      <picker mode="date" start="{{todayStr}}" value="{{expectDate}}" bindchange="onDate">
+        <view class="bf-input picker-v">{{expectDate}} ›</view>
+      </picker>
+    </view>
+    <view class="bf-row bf-row-top">
+      <view class="bf-label">备注</view>
+      <textarea class="bf-textarea" placeholder="补充说明（选填）" maxlength="200" value="{{remark}}" bindinput="onRemark" />
+    </view>
+  </view>
+
+  <button class="dark-button book-submit" bindtap="submit">提交预约</button>
+  <view class="book-tip">简版预约不在线支付，费用由物业上门时当面结算</view>
+</view>

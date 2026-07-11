@@ -14,6 +14,9 @@ Page({
     pendingBindings: [],
     menus: [
       { key: 'tickets', title: '我的工单', desc: '报修与投诉建议进度' },
+      { key: 'work', title: '物业公示', desc: '物业工作照片实拍' },
+      { key: 'services', title: '生活服务', desc: '保洁清洗上门预约' },
+      { key: 'coupons', title: '我的卡券', desc: '物业费抵扣与福利券' },
       { key: 'visitor', title: '访客邀请', desc: '生成访客通行码' },
       { key: 'announcements', title: '社区公告', desc: '物业最新通知' },
       { key: 'payments', title: '缴费记录', desc: '查看历史付款凭证' },
@@ -101,6 +104,9 @@ Page({
     if (key === 'houses') this.switchHouse();
     if (key === 'payments') wx.navigateTo({ url: '/pages/payments/payments' });
     if (key === 'tickets') wx.navigateTo({ url: '/pages/tickets/tickets' });
+    if (key === 'work') wx.navigateTo({ url: '/pages/work-wall/work-wall' });
+    if (key === 'services') wx.navigateTo({ url: '/pages/services/services' });
+    if (key === 'coupons') wx.navigateTo({ url: '/pages/coupons/coupons' });
     if (key === 'visitor') wx.navigateTo({ url: '/pages/visitor/visitor' });
     if (key === 'announcements') wx.navigateTo({ url: '/pages/announcements/announcements' });
     if (key === 'service') {

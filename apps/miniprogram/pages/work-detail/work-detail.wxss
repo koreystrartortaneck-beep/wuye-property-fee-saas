@@ -1,0 +1,51 @@
+.page.wd-page {
+  padding-top: 28rpx;
+}
+
+.wd-card {
+  padding: 36rpx;
+}
+
+.wd-cat {
+  display: inline-flex;
+  padding: 6rpx 20rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 800;
+  color: #9b743a;
+  background: rgba(201, 166, 107, 0.16);
+}
+
+.wd-title {
+  margin-top: 18rpx;
+  font-size: 36rpx;
+  font-weight: 900;
+  color: #251c38;
+}
+
+.wd-meta {
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #a79eb5;
+}
+
+.wd-desc {
+  margin-top: 24rpx;
+  font-size: 28rpx;
+  line-height: 1.7;
+  color: #3d3350;
+  white-space: pre-wrap;
+}
+
+.wd-imgs {
+  margin-top: 28rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.wd-imgs image {
+  width: 100%;
+  border-radius: 18rpx;
+  background: rgba(37, 28, 56, 0.05);
+}
