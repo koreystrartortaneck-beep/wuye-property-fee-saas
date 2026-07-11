@@ -50,16 +50,22 @@
       </view>
     </view>
 
-    <!-- ② 快捷服务 -->
-    <view class="quick-grid">
-      <block wx:for="{{quickActions}}" wx:key="title">
-        <view class="quick-card {{item.active ? 'quick-active' : ''}}" data-index="{{index}}" bindtap="handleQuickTap">
-          <view class="quick-icon">{{item.icon}}</view>
-          <view class="quick-title">{{item.title}}</view>
-          <view class="quick-desc">{{item.desc}}</view>
-        </view>
-      </block>
+    <!-- ② 物业公示（进门即见：物业都在干什么） -->
+    <view wx:if="{{workPhotos.length > 0}}" class="section-head">
+      <view>
+        <view class="section-kicker">公开透明</view>
+        <view class="section-title">物业公示</view>
+      </view>
+      <view class="section-more" bindtap="goWorkWall">查看全部</view>
     </view>
+    <scroll-view wx:if="{{workPhotos.length > 0}}" class="work-strip" scroll-x>
+      <view class="work-strip-inner">
+        <view class="work-photo" wx:for="{{workPhotos}}" wx:key="id" data-id="{{item.id}}" bindtap="goWorkDetail">
+          <image class="work-photo-img" src="{{item.cover}}" mode="aspectFill" />
+          <view class="work-photo-tag">{{item.tag}}</view>
+        </view>
+      </view>
+    </scroll-view>
 
     <!-- ③ 社区动态 -->
     <view class="section-head">

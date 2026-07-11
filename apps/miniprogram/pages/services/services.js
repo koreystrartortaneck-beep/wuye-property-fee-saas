@@ -11,6 +11,10 @@ Page({
     orders: [],
   },
 
+  onLoad(options) {
+    if (options && options.tab === '1') this.setData({ tab: 1 });
+  },
+
   async onShow() {
     await getApp().loginReady;
     await loadMyHouses().catch(() => []);

@@ -1,4 +1,5 @@
 const { request } = require('../../utils/request');
+const { imageUrl } = require('../../utils/upload');
 const { loadMyHouses } = require('../../utils/auth');
 
 Page({
@@ -11,11 +12,7 @@ Page({
     unpaidTotal: '0.00',
     unpaidCount: 0,
     paidUp: false, // 本期已缴清
-    quickActions: [
-      { title: '报事报修', desc: '拍照一键上报', icon: '修', active: true },
-      { title: '访客邀请', desc: '生成通行码', icon: '客' },
-      { title: '缴费记录', desc: '收据随时可查', icon: '票' },
-    ],
+    workPhotos: [], // 物业公示照片（进门即见）
     annList: [], // 社区动态（最多 3 条完整卡片）
   },
 
@@ -29,7 +26,7 @@ Page({
     try {
       const houses = await loadMyHouses();
       if (houses.length === 0) {
-        this.setData({ ready: true, noHouse: true, unpaidTotal: '0.00', unpaidCount: 0, annList: [] });
+        this.setData({ ready: true, noHouse: true, unpaidTotal: '0.00', unpaidCount: 0, annList: [], workPhotos: [] });
         return;
       }
       const nextHouse = app.globalData.currentHouse;
@@ -39,7 +36,7 @@ Page({
         noHouse: false,
         houses,
         currentHouse: nextHouse,
-        ...(houseChanged ? { annList: [], unpaidTotal: '0.00', unpaidCount: 0, paidUp: false } : {}),
+        ...(houseChanged ? { annList: [], workPhotos: [], unpaidTotal: '0.00', unpaidCount: 0, paidUp: false } : {}),
       });
       await this.loadHome();
     } catch (e) {
@@ -52,22 +49,29 @@ Page({
   async loadHome() {
     const house = getApp().globalData.currentHouse;
     if (!house) return;
-    const [summary, billPage, anns] = await Promise.all([
+    const [summary, billPage, anns, works] = await Promise.all([
       request(`/owner/bills/summary?houseId=${house.houseId}`),
       // 未缴账单不再在首页展示，只为「立即缴纳」合并下单做准备
       request(`/owner/bills?houseId=${house.houseId}&status=UNPAID&pageSize=50`),
       request(`/owner/announcements?houseId=${house.houseId}`).catch(() => []),
+      request(`/owner/work-logs?houseId=${house.houseId}&pageSize=8`).catch(() => ({ list: [] })),
     ]);
     this._unpaidBills = billPage.list.map((b) => ({
       id: b.id,
       name: b.title,
       amount: Number(b.amount).toFixed(2),
     }));
+    // 物业公示：把每条工作记录的首图铺成横滑照片墙
+    const CAT = { INSPECTION: '巡检', CLEANING: '保洁', GREENING: '绿化', SECURITY: '安保', REPAIR: '维修', OTHER: '公示' };
+    const workPhotos = works.list
+      .filter((w) => (w.images || []).length > 0)
+      .map((w) => ({ id: w.id, cover: imageUrl(w.images[0]), tag: CAT[w.category] || '公示' }));
     this.setData({
       currentHouse: house,
       unpaidTotal: summary.unpaidTotal,
       unpaidCount: summary.unpaidCount,
       paidUp: summary.unpaidCount === 0,
+      workPhotos,
       annList: anns.slice(0, 3).map((a) => ({
         id: a.id,
         title: a.title,
@@ -108,11 +112,12 @@ Page({
     });
   },
 
-  handleQuickTap(e) {
-    const index = Number(e.currentTarget.dataset.index);
-    if (index === 0) wx.navigateTo({ url: '/pages/ticket-create/ticket-create' });
-    if (index === 1) wx.navigateTo({ url: '/pages/visitor/visitor' });
-    if (index === 2) wx.navigateTo({ url: '/pages/payments/payments' });
+  goWorkWall() {
+    wx.navigateTo({ url: '/pages/work-wall/work-wall' });
+  },
+
+  goWorkDetail(e) {
+    wx.navigateTo({ url: `/pages/work-detail/work-detail?id=${e.currentTarget.dataset.id}` });
   },
 
   goAnnList() {

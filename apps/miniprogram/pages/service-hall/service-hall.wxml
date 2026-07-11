@@ -1,0 +1,35 @@
+<view class="page hall-page has-navbar">
+  <view style="height: {{nav.spacerPx}}px"></view>
+  <view class="nav-row" style="height: {{nav.rowPx}}px">
+    <view class="nav-row-title">服务</view>
+  </view>
+  <view class="nav-sub-row">物业报事 · 便民生活 · 一站直达</view>
+
+  <view class="hall-section-title">物业服务</view>
+  <view class="hall-grid">
+    <view class="hall-card card" wx:for="{{propertyServices}}" wx:key="key" data-key="{{item.key}}" bindtap="tap">
+      <view class="hall-icon {{item.theme}}">{{item.icon}}</view>
+      <view class="hall-title">{{item.title}}</view>
+      <view class="hall-desc">{{item.desc}}</view>
+    </view>
+  </view>
+
+  <view class="hall-section-title">便民生活</view>
+  <view class="hall-grid">
+    <view class="hall-card card" wx:for="{{lifeServices}}" wx:key="key" data-key="{{item.key}}" bindtap="tap">
+      <view class="hall-icon {{item.theme}}">{{item.icon}}</view>
+      <view class="hall-title">{{item.title}}</view>
+      <view class="hall-desc">{{item.desc}}</view>
+    </view>
+  </view>
+
+  <view class="hall-section-title">联系物业</view>
+  <view class="manager-card card" bindtap="callManager">
+    <view class="manager-icon">话</view>
+    <view class="manager-body">
+      <view class="manager-title">联系管家</view>
+      <view class="manager-desc">{{hasPhone ? '一键拨打物业服务电话' : '物业暂未配置电话'}}</view>
+    </view>
+    <view class="manager-arrow">›</view>
+  </view>
+</view>

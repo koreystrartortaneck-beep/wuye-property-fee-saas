@@ -1,6 +1,7 @@
 {
   "pages": [
     "pages/index/index",
+    "pages/service-hall/service-hall",
     "pages/bill/bill",
     "pages/pay-confirm/pay-confirm",
     "pages/pay-success/pay-success",
@@ -38,6 +39,12 @@
         "text": "首页",
         "iconPath": "assets/tab/home.png",
         "selectedIconPath": "assets/tab/home-active.png"
+      },
+      {
+        "pagePath": "pages/service-hall/service-hall",
+        "text": "服务",
+        "iconPath": "assets/tab/service.png",
+        "selectedIconPath": "assets/tab/service-active.png"
       },
       {
         "pagePath": "pages/bill/bill",

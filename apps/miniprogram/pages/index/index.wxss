@@ -406,3 +406,43 @@
   color: #251c38;
   background: linear-gradient(145deg, #fff1c8, #c9a66b);
 }
+
+/* ===== 物业公示横滑照片墙（首页新增） ===== */
+.work-strip {
+  margin-top: 4rpx;
+  white-space: nowrap;
+}
+
+.work-strip-inner {
+  display: inline-flex;
+  gap: 18rpx;
+  padding: 4rpx 0 8rpx;
+}
+
+.work-photo {
+  position: relative;
+  width: 240rpx;
+  height: 180rpx;
+  border-radius: 24rpx;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(37, 28, 56, 0.06);
+  box-shadow: 0 16rpx 40rpx rgba(70, 52, 29, 0.08);
+}
+
+.work-photo-img {
+  width: 100%;
+  height: 100%;
+}
+
+.work-photo-tag {
+  position: absolute;
+  left: 14rpx;
+  bottom: 14rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(37, 28, 56, 0.6);
+}

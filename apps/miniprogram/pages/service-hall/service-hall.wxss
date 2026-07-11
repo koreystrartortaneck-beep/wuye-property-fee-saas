@@ -1,0 +1,90 @@
+.hall-section-title {
+  margin: 34rpx 4rpx 20rpx;
+  font-size: 30rpx;
+  font-weight: 900;
+  color: #251c38;
+}
+
+.hall-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20rpx;
+}
+
+.hall-card {
+  padding: 32rpx 28rpx;
+  display: flex;
+  flex-direction: column;
+}
+
+.hall-icon {
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 26rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 900;
+}
+
+.hall-icon.amber { background: linear-gradient(145deg, #ddbd76, #9b743a); }
+.hall-icon.plum { background: linear-gradient(145deg, #6d5b93, #3b2b57); }
+.hall-icon.emerald { background: linear-gradient(145deg, #6f9795, #315f63); }
+.hall-icon.sapphire { background: linear-gradient(145deg, #514271, #2a2144); }
+
+.hall-title {
+  margin-top: 22rpx;
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #251c38;
+}
+
+.hall-desc {
+  margin-top: 8rpx;
+  font-size: 23rpx;
+  color: #8b8199;
+}
+
+.manager-card {
+  padding: 30rpx;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.manager-icon {
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 26rpx;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #251c38;
+  font-size: 30rpx;
+  font-weight: 900;
+  background: linear-gradient(145deg, #fff1c8, #c9a66b);
+}
+
+.manager-body {
+  flex: 1;
+}
+
+.manager-title {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #251c38;
+}
+
+.manager-desc {
+  margin-top: 8rpx;
+  font-size: 23rpx;
+  color: #8b8199;
+}
+
+.manager-arrow {
+  color: rgba(130, 120, 140, 0.55);
+  font-size: 40rpx;
+}
