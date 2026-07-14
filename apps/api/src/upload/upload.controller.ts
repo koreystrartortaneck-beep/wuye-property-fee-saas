@@ -1,6 +1,6 @@
 import { Controller, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { diskStorage, memoryStorage } from 'multer';
 import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -8,6 +8,7 @@ import { ErrorCode } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { OwnerGuard } from '../auth/owner.guard';
 import { BizException } from '../common/biz.exception';
+import { WxCloudService } from '../wx/wx-cloud.service';
 
 /** 上传根目录：容器内由 UPLOAD_DIR 指定并挂 volume；本地落在 apps/api/uploads */
 export const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
@@ -47,6 +48,13 @@ function toResult(file?: Express.Multer.File) {
   return { url: `/uploads/${monthDir()}/${file.filename}` };
 }
 
+/** 云存储上传用：把文件读进内存（不落盘），再转存微信云存储 */
+export const memUploadOptions = {
+  storage: memoryStorage(),
+  limits: uploadOptions.limits,
+  fileFilter: uploadOptions.fileFilter,
+};
+
 /** 业主图片上传（报修等场景） */
 @Controller('owner/upload')
 @UseGuards(OwnerGuard)
@@ -58,13 +66,24 @@ export class UploadController {
   }
 }
 
-/** 管理端图片上传（照片墙、服务封面等场景） */
+/** 管理端图片上传（照片墙、服务封面等场景）。
+ *  云模式下转存微信云存储返回 cloud:// fileID，保证业主小程序真机也能显示；
+ *  未配置云环境时回退磁盘。 */
 @Controller('admin/upload')
 @UseGuards(AdminGuard)
 export class AdminUploadController {
+  constructor(private readonly wxCloud: WxCloudService) {}
+
   @Post()
-  @UseInterceptors(FileInterceptor('file', uploadOptions))
-  upload(@UploadedFile() file?: Express.Multer.File) {
+  @UseInterceptors(FileInterceptor('file', process.env.WX_CLOUD_ENV ? memUploadOptions : uploadOptions))
+  async upload(@UploadedFile() file?: Express.Multer.File) {
+    if (!file) throw new BizException(ErrorCode.UPLOAD_INVALID, '未收到文件');
+    if (process.env.WX_CLOUD_ENV) {
+      const ext = EXT[file.mimetype] ?? '.jpg';
+      const cloudPath = `admin/${monthDir()}/${Date.now()}-${randomBytes(6).toString('hex')}${ext}`;
+      const fileId = await this.wxCloud.uploadToCloud(cloudPath, file.buffer, file.mimetype);
+      return { url: fileId };
+    }
     return toResult(file);
   }
 }

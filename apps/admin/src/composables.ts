@@ -1,5 +1,37 @@
 import { onMounted, ref } from 'vue';
-import { api, qs, type Page } from './api';
+import { api, imgUrl as baseImgUrl, qs, type Page } from './api';
+
+/**
+ * 云存储图片解析：业主/后台上传的 cloud:// fileID 浏览器不能直接渲染，
+ * 批量向后端换成临时 https URL 后展示。非 cloud:// 的走原有 imgUrl。
+ */
+export function useCloudImages() {
+  const cloudUrls = ref<Record<string, string>>({});
+
+  function cloudImgUrl(rel: string): string {
+    if (!rel) return '';
+    if (rel.startsWith('cloud://')) return cloudUrls.value[rel] || '';
+    return baseImgUrl(rel);
+  }
+
+  async function resolveCloud(all: string[]) {
+    const ids = [...new Set((all || []).filter((s) => s && s.startsWith('cloud://')))].filter(
+      (id) => !cloudUrls.value[id],
+    );
+    if (!ids.length) return;
+    try {
+      const map = await api<Record<string, string>>('/admin/cloud-files/urls', {
+        method: 'POST',
+        body: { fileIds: ids },
+      });
+      cloudUrls.value = { ...cloudUrls.value, ...map };
+    } catch {
+      /* 解析失败则显示占位，不阻断 */
+    }
+  }
+
+  return { cloudImgUrl, resolveCloud };
+}
 
 /** 通用小区下拉选项 */
 export function useCommunities(auto = true) {

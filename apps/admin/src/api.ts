@@ -55,6 +55,8 @@ export async function uploadImage(file: File): Promise<string> {
 export function imgUrl(rel: string): string {
   if (!rel) return '';
   if (rel.startsWith('http')) return rel;
+  // cloud:// 需异步解析成临时 URL（见 useCloudImages），此处不直接拼，避免生成坏地址
+  if (rel.startsWith('cloud://')) return '';
   return API_BASE.replace(/\/api\/v1$/, '') + rel;
 }
 

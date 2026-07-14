@@ -39,6 +39,44 @@ export class WxCloudService {
     return data.access_token;
   }
 
+  /**
+   * 上传文件到微信云存储，返回 cloud:// fileID。
+   * 供后台上传业主可见图片（工作照片墙/服务封面等），保证小程序真机也能显示。
+   * 两步：tcb/uploadfile 取 COS 上传地址与鉴权 → 以 multipart 表单 POST 到该地址。
+   */
+  async uploadToCloud(cloudPath: string, buffer: Buffer, mime = 'image/jpeg'): Promise<string> {
+    if (!this.env) throw new Error('WX_CLOUD_ENV 未配置，无法上传云存储');
+    const token = await this.getAccessToken();
+    const metaRes = await fetch(`https://api.weixin.qq.com/tcb/uploadfile?access_token=${token}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ env: this.env, path: cloudPath }),
+    });
+    const meta = (await metaRes.json()) as {
+      errcode?: number;
+      errmsg?: string;
+      url?: string;
+      token?: string;
+      authorization?: string;
+      file_id?: string;
+      cos_file_id?: string;
+    };
+    if (meta.errcode || !meta.url || !meta.file_id) {
+      throw new Error(`获取云存储上传地址失败：${meta.errmsg || meta.errcode || 'unknown'}`);
+    }
+    const form = new FormData();
+    form.append('key', cloudPath);
+    form.append('Signature', meta.authorization || '');
+    form.append('x-cos-security-token', meta.token || '');
+    form.append('x-cos-meta-fileid', meta.cos_file_id || '');
+    form.append('file', new Blob([new Uint8Array(buffer)], { type: mime }), cloudPath.split('/').pop() || 'file');
+    const up = await fetch(meta.url, { method: 'POST', body: form });
+    if (up.status !== 204 && up.status !== 200) {
+      throw new Error(`云存储上传失败：HTTP ${up.status}`);
+    }
+    return meta.file_id;
+  }
+
   /** cloud:// fileID[] → { fileID: 临时URL }。非 cloud:// 的原样忽略；失败返回空映射（前端各自兜底）。 */
   async resolveFileUrls(fileIds: string[]): Promise<Record<string, string>> {
     const cloudIds = [...new Set((fileIds || []).filter((f) => typeof f === 'string' && f.startsWith('cloud://')))];

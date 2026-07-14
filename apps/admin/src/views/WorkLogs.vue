@@ -22,8 +22,8 @@
           <el-image
             v-for="(img, i) in row.images || []"
             :key="i"
-            :src="imgUrl(img)"
-            :preview-src-list="(row.images || []).map(imgUrl)"
+            :src="cloudImgUrl(img)"
+            :preview-src-list="(row.images || []).map(cloudImgUrl)"
             :initial-index="i"
             fit="cover"
             preview-teleported
@@ -81,8 +81,10 @@
 import { ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Plus } from '@element-plus/icons-vue';
-import { api, imgUrl, qs, uploadImage, type Page } from '../api';
-import { WORK_CATEGORY_LABEL, useCommunities } from '../composables';
+import { api, qs, uploadImage, type Page } from '../api';
+import { WORK_CATEGORY_LABEL, useCloudImages, useCommunities } from '../composables';
+
+const { cloudImgUrl, resolveCloud } = useCloudImages();
 
 interface WorkLog {
   id: string;
@@ -126,6 +128,7 @@ async function load() {
     const data = await api<Page<WorkLog>>(`/admin/work-logs${qs({ ...filter.value, page: page.value, pageSize: 20 })}`);
     rows.value = data.list;
     total.value = data.total;
+    await resolveCloud(rows.value.flatMap((r) => r.images || []));
   } finally {
     loading.value = false;
   }
@@ -141,7 +144,8 @@ function openCreate() {
 async function doUpload(opt: { file: File }) {
   const url = await uploadImage(opt.file);
   images.value.push(url);
-  fileList.value.push({ name: url, url: imgUrl(url) });
+  await resolveCloud([url]); // 立即解析新图的临时URL用于预览
+  fileList.value.push({ name: url, url: cloudImgUrl(url) });
 }
 
 function onRemove(file: { url?: string }) {
