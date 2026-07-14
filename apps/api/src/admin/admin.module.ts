@@ -5,6 +5,7 @@ import { CommunitiesController, CommunitiesService } from './communities.control
 import { HousesController, HousesService } from './houses.controller';
 import { StatsController } from './stats.controller';
 import { TenantsController, TenantsService } from './tenants.controller';
+import { CloudFilesController } from './cloud-files.controller';
 
 @Module({
   controllers: [
@@ -14,6 +15,7 @@ import { TenantsController, TenantsService } from './tenants.controller';
     HousesController,
     BindingsController,
     StatsController,
+    CloudFilesController,
   ],
   providers: [AdminAuthService, TenantsService, CommunitiesService, HousesService, BindingsService],
 })

@@ -143,9 +143,17 @@ export class PaymentService {
   async getPayment(ownerId: string, orderNo: string) {
     const p = await this.prisma.raw.payment.findUnique({
       where: { orderNo },
-      include: { paymentBills: { include: { bill: true } } },
+      include: {
+        paymentBills: {
+          include: {
+            bill: { include: { house: { include: { community: { select: { name: true } } } } } },
+          },
+        },
+      },
     });
     if (!p || p.wxUserId !== ownerId) throw new BizException(ErrorCode.NOT_FOUND);
+    // 收据房屋以「订单本身对应的房屋」为准（取首张账单的房屋），而非当前选中房屋
+    const firstHouse = p.paymentBills[0]?.bill?.house ?? null;
     return {
       orderNo: p.orderNo,
       totalAmount: p.totalAmount,
@@ -153,7 +161,13 @@ export class PaymentService {
       channel: p.channel,
       paidAt: p.paidAt,
       createdAt: p.createdAt,
-      bills: p.paymentBills.map((pb) => pb.bill),
+      house: firstHouse
+        ? { displayName: firstHouse.displayName, communityName: firstHouse.community.name }
+        : null,
+      bills: p.paymentBills.map((pb) => {
+        const { house: _h, ...bill } = pb.bill as Record<string, unknown>;
+        return bill;
+      }),
     };
   }
 }

@@ -17,7 +17,7 @@
   <!-- 未绑定房屋引导 -->
   <view wx:if="{{ready && noHouse}}" class="hero-card">
     <view class="hero-kicker">PROPERTY SERVICE</view>
-    <view class="hero-title">绑定房屋\n开启从容缴费</view>
+    <view class="hero-title">{{'绑定房屋\n开启从容缴费'}}</view>
     <view class="amount-panel">
       <view class="panel-label">首次使用请先绑定您的房屋</view>
       <view class="amount-row">

@@ -1,4 +1,14 @@
 <view class="page tickets-page">
+  <view wx:if="{{loading && list.length === 0}}" class="state">
+    <view class="state-spinner"></view>
+    <view class="state-text">加载中…</view>
+  </view>
+  <view wx:elif="{{error && list.length === 0}}" class="state">
+    <view class="state-icon">⚠️</view>
+    <view class="state-text">加载失败，请检查网络</view>
+    <button class="state-retry" bindtap="retry">点击重试</button>
+  </view>
+
   <view class="ticket-list">
     <block wx:for="{{list}}" wx:key="id">
       <view class="ticket-item card" data-id="{{item.id}}" bindtap="goDetail">
@@ -13,7 +23,7 @@
         </view>
       </view>
     </block>
-    <view wx:if="{{list.length === 0}}" class="ticket-item card">
+    <view wx:if="{{!loading && !error && list.length === 0}}" class="ticket-item card">
       <view class="ticket-content">还没有工单，点击下方按钮提交报修或建议</view>
     </view>
   </view>

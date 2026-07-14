@@ -10,7 +10,7 @@ App({
   },
 
   onLaunch() {
-    // 云开发初始化（迁移中：为 wx.cloud.callFunction 免备案链路做准备）
+    // 云托管初始化：callContainer 免备案内部通道（env 指向云托管环境）
     if (wx.cloud && config.cloudEnv) {
       wx.cloud.init({ env: config.cloudEnv, traceUser: true });
     }

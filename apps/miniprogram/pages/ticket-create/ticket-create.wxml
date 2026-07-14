@@ -1,4 +1,9 @@
 <view class="page create-page">
+  <view wx:if="{{noHouse}}" class="bind-banner card">
+    <view class="bb-text">您还未绑定房屋，绑定后才能提交</view>
+    <button class="gold-button bb-btn" bindtap="goBind">去绑定</button>
+  </view>
+
   <view class="type-tabs card">
     <view
       wx:for="{{typeTabs}}"
@@ -31,5 +36,6 @@
     </view>
   </view>
 
-  <button class="dark-button submit-btn" bindtap="submit">提交</button>
+  <button wx:if="{{noHouse}}" class="dark-button submit-btn" bindtap="goBind">去绑定房屋</button>
+  <button wx:else class="dark-button submit-btn" bindtap="submit" loading="{{submitting}}" disabled="{{submitting}}">提交</button>
 </view>

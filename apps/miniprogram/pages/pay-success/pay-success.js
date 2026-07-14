@@ -10,18 +10,26 @@ Page({
 
   async onLoad(options) {
     const app = getApp();
+    // 先用当前房屋兜底，拿到订单后以订单房屋为准
     this.setData({
       house: app.globalData.currentHouse
         ? `${app.globalData.currentHouse.communityName} ${app.globalData.currentHouse.displayName}`
         : '',
     });
     if (!options.orderNo) return;
-    const order = await request(`/owner/payments/${options.orderNo}`);
-    this.setData({
-      orderNo: order.orderNo,
-      amount: Number(order.totalAmount).toFixed(2),
-      payTime: order.paidAt ? order.paidAt.replace('T', ' ').slice(0, 16) : '',
-    });
+    try {
+      const order = await request(`/owner/payments/${options.orderNo}`, { silent: true });
+      this.setData({
+        orderNo: order.orderNo || '',
+        amount: Number(order.totalAmount || 0).toFixed(2),
+        payTime: order.paidAt ? order.paidAt.replace('T', ' ').slice(0, 16) : '',
+        house: order.house
+          ? `${order.house.communityName || ''} ${order.house.displayName || ''}`.trim()
+          : this.data.house,
+      });
+    } catch (e) {
+      // 拉单失败不影响"缴费成功"结论，凭证字段留空即可
+    }
   },
 
   backHome() {

@@ -113,3 +113,76 @@ button::after {
   color: #8b8199;
   font-size: 24rpx;
 }
+
+/* ---- 通用三态：加载 / 错误 / 空（全站复用） ---- */
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 140rpx 40rpx;
+  text-align: center;
+}
+
+.state-spinner {
+  width: 56rpx;
+  height: 56rpx;
+  border: 6rpx solid rgba(37, 28, 56, 0.12);
+  border-top-color: #c9a66b;
+  border-radius: 50%;
+  animation: state-spin 0.8s linear infinite;
+}
+
+@keyframes state-spin {
+  to { transform: rotate(360deg); }
+}
+
+.state-icon {
+  font-size: 72rpx;
+  opacity: 0.5;
+  line-height: 1;
+}
+
+.state-text {
+  margin-top: 24rpx;
+  font-size: 26rpx;
+  color: #8b8199;
+}
+
+.state-retry {
+  margin-top: 30rpx;
+  padding: 0 52rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  font-size: 26rpx;
+  color: #251c38;
+  background: rgba(201, 166, 107, 0.18);
+  border-radius: 40rpx;
+}
+
+.state-cta {
+  margin-top: 30rpx;
+}
+
+/* 未绑定房屋提示条（表单页顶部复用） */
+.bind-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 24rpx 28rpx;
+  margin-bottom: 24rpx;
+}
+
+.bb-text {
+  font-size: 26rpx;
+  color: #8b5e00;
+  flex: 1;
+}
+
+.bb-btn {
+  height: 60rpx;
+  padding: 0 30rpx;
+  font-size: 24rpx;
+  flex-shrink: 0;
+}

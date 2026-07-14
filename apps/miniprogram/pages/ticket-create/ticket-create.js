@@ -24,6 +24,11 @@ Page({
     houses: [],
     houseIndex: 0,
     submitting: false,
+    noHouse: false,
+  },
+
+  goBind() {
+    wx.navigateTo({ url: '/pages/bind-house/bind-house' });
   },
 
   async onLoad(options) {
@@ -33,10 +38,15 @@ Page({
       if (idx >= 0) this.setData({ typeIndex: idx, placeholder: PLACEHOLDER[options.type] });
     }
     await getApp().loginReady;
-    const houses = await loadMyHouses().catch(() => []);
+    let houses = [];
+    try {
+      houses = await loadMyHouses();
+    } catch (e) {
+      houses = getApp().globalData.houses || [];
+    }
     const current = getApp().globalData.currentHouse;
     const houseIndex = Math.max(0, houses.findIndex((h) => current && h.houseId === current.houseId));
-    this.setData({ houses, houseIndex });
+    this.setData({ houses, houseIndex, noHouse: houses.length === 0 });
   },
 
   setType(e) {
@@ -82,11 +92,33 @@ Page({
       return;
     }
     this.setData({ submitting: true });
-    wx.showLoading({ title: '提交中' });
+    wx.showLoading({ title: images.length ? '上传图片中' : '提交中', mask: true });
     try {
-      // 先传图，再建单
-      const urls = [];
-      for (const path of images) urls.push(await uploadImage(path));
+      // 传图与建单解耦：失败的图片跳过，不阻断建单
+      let urls = [];
+      if (images.length) {
+        const results = await Promise.allSettled(images.map((p) => uploadImage(p)));
+        urls = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+        const failed = results.length - urls.length;
+        if (failed > 0) {
+          wx.hideLoading();
+          const go = await new Promise((resolve) =>
+            wx.showModal({
+              title: '部分图片上传失败',
+              content: `有 ${failed} 张图片没传上。是否继续提交（仅保留已成功的图片）？`,
+              confirmText: '继续提交',
+              cancelText: '返回重试',
+              success: (m) => resolve(m.confirm),
+              fail: () => resolve(false),
+            })
+          );
+          if (!go) {
+            this.setData({ submitting: false });
+            return;
+          }
+          wx.showLoading({ title: '提交中', mask: true });
+        }
+      }
       await request('/owner/tickets', {
         method: 'POST',
         data: {

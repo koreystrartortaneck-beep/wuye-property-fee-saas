@@ -20,13 +20,32 @@ Page({
     page: 1,
     total: 0,
     loadingMore: false,
+    loading: true,
+    error: false,
   },
 
   async onShow() {
-    await getApp().loginReady;
-    await loadMyHouses().catch(() => []);
-    this.setData({ page: 1, list: [] });
-    await this.fetchPage(1);
+    await this.load();
+  },
+
+  async load() {
+    this.setData({ loading: true, error: false, page: 1 });
+    try {
+      await getApp().loginReady;
+      await loadMyHouses().catch(() => []);
+      await this.fetchPage(1);
+      this.setData({ loading: false, error: false });
+    } catch (e) {
+      if (this.data.list.length === 0) {
+        this.setData({ error: true, loading: false });
+      } else {
+        this.setData({ loading: false, error: false });
+      }
+    }
+  },
+
+  retry() {
+    this.load();
   },
 
   async fetchPage(page) {
@@ -36,8 +55,8 @@ Page({
       return;
     }
     const cat = this.data.activeCat;
-    const res = await request(`/owner/work-logs?houseId=${house.houseId}&page=${page}&pageSize=20${cat ? '&category=' + cat : ''}`);
-    const mapped = res.list.map((w) => ({
+    const res = await request(`/owner/work-logs?houseId=${house.houseId}&page=${page}&pageSize=20${cat ? '&category=' + cat : ''}`, { silent: true });
+    const mapped = (res.list || []).map((w) => ({
       id: w.id,
       category: CATEGORY_LABEL[w.category] || w.category,
       title: w.title || CATEGORY_LABEL[w.category],
@@ -49,27 +68,29 @@ Page({
     }));
     this.setData({
       list: page === 1 ? mapped : this.data.list.concat(mapped),
-      total: res.total,
+      total: res.total || 0,
       page,
     });
   },
 
   async setCat(e) {
-    this.setData({ activeCat: e.currentTarget.dataset.cat, page: 1, list: [] });
-    await this.fetchPage(1);
+    this.setData({ activeCat: e.currentTarget.dataset.cat });
+    await this.load();
   },
 
   async onReachBottom() {
     if (this.data.list.length >= this.data.total || this.data.loadingMore) return;
     this.setData({ loadingMore: true });
-    await this.fetchPage(this.data.page + 1);
-    this.setData({ loadingMore: false });
+    try {
+      await this.fetchPage(this.data.page + 1);
+    } finally {
+      this.setData({ loadingMore: false });
+    }
   },
 
   async onPullDownRefresh() {
     try {
-      this.setData({ page: 1, list: [] });
-      await this.fetchPage(1);
+      await this.load();
     } finally {
       wx.stopPullDownRefresh();
     }

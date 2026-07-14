@@ -9,14 +9,40 @@ Page({
     bill: null,
     calcRows: [], // 计算依据 [{label, value}]
     overdue: false,
+    loading: true,
+    error: false,
   },
 
-  async onLoad(options) {
-    if (!options.id) return;
-    const b = await request(`/owner/bills/${options.id}`);
+  onLoad(options) {
+    this.id = options.id;
+    this.load();
+  },
+
+  retry() {
+    this.load();
+  },
+
+  async load() {
+    if (!this.id) {
+      this.setData({ loading: false, error: true });
+      return;
+    }
+    this.setData({ loading: true, error: false });
+    try {
+      await getApp().loginReady;
+      const b = await request(`/owner/bills/${this.id}`, { silent: true });
+      this.render(b);
+      this.setData({ loading: false, error: false });
+    } catch (e) {
+      this.setData({ loading: false, error: true });
+    }
+  },
+
+  render(b) {
     const s = b.snapshot || {};
+    const rule = b.rule || {};
     let calcRows = [];
-    switch (b.rule.ruleType) {
+    switch (rule.ruleType) {
       case 'AREA_PRICE':
         calcRows = [
           { label: '计费单价', value: `${s.unitPrice} 元/㎡` },

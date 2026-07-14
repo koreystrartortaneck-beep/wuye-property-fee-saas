@@ -17,10 +17,11 @@ Page({
     submitting: false,
   },
 
-  onLoad() {
+  onLoad(options) {
     const item = getApp().globalData.bookingItem;
-    this.itemId = item ? item.id : '';
-    this.setData({ item, expectDate: todayStr(1), todayStr: todayStr() });
+    // globalData 可能被微信回收清空，兜底用 URL 的 id
+    this.itemId = (item && item.id) || (options && options.id) || '';
+    this.setData({ item: item || null, expectDate: todayStr(1), todayStr: todayStr() });
   },
 
   onName(e) { this.setData({ contactName: e.detail.value }); },
@@ -33,6 +34,7 @@ Page({
     if (submitting) return;
     const house = getApp().globalData.currentHouse;
     if (!house) return wx.showToast({ title: '请先绑定房屋', icon: 'none' });
+    if (!this.itemId) return wx.showToast({ title: '服务信息已失效，请重新选择', icon: 'none' });
     if (!contactName.trim()) return wx.showToast({ title: '请填写联系人', icon: 'none' });
     if (!/^1\d{10}$/.test(contactPhone)) return wx.showToast({ title: '请填写正确手机号', icon: 'none' });
     this.setData({ submitting: true });
@@ -52,7 +54,7 @@ Page({
         title: '预约成功',
         content: '物业接单后会电话联系您确认上门时间',
         showCancel: false,
-        success: () => wx.redirectTo({ url: '/pages/services/services' }),
+        success: () => wx.redirectTo({ url: '/pages/services/services?tab=1' }),
       });
     } catch (e) {
       this.setData({ submitting: false });

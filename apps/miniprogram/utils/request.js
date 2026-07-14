@@ -15,6 +15,28 @@ function clearToken() {
 }
 
 function rawRequest(path, { method = 'GET', data = {} } = {}) {
+  const auth = getToken() ? `Bearer ${getToken()}` : '';
+
+  // 云托管：走 wx.cloud.callContainer 免备案内部通道
+  if (config.useCloud) {
+    return new Promise((resolve, reject) => {
+      wx.cloud.callContainer({
+        config: { env: config.cloudEnv },
+        path: config.apiPrefix + path, // /api/v1 + /owner/xxx
+        method,
+        header: {
+          'X-WX-SERVICE': config.cloudService, // 路由到对应云托管服务，必填
+          'content-type': 'application/json',
+          Authorization: auth,
+        },
+        data,
+        success: (res) => resolve(res.data),
+        fail: (err) => reject(new Error(err.errMsg || '云调用失败')),
+      });
+    });
+  }
+
+  // 自有服务器直连（回滚保底）
   return new Promise((resolve, reject) => {
     wx.request({
       url: config.baseURL + path,
@@ -22,7 +44,7 @@ function rawRequest(path, { method = 'GET', data = {} } = {}) {
       data,
       header: {
         'Content-Type': 'application/json',
-        Authorization: getToken() ? `Bearer ${getToken()}` : '',
+        Authorization: auth,
       },
       success: (res) => resolve(res.data),
       fail: (err) => reject(new Error(err.errMsg || '网络异常')),

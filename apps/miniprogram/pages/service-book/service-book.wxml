@@ -1,5 +1,5 @@
-<view class="page book-page" wx:if="{{item}}">
-  <view class="book-hero card">
+<view class="page book-page">
+  <view wx:if="{{item}}" class="book-hero card">
     <view class="bh-name">{{item.name}}</view>
     <view class="bh-price"><text class="bh-cur">¥</text>{{item.price}}<text class="bh-unit"> {{item.unit}}</text></view>
     <view class="bh-desc" wx:if="{{item.desc}}">{{item.desc}}</view>
@@ -26,6 +26,6 @@
     </view>
   </view>
 
-  <button class="dark-button book-submit" bindtap="submit">提交预约</button>
+  <button class="dark-button book-submit" bindtap="submit" loading="{{submitting}}" disabled="{{submitting}}">提交预约</button>
   <view class="book-tip">简版预约不在线支付，费用由物业上门时当面结算</view>
 </view>

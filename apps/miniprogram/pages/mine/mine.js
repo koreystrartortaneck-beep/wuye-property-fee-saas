@@ -46,7 +46,7 @@ Page({
       this.setData({
         pendingBindings,
         phone: me.phone ? me.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : '未绑定手机号',
-        userName: houses.length > 0 ? `${houses[0].communityName}业主` : '业主',
+        userName: current ? `${current.communityName}业主` : houses.length > 0 ? `${houses[0].communityName}业主` : '业主',
         houseCount: houses.length,
         currentHouse: current
           ? {

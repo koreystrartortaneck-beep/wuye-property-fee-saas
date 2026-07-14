@@ -6,7 +6,21 @@
 
   <!-- 服务菜单 -->
   <block wx:if="{{tab === 0}}">
-    <view class="svc-list">
+    <view wx:if="{{loading && items.length === 0}}" class="state">
+      <view class="state-spinner"></view>
+      <view class="state-text">加载中…</view>
+    </view>
+    <view wx:elif="{{noHouse}}" class="state">
+      <view class="state-icon">🏠</view>
+      <view class="state-text">绑定房屋后即可预约生活服务</view>
+      <button class="gold-button state-cta" bindtap="goBind">去绑定房屋</button>
+    </view>
+    <view wx:elif="{{error && items.length === 0}}" class="state">
+      <view class="state-icon">⚠️</view>
+      <view class="state-text">加载失败，请检查网络</view>
+      <button class="state-retry" bindtap="retry">点击重试</button>
+    </view>
+    <view wx:else class="svc-list">
       <block wx:for="{{items}}" wx:key="id">
         <view class="svc-item card">
           <image wx:if="{{item.cover}}" class="svc-cover" src="{{item.cover}}" mode="aspectFill" />
@@ -30,7 +44,16 @@
 
   <!-- 我的预约 -->
   <block wx:else>
-    <view class="svc-list">
+    <view wx:if="{{ordersLoading && orders.length === 0}}" class="state">
+      <view class="state-spinner"></view>
+      <view class="state-text">加载中…</view>
+    </view>
+    <view wx:elif="{{ordersError && orders.length === 0}}" class="state">
+      <view class="state-icon">⚠️</view>
+      <view class="state-text">加载失败，请检查网络</view>
+      <button class="state-retry" bindtap="retryOrders">点击重试</button>
+    </view>
+    <view wx:else class="svc-list">
       <block wx:for="{{orders}}" wx:key="id">
         <view class="order-item card">
           <view class="order-top">

@@ -1,4 +1,15 @@
-<view class="page tdetail-page" wx:if="{{ticket}}">
+<view wx:if="{{loading}}" class="state">
+  <view class="state-spinner"></view>
+  <view class="state-text">加载中…</view>
+</view>
+
+<view wx:elif="{{error}}" class="state">
+  <view class="state-icon">⚠️</view>
+  <view class="state-text">加载失败，请检查网络</view>
+  <button class="state-retry" bindtap="retry">点击重试</button>
+</view>
+
+<view class="page tdetail-page" wx:elif="{{ticket}}">
   <view class="td-card card">
     <view class="td-top">
       <view class="td-type">{{ticket.typeLabel}}</view>
@@ -46,7 +57,7 @@
               data-star="{{item}}" bindtap="setRating">★</text>
       </view>
       <input class="rate-input" placeholder="说点什么（选填）" value="{{ratingComment}}" bindinput="onRatingComment" />
-      <button class="gold-button rate-btn" bindtap="submitRating">提交评价</button>
+      <button class="gold-button rate-btn" bindtap="submitRating" loading="{{submittingRate}}" disabled="{{submittingRate}}">提交评价</button>
     </block>
   </view>
 </view>

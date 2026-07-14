@@ -11,6 +11,16 @@
     </view>
   </scroll-view>
 
+  <view wx:if="{{loading && feed.length === 0}}" class="state">
+    <view class="state-spinner"></view>
+    <view class="state-text">加载中…</view>
+  </view>
+  <view wx:elif="{{error && feed.length === 0}}" class="state">
+    <view class="state-icon">⚠️</view>
+    <view class="state-text">加载失败，请检查网络</view>
+    <button class="state-retry" bindtap="retry">点击重试</button>
+  </view>
+
   <view class="feed-list">
     <block wx:for="{{feed}}" wx:key="id">
       <view wx:if="{{item.type === 'work'}}" class="feed-work card" data-id="{{item.id}}" data-type="work" bindtap="goItem">
@@ -36,7 +46,7 @@
         <view class="ac-date">{{item.date}}</view>
       </view>
     </block>
-    <view wx:if="{{feed.length === 0}}" class="feed-empty card">
+    <view wx:if="{{!loading && !error && feed.length === 0}}" class="feed-empty card">
       <view class="fe-title">暂无内容</view>
       <view class="fe-desc">物业公告与日常工作照片会在这里持续更新</view>
     </view>

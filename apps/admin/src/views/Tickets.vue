@@ -127,10 +127,34 @@ const assigneeName = ref('');
 const replyContent = ref('');
 const current = ref<Ticket | null>(null);
 
-/** 上传图片相对路径 → 可访问 URL（走同源 /wuye/uploads 或 dev 代理） */
+// 业主端云托管模式下工单图片是微信云存储 cloud:// fileID，浏览器无法直接渲染，
+// 需经后端解析为临时 https URL；旧的 /uploads 相对路径仍走同源。
+const cloudUrls = ref<Record<string, string>>({});
+
+/** 图片标识 → 可访问 URL */
 function imgUrl(rel: string): string {
+  if (!rel) return '';
+  if (rel.startsWith('cloud://')) return cloudUrls.value[rel] || '';
+  if (rel.startsWith('http')) return rel;
   const base = (import.meta as any).env?.VITE_API_BASE || '/api/v1';
   return base.replace(/\/api\/v1$/, '') + rel;
+}
+
+/** 批量把当前列表里的 cloud:// 图片解析成临时 URL */
+async function resolveCloudImages() {
+  const ids = [
+    ...new Set(rows.value.flatMap((r) => r.images || []).filter((s) => s && s.startsWith('cloud://'))),
+  ].filter((id) => !cloudUrls.value[id]);
+  if (!ids.length) return;
+  try {
+    const map = await api<Record<string, string>>('/admin/cloud-files/urls', {
+      method: 'POST',
+      body: { fileIds: ids },
+    });
+    cloudUrls.value = { ...cloudUrls.value, ...map };
+  } catch {
+    /* 解析失败则图片显示占位，不阻断列表 */
+  }
 }
 
 function reload() {
@@ -144,6 +168,7 @@ async function load() {
     const data = await api<Page<Ticket>>(`/admin/tickets${qs({ ...filter.value, page: page.value, pageSize: 20 })}`);
     rows.value = data.list;
     total.value = data.total;
+    await resolveCloudImages();
   } finally {
     loading.value = false;
   }

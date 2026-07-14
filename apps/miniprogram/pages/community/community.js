@@ -34,27 +34,42 @@ Page({
     active: 'all',
     all: [],
     feed: [],
+    loading: true,
+    error: false,
   },
 
   async onShow() {
-    await getApp().loginReady;
-    await loadMyHouses().catch(() => []);
     await this.load();
   },
 
   async load() {
-    const house = getApp().globalData.currentHouse;
-    if (!house) {
-      this.setData({ all: [], feed: [] });
-      return;
+    this.setData({ loading: true, error: false });
+    try {
+      await getApp().loginReady;
+      await loadMyHouses().catch(() => []);
+      const house = getApp().globalData.currentHouse;
+      if (!house) {
+        this.setData({ all: [], feed: [], loading: false, error: false });
+        return;
+      }
+      const [anns, works] = await Promise.all([
+        request(`/owner/announcements?houseId=${house.houseId}`, { silent: true }),
+        request(`/owner/work-logs?houseId=${house.houseId}&pageSize=50`, { silent: true }),
+      ]);
+      const all = buildFeed(anns, (works || {}).list);
+      this.setData({ all, loading: false, error: false });
+      this.applyFilter();
+    } catch (e) {
+      if (this.data.feed.length === 0) {
+        this.setData({ error: true, loading: false });
+      } else {
+        this.setData({ loading: false, error: false });
+      }
     }
-    const [anns, works] = await Promise.all([
-      request(`/owner/announcements?houseId=${house.houseId}`).catch(() => []),
-      request(`/owner/work-logs?houseId=${house.houseId}&pageSize=50`).catch(() => ({ list: [] })),
-    ]);
-    const all = buildFeed(anns, works.list);
-    this.setData({ all });
-    this.applyFilter();
+  },
+
+  retry() {
+    this.load();
   },
 
   applyFilter() {

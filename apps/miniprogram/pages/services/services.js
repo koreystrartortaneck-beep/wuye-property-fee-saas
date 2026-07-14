@@ -9,6 +9,11 @@ Page({
     tab: 0, // 0 服务菜单 1 我的预约
     items: [],
     orders: [],
+    loading: true,
+    error: false,
+    noHouse: false,
+    ordersLoading: false,
+    ordersError: false,
   },
 
   onLoad(options) {
@@ -17,45 +22,73 @@ Page({
 
   async onShow() {
     await getApp().loginReady;
-    await loadMyHouses().catch(() => []);
     await this.loadItems();
     if (this.data.tab === 1) await this.loadOrders();
   },
 
+  goBind() {
+    wx.navigateTo({ url: '/pages/bind-house/bind-house' });
+  },
+
+  retry() {
+    this.loadItems();
+  },
+
+  retryOrders() {
+    this.loadOrders();
+  },
+
   async loadItems() {
-    const house = getApp().globalData.currentHouse;
-    if (!house) {
-      this.setData({ items: [] });
-      return;
+    this.setData({ loading: this.data.items.length === 0, error: false });
+    try {
+      const houses = await loadMyHouses();
+      const house = getApp().globalData.currentHouse;
+      if (!houses.length || !house) {
+        this.setData({ noHouse: true, items: [], loading: false, error: false });
+        return;
+      }
+      const list = await request(`/owner/service-items?houseId=${house.houseId}`, { silent: true });
+      this.setData({
+        noHouse: false,
+        loading: false,
+        error: false,
+        items: (list || []).map((s) => ({
+          id: s.id,
+          name: s.name || '服务',
+          category: s.category || '',
+          price: Number(s.price || 0).toFixed(2),
+          unit: s.unit || '',
+          desc: s.description || '',
+          cover: s.coverImage ? imageUrl(s.coverImage) : '',
+        })),
+      });
+    } catch (e) {
+      // 请求失败（区别于"确实没房"）：有数据则保留，无数据则显示错误态
+      this.setData({ loading: false, error: this.data.items.length === 0 });
     }
-    const list = await request(`/owner/service-items?houseId=${house.houseId}`);
-    this.setData({
-      items: list.map((s) => ({
-        id: s.id,
-        name: s.name,
-        category: s.category || '',
-        price: Number(s.price).toFixed(0),
-        unit: s.unit,
-        desc: s.description || '',
-        cover: s.coverImage ? imageUrl(s.coverImage) : '',
-      })),
-    });
   },
 
   async loadOrders() {
-    const res = await request('/owner/service-orders?pageSize=30');
-    this.setData({
-      orders: res.list.map((o) => ({
-        id: o.id,
-        name: o.serviceName,
-        price: Number(o.price).toFixed(0),
-        unit: o.unit,
-        date: (o.expectDate || '').slice(0, 10),
-        remark: o.remark || '',
-        status: o.status,
-        statusLabel: ORDER_STATUS[o.status] || o.status,
-      })),
-    });
+    this.setData({ ordersLoading: this.data.orders.length === 0, ordersError: false });
+    try {
+      const res = await request('/owner/service-orders?pageSize=30', { silent: true });
+      this.setData({
+        ordersLoading: false,
+        ordersError: false,
+        orders: (res.list || []).map((o) => ({
+          id: o.id,
+          name: o.serviceName || '',
+          price: Number(o.price || 0).toFixed(2),
+          unit: o.unit || '',
+          date: (o.expectDate || '').slice(0, 10),
+          remark: o.remark || '',
+          status: o.status,
+          statusLabel: ORDER_STATUS[o.status] || o.status,
+        })),
+      });
+    } catch (e) {
+      this.setData({ ordersLoading: false, ordersError: this.data.orders.length === 0 });
+    }
   },
 
   async switchTab(e) {

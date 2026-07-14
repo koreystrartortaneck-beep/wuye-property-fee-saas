@@ -33,16 +33,37 @@ Page({
   async onShow() {
     const app = getApp();
     await app.loginReady;
-    const houses = await loadMyHouses().catch(() => []);
+    let houses = [];
+    try {
+      houses = await loadMyHouses();
+    } catch (e) {
+      houses = app.globalData.houses || [];
+    }
     if (houses.length === 0) {
-      this.setData({ house: null, bills: [], groups: [] });
+      this.setData({ house: null, noHouse: true, bills: [], groups: [], unpaidCount: 0, unpaidTotal: '0.00' });
       return;
     }
     const house = app.globalData.currentHouse;
     const houseChanged = !this.data.house || this.data.house.houseId !== house.houseId;
-    this.setData({ house });
+    this.setData({ house, noHouse: false });
     if (houseChanged) await this.loadFilters();
     await this.reload();
+    await this.loadSummary();
+  },
+
+  /** 待缴合计以权威 summary 为准（不受当前分页影响） */
+  async loadSummary() {
+    if (!this.data.house) return;
+    try {
+      const s = await request(`/owner/bills/summary?houseId=${this.data.house.houseId}`, { silent: true });
+      this.setData({ unpaidCount: s.unpaidCount || 0, unpaidTotal: s.unpaidTotal || '0.00' });
+    } catch (e) {
+      /* 保留旧值 */
+    }
+  },
+
+  goBind() {
+    wx.navigateTo({ url: '/pages/bind-house/bind-house' });
   },
 
   /** 该房屋实际存在的费用科目 */
@@ -88,15 +109,12 @@ Page({
       };
     });
     const bills = page === 1 ? mapped : this.data.bills.concat(mapped);
-    const unpaid = bills.filter((b) => !b.paid);
-    const unpaidCents = unpaid.reduce((s, b) => s + Math.round(Number(b.amount) * 100), 0);
+    // 注意：待缴合计/笔数由 loadSummary() 从权威接口取，这里不再按当前页估算
     this.setData({
       bills,
       groups: this.buildGroups(bills),
       total: res.total,
       page,
-      unpaidCount: unpaid.length,
-      unpaidTotal: (unpaidCents / 100).toFixed(2),
     });
   },
 
@@ -125,8 +143,11 @@ Page({
   async onReachBottom() {
     if (this.data.bills.length >= this.data.total || this.data.loadingMore) return;
     this.setData({ loadingMore: true });
-    await this.fetchPage(this.data.page + 1);
-    this.setData({ loadingMore: false });
+    try {
+      await this.fetchPage(this.data.page + 1);
+    } finally {
+      this.setData({ loadingMore: false });
+    }
   },
 
   async onPullDownRefresh() {
@@ -169,17 +190,34 @@ Page({
     this.setData({ selectedIds: ids, selMap, selectedTotal: (totalCents / 100).toFixed(2) });
   },
 
-  /** 合并缴纳：勾选的账单，没勾则默认全部未缴 */
-  goPay() {
-    const unpaid = this.data.bills.filter((b) => !b.paid);
-    const chosen = this.data.selectedIds.length
-      ? unpaid.filter((b) => this.data.selectedIds.includes(b.id))
-      : unpaid;
-    if (chosen.length === 0) {
+  /** 合并缴纳：勾选的账单；没勾则全部未缴（拉全量，不止当前已加载页） */
+  async goPay() {
+    let chosen;
+    if (this.data.selectedIds.length) {
+      chosen = this.data.bills.filter((b) => !b.paid && this.data.selectedIds.includes(b.id));
+    } else {
+      chosen = await this.fetchAllUnpaid();
+    }
+    if (!chosen || chosen.length === 0) {
       wx.showToast({ title: '没有可缴纳的账单', icon: 'none' });
       return;
     }
     getApp().globalData.pendingBills = chosen.map((b) => ({ id: b.id, name: b.title, amount: b.amount }));
     wx.navigateTo({ url: '/pages/pay-confirm/pay-confirm' });
+  },
+
+  /** 拉该房屋全部未缴账单（供"全部缴纳"，避免只缴当前页） */
+  async fetchAllUnpaid() {
+    const house = this.data.house;
+    if (!house) return [];
+    try {
+      const res = await request(`/owner/bills?houseId=${house.houseId}&status=UNPAID&page=1&pageSize=500`, {
+        silent: true,
+      });
+      return (res.list || []).map((b) => ({ id: b.id, title: b.title, amount: Number(b.amount).toFixed(2) }));
+    } catch (e) {
+      wx.showToast({ title: '获取待缴账单失败', icon: 'none' });
+      return [];
+    }
   },
 });

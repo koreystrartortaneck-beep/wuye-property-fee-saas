@@ -1,5 +1,11 @@
 <view class="page visitor-page">
-  <view class="v-card card">
+  <view wx:if="{{noHouse}}" class="v-card card">
+    <view class="v-title">邀请访客</view>
+    <view class="v-guide-text">绑定房屋后，即可为访客生成到访通行码</view>
+    <button class="dark-button v-btn" bindtap="goBind">去绑定房屋</button>
+  </view>
+
+  <view wx:else class="v-card card">
     <view class="v-title">邀请访客</view>
     <view class="v-form-row">
       <view class="v-label">到访房屋</view>
@@ -27,7 +33,18 @@
   </view>
 
   <view class="v-section">我的通行码</view>
-  <view class="pass-list">
+
+  <view wx:if="{{listLoading && list.length === 0}}" class="state">
+    <view class="state-spinner"></view>
+    <view class="state-text">加载中…</view>
+  </view>
+  <view wx:elif="{{listError && list.length === 0}}" class="state">
+    <view class="state-icon">⚠️</view>
+    <view class="state-text">加载失败，请检查网络</view>
+    <button class="state-retry" bindtap="retry">点击重试</button>
+  </view>
+
+  <view wx:else class="pass-list">
     <block wx:for="{{list}}" wx:key="id">
       <view class="pass-item card {{item.status !== 'ACTIVE' ? 'pass-dim' : ''}}">
         <view class="pass-code amount" data-code="{{item.code}}" bindtap="copyCode">{{item.code}}</view>

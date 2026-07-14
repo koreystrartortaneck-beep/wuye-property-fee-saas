@@ -11,6 +11,16 @@
     </view>
   </scroll-view>
 
+  <view wx:if="{{loading && list.length === 0}}" class="state">
+    <view class="state-spinner"></view>
+    <view class="state-text">加载中…</view>
+  </view>
+  <view wx:elif="{{error && list.length === 0}}" class="state">
+    <view class="state-icon">⚠️</view>
+    <view class="state-text">加载失败，请检查网络</view>
+    <button class="state-retry" bindtap="retry">点击重试</button>
+  </view>
+
   <view class="work-list">
     <block wx:for="{{list}}" wx:key="id">
       <view class="work-item card" data-id="{{item.id}}" bindtap="goDetail">
@@ -26,7 +36,7 @@
         </view>
       </view>
     </block>
-    <view wx:if="{{list.length === 0}}" class="work-empty card">
+    <view wx:if="{{!loading && !error && list.length === 0}}" class="work-empty card">
       <view class="we-title">暂无物业公示</view>
       <view class="we-desc">物业的日常巡检、保洁、维修工作照片会展示在这里</view>
     </view>

@@ -1,4 +1,15 @@
-<view class="page annd-page" wx:if="{{ann}}">
+<view wx:if="{{loading}}" class="state">
+  <view class="state-spinner"></view>
+  <view class="state-text">加载中…</view>
+</view>
+
+<view wx:elif="{{error}}" class="state">
+  <view class="state-icon">⚠️</view>
+  <view class="state-text">加载失败，请检查网络</view>
+  <button class="state-retry" bindtap="retry">点击重试</button>
+</view>
+
+<view class="page annd-page" wx:elif="{{ann}}">
   <view class="annd-card card">
     <view class="annd-title">{{ann.title}}</view>
     <view class="annd-date">{{ann.date}}</view>

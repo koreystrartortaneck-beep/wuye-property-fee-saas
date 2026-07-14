@@ -1,4 +1,17 @@
-<view class="page receipt-page" wx:if="{{r}}">
+<!-- 加载态 -->
+<view wx:if="{{loading}}" class="rc-state">
+  <view class="rc-spinner"></view>
+  <view class="rc-state-text">收据加载中…</view>
+</view>
+
+<!-- 错误态 -->
+<view wx:elif="{{error}}" class="rc-state">
+  <view class="rc-state-text">收据加载失败</view>
+  <button class="rc-retry" bindtap="retry">点击重试</button>
+</view>
+
+<!-- 内容 -->
+<view wx:elif="{{r}}" class="page receipt-page">
   <view class="rc-card card">
     <view class="rc-head">
       <view class="rc-org">电 子 收 据</view>
@@ -27,5 +40,11 @@
     <view class="rc-stamp" wx:if="{{r.success}}">收讫</view>
   </view>
 
-  <view class="rc-tip">长按屏幕截图，即可保存此收据凭证</view>
+  <button class="rc-save gold-button" bindtap="saveReceipt" loading="{{saving}}" disabled="{{saving}}">
+    {{saving ? '生成中…' : '保存收据到相册'}}
+  </button>
+  <view class="rc-tip">保存后可发送给他人或用于报销</view>
 </view>
+
+<!-- 离屏画布：生成收据图片用 -->
+<canvas type="2d" id="receiptCanvas" class="rc-canvas"></canvas>

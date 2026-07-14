@@ -11,16 +11,36 @@ Page({
     ratingInput: 0,
     ratingComment: '',
     submittingRate: false,
+    loading: true,
+    error: false,
   },
 
-  async onLoad(options) {
+  onLoad(options) {
     this.id = options.id;
-    await getApp().loginReady;
-    await this.load();
+    this.load();
+  },
+
+  retry() {
+    this.load();
   },
 
   async load() {
-    const t = await request(`/owner/tickets/${this.id}`);
+    if (!this.id) {
+      this.setData({ loading: false, error: true });
+      return;
+    }
+    this.setData({ loading: true, error: false });
+    try {
+      await getApp().loginReady;
+      await this.fetch();
+      this.setData({ loading: false, error: false });
+    } catch (e) {
+      this.setData({ loading: false, error: true });
+    }
+  },
+
+  async fetch() {
+    const t = await request(`/owner/tickets/${this.id}`, { silent: true });
     const fmt = (s) => (s ? s.replace('T', ' ').slice(0, 16) : '');
     const timeline = [{ label: '提交工单', time: fmt(t.createdAt), done: true }];
     timeline.push({
@@ -39,7 +59,7 @@ Page({
         typeLabel: TYPE_LABEL[t.type] || t.type,
         statusLabel: STATUS_LABEL[t.status] || t.status,
         status: t.status,
-        content: t.content,
+        content: t.content || '',
         images: (t.images || []).map(imageUrl),
         replyContent: t.replyContent,
         rating: t.rating,
@@ -79,7 +99,7 @@ Page({
         data: { rating: this.data.ratingInput, comment: this.data.ratingComment.trim() || undefined },
       });
       wx.showToast({ title: '感谢您的评价', icon: 'success' });
-      await this.load();
+      await this.fetch();
     } finally {
       this.setData({ submittingRate: false });
     }

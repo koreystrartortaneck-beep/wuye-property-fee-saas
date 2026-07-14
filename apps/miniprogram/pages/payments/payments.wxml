@@ -2,6 +2,16 @@
   <view class="nav-title">缴费记录</view>
   <view class="nav-subtitle">每一笔付款均可追溯</view>
 
+  <view wx:if="{{loading && list.length === 0}}" class="state">
+    <view class="state-spinner"></view>
+    <view class="state-text">加载中…</view>
+  </view>
+  <view wx:elif="{{error && list.length === 0}}" class="state">
+    <view class="state-icon">⚠️</view>
+    <view class="state-text">加载失败，请检查网络</view>
+    <button class="state-retry" bindtap="retry">点击重试</button>
+  </view>
+
   <view class="pay-list">
     <block wx:for="{{list}}" wx:key="orderNo">
       <view class="pay-item card" data-index="{{index}}" bindtap="goReceipt">
@@ -16,7 +26,7 @@
         </view>
       </view>
     </block>
-    <view wx:if="{{list.length === 0}}" class="pay-item card">
+    <view wx:if="{{!loading && !error && list.length === 0}}" class="pay-item card">
       <view class="pay-item-bills">暂无缴费记录</view>
     </view>
   </view>

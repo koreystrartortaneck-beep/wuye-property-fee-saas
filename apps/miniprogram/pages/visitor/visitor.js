@@ -19,31 +19,60 @@ Page({
     todayStr: '',
     list: [],
     submitting: false,
+    noHouse: false,
+    listLoading: true,
+    listError: false,
   },
 
   async onShow() {
     await getApp().loginReady;
-    const houses = await loadMyHouses().catch(() => []);
+    let houses = [];
+    try {
+      houses = await loadMyHouses();
+    } catch (e) {
+      houses = getApp().globalData.houses || [];
+    }
     const current = getApp().globalData.currentHouse;
     const houseIndex = Math.max(0, houses.findIndex((h) => current && h.houseId === current.houseId));
-    this.setData({ houses, houseIndex, visitDate: this.data.visitDate || todayStr(), todayStr: todayStr() });
+    this.setData({
+      houses,
+      houseIndex,
+      noHouse: houses.length === 0,
+      visitDate: this.data.visitDate || todayStr(),
+      todayStr: todayStr(),
+    });
     await this.loadList();
   },
 
+  goBind() {
+    wx.navigateTo({ url: '/pages/bind-house/bind-house' });
+  },
+
+  retry() {
+    this.loadList();
+  },
+
   async loadList() {
-    const res = await request('/owner/visitor-passes?pageSize=20');
-    this.setData({
-      list: res.list.map((p) => ({
-        id: p.id,
-        code: p.code,
-        visitorName: p.visitorName,
-        plateNo: p.plateNo,
-        date: (p.visitDate || '').slice(0, 10),
-        houseName: p.house ? `${p.house.community.name} ${p.house.displayName}` : '',
-        status: p.status,
-        statusLabel: STATUS_LABEL[p.status] || p.status,
-      })),
-    });
+    this.setData({ listLoading: this.data.list.length === 0, listError: false });
+    try {
+      const res = await request('/owner/visitor-passes?pageSize=20', { silent: true });
+      this.setData({
+        listLoading: false,
+        listError: false,
+        list: (res.list || []).map((p) => ({
+          id: p.id,
+          code: p.code,
+          visitorName: p.visitorName || '',
+          plateNo: p.plateNo || '',
+          date: (p.visitDate || '').slice(0, 10),
+          houseName: p.house ? `${p.house.community.name} ${p.house.displayName}` : '',
+          status: p.status,
+          statusLabel: STATUS_LABEL[p.status] || p.status,
+        })),
+      });
+    } catch (e) {
+      this.setData({ listLoading: false, listError: this.data.list.length === 0 });
+    }
   },
 
   onName(e) { this.setData({ visitorName: e.detail.value }); },
@@ -80,7 +109,10 @@ Page({
   },
 
   copyCode(e) {
-    wx.setClipboardData({ data: e.currentTarget.dataset.code });
+    wx.setClipboardData({
+      data: String(e.currentTarget.dataset.code || ''),
+      success: () => wx.showToast({ title: '通行码已复制', icon: 'success' }),
+    });
   },
 
   async cancel(e) {

@@ -1,4 +1,15 @@
-<view class="page wd-page" wx:if="{{log}}">
+<view wx:if="{{loading}}" class="state">
+  <view class="state-spinner"></view>
+  <view class="state-text">加载中…</view>
+</view>
+
+<view wx:elif="{{error}}" class="state">
+  <view class="state-icon">⚠️</view>
+  <view class="state-text">加载失败，请检查网络</view>
+  <button class="state-retry" bindtap="retry">点击重试</button>
+</view>
+
+<view class="page wd-page" wx:elif="{{log}}">
   <view class="wd-card card">
     <view class="wd-cat">{{log.category}}</view>
     <view class="wd-title">{{log.title}}</view>

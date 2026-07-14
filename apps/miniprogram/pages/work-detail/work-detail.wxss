@@ -48,4 +48,6 @@
   width: 100%;
   border-radius: 18rpx;
   background: rgba(37, 28, 56, 0.05);
+  /* widthFix 下图片加载失败会塌成 0 高，给最小高度避免"照片消失" */
+  min-height: 200rpx;
 }

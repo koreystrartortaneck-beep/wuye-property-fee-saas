@@ -1,4 +1,14 @@
 <view class="page ann-page">
+  <view wx:if="{{loading && list.length === 0}}" class="state">
+    <view class="state-spinner"></view>
+    <view class="state-text">加载中…</view>
+  </view>
+  <view wx:elif="{{error && list.length === 0}}" class="state">
+    <view class="state-icon">⚠️</view>
+    <view class="state-text">加载失败，请检查网络</view>
+    <button class="state-retry" bindtap="retry">点击重试</button>
+  </view>
+
   <view class="ann-list">
     <block wx:for="{{list}}" wx:key="id">
       <view class="ann-item card" data-id="{{item.id}}" bindtap="goDetail">
@@ -10,7 +20,7 @@
         <view class="ann-date">{{item.date}}</view>
       </view>
     </block>
-    <view wx:if="{{list.length === 0}}" class="ann-item card">
+    <view wx:if="{{!loading && !error && list.length === 0}}" class="ann-item card">
       <view class="ann-preview">暂无公告</view>
     </view>
   </view>
