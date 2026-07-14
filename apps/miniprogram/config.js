@@ -12,4 +12,7 @@ module.exports = {
   // 本地开发时换回：
   // baseURL: 'http://127.0.0.1:3000/api/v1',
   mockAuth: true,
+
+  // 微信云开发环境 ID（迁移目标：小程序改用 wx.cloud.callFunction 免备案）
+  cloudEnv: 'cloudbase-d8gkdvv8i8d2ae64d',
 };

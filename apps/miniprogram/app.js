@@ -1,3 +1,4 @@
+const config = require('./config');
 const { ensureLogin } = require('./utils/auth');
 
 App({
@@ -9,6 +10,11 @@ App({
   },
 
   onLaunch() {
+    // 云开发初始化（迁移中：为 wx.cloud.callFunction 免备案链路做准备）
+    if (wx.cloud && config.cloudEnv) {
+      wx.cloud.init({ env: config.cloudEnv, traceUser: true });
+    }
+
     // 自定义导航页的标题行必须与系统胶囊按钮精确同行，否则会互相遮挡
     try {
       const menu = wx.getMenuButtonBoundingClientRect();
