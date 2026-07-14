@@ -1,0 +1,13 @@
+# 云托管/Docker 构建上下文忽略（后端镜像只需 apps/api + packages/shared + 根配置）
+**/node_modules
+**/dist
+**/.git
+.git
+apps/admin
+apps/miniprogram
+apps/api/uploads
+**/*.log
+**/*.tsbuildinfo
+outputs
+output
+.DS_Store
