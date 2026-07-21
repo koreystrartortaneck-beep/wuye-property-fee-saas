@@ -9,4 +9,5 @@ outputs/*.zip
 .worktrees/
 apps/miniprogram/project.private.config.json
 apps/api/uploads/
+deploy/secrets/
 output/

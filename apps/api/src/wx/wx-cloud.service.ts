@@ -22,7 +22,10 @@ export class WxCloudService {
     return process.env.WX_CLOUD_ENV || '';
   }
 
-  private async getAccessToken(): Promise<string> {
+  async getAccessToken(): Promise<string> {
+    if (!this.appId || !this.secret) {
+      throw new Error('微信 AppID 或 AppSecret 未配置');
+    }
     if (this.tokenCache && this.tokenCache.exp > Date.now() + 60_000) {
       return this.tokenCache.token;
     }

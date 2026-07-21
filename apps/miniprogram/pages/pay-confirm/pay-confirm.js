@@ -1,4 +1,5 @@
 const { request } = require('../../utils/request');
+const { requestSubscribe } = require('../../utils/subscribe');
 
 Page({
   data: {
@@ -29,13 +30,21 @@ Page({
   async submitPay() {
     if (this.data.paying) return;
     this.setData({ paying: true });
+    // 请求订阅缴费提醒（须在点击手势上下文，故放最前、不阻断支付）
+    await requestSubscribe().catch(() => {});
     wx.showLoading({ title: '支付中' });
     try {
       const billIds = this.data.items.map((b) => b.id);
       const order = await request('/owner/payments', { method: 'POST', data: { billIds } });
-      // mock 模式：直接确认；real 模式（子项目5）：wx.requestPayment(order.payParams)
       if (order.payParams && order.payParams.mock) {
+        // mock 模式：直接确认
         await request(`/owner/payments/${order.orderNo}/mock-confirm`, { method: 'POST' });
+      } else if (order.payParams) {
+        // 真实微信支付：拉起收银台
+        wx.hideLoading();
+        await new Promise((resolve, reject) =>
+          wx.requestPayment({ ...order.payParams, success: resolve, fail: reject }),
+        );
       }
       getApp().globalData.pendingBills = [];
       wx.hideLoading();

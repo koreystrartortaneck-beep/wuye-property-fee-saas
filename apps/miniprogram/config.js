@@ -9,7 +9,7 @@
 module.exports = {
   // ===== 云托管（免备案，当前生产）=====
   useCloud: true,
-  cloudEnv: 'wuye-api-d5g9kagygdd670922', // 云托管环境ID（wx.cloud.init + callContainer 均用它）
+  cloudEnv: 'wuye-api-d2gql1e3g718d01c9', // 云托管环境ID（wx.cloud.init + callContainer 均用它）
   cloudService: 'wuye-api', // 云托管服务名（callContainer 需带 X-WX-SERVICE 头）
   apiPrefix: '/api/v1', // NestJS 全局前缀
 
@@ -17,5 +17,12 @@ module.exports = {
   baseURL: 'http://58.244.176.174:8443/wuye/api/v1',
   // 本地开发：baseURL: 'http://127.0.0.1:3000/api/v1', useCloud: false
 
-  mockAuth: true,
+  mockAuth: false,
+
+  // 订阅消息模板 ID（在微信公众平台「订阅消息」选用模板后填入；顺序即请求顺序）
+  // 与后端环境变量 WX_TMPL_BILL_CREATED / WX_TMPL_DUE_SOON / WX_TMPL_OVERDUE 对应同一批模板
+  subscribeTmplIds: [
+    // 'xxxxxxx',  // 账单生成提醒
+    // 'yyyyyyy',  // 缴费到期提醒
+  ],
 };

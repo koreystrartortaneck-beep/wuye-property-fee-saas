@@ -1,0 +1,14 @@
+<view wx:if="{{show}}" class="pp-mask">
+  <view class="pp-card">
+    <view class="pp-title">隐私保护提示</view>
+    <view class="pp-body">
+      感谢您使用本小程序。在使用前，请阅读并同意
+      <text class="pp-link" bindtap="openContract">《用户隐私保护指引》</text>。
+      我们会依法收集与保护您的手机号等必要信息，仅用于物业费查询、缴纳与业主服务。
+    </view>
+    <view class="pp-btns">
+      <button class="pp-btn pp-reject" bindtap="onDisagree">不同意</button>
+      <button id="agree-privacy-btn" class="pp-btn pp-agree" open-type="agreePrivacyAuthorization" bindagreeprivacyauthorization="onAgree">同意并继续</button>
+    </view>
+  </view>
+</view>

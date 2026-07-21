@@ -68,7 +68,7 @@ async function request(path, options = {}, retried = false) {
   }
   if (body.code === 0) return body.data;
 
-  if (body.code === 40100 && !retried) {
+  if (body.code === 40100 && !retried && path !== '/auth/wx-login') {
     clearToken();
     const { ensureLogin } = require('./auth');
     await ensureLogin();

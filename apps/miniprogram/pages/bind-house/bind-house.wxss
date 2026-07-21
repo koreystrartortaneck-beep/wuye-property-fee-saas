@@ -116,3 +116,9 @@
 .page.bind-page {
   padding-top: 32rpx;
 }
+
+.match-btn-full {
+  width: 100%;
+  height: 84rpx;
+  margin-top: 8rpx;
+}

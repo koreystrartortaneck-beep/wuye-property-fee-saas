@@ -2,5 +2,8 @@
   "navigationStyle": "default",
   "navigationBarTitleText": "绑定房屋",
   "navigationBarBackgroundColor": "#FAF7F2",
-  "navigationBarTextStyle": "black"
+  "navigationBarTextStyle": "black",
+  "usingComponents": {
+    "privacy-popup": "/components/privacy-popup/privacy-popup"
+  }
 }

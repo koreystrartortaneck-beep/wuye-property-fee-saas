@@ -1,0 +1,59 @@
+.pp-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(20, 14, 32, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.pp-card {
+  width: 100%;
+  background: #fdfbf7;
+  border-radius: 36rpx 36rpx 0 0;
+  padding: 48rpx 40rpx calc(40rpx + env(safe-area-inset-bottom));
+}
+
+.pp-title {
+  font-size: 34rpx;
+  font-weight: 800;
+  color: #251c38;
+  text-align: center;
+}
+
+.pp-body {
+  margin-top: 28rpx;
+  font-size: 27rpx;
+  line-height: 1.7;
+  color: #6b6478;
+}
+
+.pp-link {
+  color: #b08d57;
+}
+
+.pp-btns {
+  margin-top: 40rpx;
+  display: flex;
+  gap: 24rpx;
+}
+
+.pp-btn {
+  flex: 1;
+  height: 88rpx;
+  line-height: 88rpx;
+  border-radius: 999rpx;
+  font-size: 29rpx;
+  font-weight: 700;
+}
+
+.pp-reject {
+  background: rgba(37, 28, 56, 0.06);
+  color: #6b6478;
+}
+
+.pp-agree {
+  background: linear-gradient(145deg, #3b2b57, #251c38);
+  color: #fdfbf7;
+}

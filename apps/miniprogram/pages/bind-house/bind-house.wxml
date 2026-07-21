@@ -1,11 +1,18 @@
 <view class="page bind-page">
+  <privacy-popup />
   <view class="nav-title">绑定房屋</view>
   <view class="nav-subtitle">绑定后即可查询与缴纳物业费用</view>
 
   <view class="bind-card card">
     <view class="bind-card-title">手机号快速绑定</view>
     <view class="bind-card-desc">物业已登记您的手机号时，可自动匹配名下房产</view>
-    <view class="phone-row">
+    <!-- real 模式：微信授权按钮；mock 模式：手动输入 -->
+    <block wx:if="{{!mockAuth}}">
+      <button class="dark-button match-btn-full" open-type="getPhoneNumber" bindgetphonenumber="onGetPhone">
+        微信授权手机号，自动匹配房产
+      </button>
+    </block>
+    <view wx:else class="phone-row">
       <input class="phone-input" type="number" maxlength="11" placeholder="请输入手机号"
              value="{{phone}}" bindinput="onPhoneInput" />
       <button class="gold-button match-btn" bindtap="matchByPhone">匹配</button>

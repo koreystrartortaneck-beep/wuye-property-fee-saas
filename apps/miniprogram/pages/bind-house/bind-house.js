@@ -1,8 +1,10 @@
+const config = require('../../config');
 const { request } = require('../../utils/request');
 const { bindPhone, loadMyHouses } = require('../../utils/auth');
 
 Page({
   data: {
+    mockAuth: config.mockAuth, // true=输入手机号；false=微信授权按钮
     phone: '',
     keyword: '',
     communities: [],
@@ -23,7 +25,7 @@ Page({
     this.setData({ phone: e.detail.value });
   },
 
-  /** 方式一：手机号自动匹配（物业已登记） */
+  /** 方式一(mock)：手动输入手机号自动匹配 */
   async matchByPhone() {
     const phone = this.data.phone.trim();
     if (!/^1\d{10}$/.test(phone)) {
@@ -33,16 +35,36 @@ Page({
     wx.showLoading({ title: '匹配中' });
     try {
       const res = await bindPhone(phone);
-      await loadMyHouses();
-      wx.hideLoading();
-      if (res.matchedHouses > 0) {
-        wx.showToast({ title: `已自动绑定 ${res.matchedHouses} 处房产`, icon: 'success' });
-        setTimeout(() => wx.switchTab({ url: '/pages/index/index' }), 1200);
-      } else {
-        wx.showToast({ title: '未匹配到登记房产，请在下方申请绑定', icon: 'none', duration: 2500 });
-      }
+      await this.afterBind(res);
     } catch (e) {
       wx.hideLoading();
+    }
+  },
+
+  /** 方式一(real)：微信手机号快速验证按钮回调（e.detail.code） */
+  async onGetPhone(e) {
+    const code = e.detail && e.detail.code;
+    if (!code) {
+      wx.showToast({ title: '需授权手机号才能自动匹配', icon: 'none' });
+      return;
+    }
+    wx.showLoading({ title: '匹配中' });
+    try {
+      const res = await bindPhone(code);
+      await this.afterBind(res);
+    } catch (err) {
+      wx.hideLoading();
+    }
+  },
+
+  async afterBind(res) {
+    await loadMyHouses();
+    wx.hideLoading();
+    if (res.matchedHouses > 0) {
+      wx.showToast({ title: `已自动绑定 ${res.matchedHouses} 处房产`, icon: 'success' });
+      setTimeout(() => wx.switchTab({ url: '/pages/index/index' }), 1200);
+    } else {
+      wx.showToast({ title: '未匹配到登记房产，请在下方申请绑定', icon: 'none', duration: 2500 });
     }
   },
 
