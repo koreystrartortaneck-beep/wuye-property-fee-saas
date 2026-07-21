@@ -1,5 +1,7 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post, UseGuards } from '@nestjs/common';
 import { IsNotEmpty, IsString } from 'class-validator';
+import { ErrorCode } from '@pf/shared';
+import { BizException } from '../common/biz.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
 import { Current, CurrentOwner } from './current.decorator';
@@ -25,8 +27,26 @@ export class AuthController {
   ) {}
 
   @Post('wx-login')
-  wxLogin(@Body() dto: WxLoginDto) {
-    return this.auth.wxLogin(dto.code);
+  wxLogin(
+    @Body() dto: WxLoginDto,
+    @Headers('x-wx-openid') wxOpenid?: string,
+    @Headers('x-wx-source') wxSource?: string,
+    @Headers('x-wx-appid') wxAppid?: string,
+    @Headers('x-authmethod') authMethod?: string,
+  ) {
+    const cloudRuntime = !!process.env.WX_CLOUD_ENV;
+    const trustedCloudRequest =
+      cloudRuntime &&
+      (wxSource === 'wx_client' || wxSource === 'wx_devtools' || authMethod === 'WX_SERVER_AUTH');
+    let trustedOpenid: string | undefined;
+    if (trustedCloudRequest) {
+      const expectedAppid = process.env.WX_APPID || '';
+      if (!expectedAppid || !wxAppid || wxAppid !== expectedAppid) {
+        throw new BizException(ErrorCode.UNAUTHORIZED, '小程序 AppID 不匹配');
+      }
+      trustedOpenid = wxOpenid || undefined;
+    }
+    return this.auth.wxLogin(dto.code, trustedOpenid);
   }
 
   @Post('phone')

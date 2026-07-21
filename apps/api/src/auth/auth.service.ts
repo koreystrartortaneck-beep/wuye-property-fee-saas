@@ -25,9 +25,9 @@ export class AuthService {
     @Inject(WX_API) private readonly wx: WxApi,
   ) {}
 
-  /** 微信登录：code 换 openid，落库并签发 owner token */
-  async wxLogin(code: string): Promise<{ token: string; user: { id: string; hasPhone: boolean } }> {
-    const { openid } = await this.wx.code2session(code);
+  /** 微信登录：优先使用云托管可信 openid，否则用 code 换取，落库并签发 owner token */
+  async wxLogin(code: string, trustedOpenid?: string): Promise<{ token: string; user: { id: string; hasPhone: boolean } }> {
+    const openid = trustedOpenid || (await this.wx.code2session(code)).openid;
     const user = await this.prisma.raw.wxUser.upsert({
       where: { openid },
       create: { openid },
