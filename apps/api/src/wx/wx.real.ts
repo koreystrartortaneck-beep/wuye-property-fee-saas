@@ -27,16 +27,25 @@ export class RealWxService implements WxApi {
     }
   }
 
+  private networkErrorDetail(error: unknown): string {
+    const cause = error && typeof error === 'object' ? (error as { cause?: unknown }).cause : undefined;
+    if (cause && typeof cause === 'object' && 'code' in cause) {
+      return String((cause as { code: unknown }).code);
+    }
+    return error instanceof Error ? error.message : 'unknown';
+  }
+
   /** wx.login 的 code 换 openid */
   async code2session(code: string): Promise<{ openid: string }> {
     this.assertConfigured();
     const url = `https://api.weixin.qq.com/sns/jscode2session?appid=${this.appId}&secret=${this.secret}&js_code=${encodeURIComponent(code)}&grant_type=authorization_code`;
-    const data = (await (await fetch(url)).json()) as {
-      openid?: string;
-      session_key?: string;
-      errcode?: number;
-      errmsg?: string;
-    };
+    let data: { openid?: string; session_key?: string; errcode?: number; errmsg?: string };
+    try {
+      const response = await fetch(url);
+      data = (await response.json()) as typeof data;
+    } catch (error) {
+      throw new BizException(ErrorCode.INTERNAL, `微信登录接口请求失败（${this.networkErrorDetail(error)}）`);
+    }
     if (!data.openid) {
       throw new BizException(ErrorCode.UNAUTHORIZED, `微信登录失败：${data.errmsg || data.errcode || 'unknown'}`);
     }

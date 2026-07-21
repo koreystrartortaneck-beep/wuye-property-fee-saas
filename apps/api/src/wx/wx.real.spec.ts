@@ -68,6 +68,20 @@ describe('RealWxService', () => {
     });
   });
 
+  it('微信登录网络失败时返回安全的底层错误码', async () => {
+    process.env.WX_APPID = 'test-appid';
+    process.env.WX_SECRET = 'test-secret';
+    const networkError = new TypeError('fetch failed') as TypeError & { cause?: { code: string } };
+    networkError.cause = { code: 'ENETUNREACH' };
+    global.fetch = jest.fn().mockRejectedValue(networkError) as typeof fetch;
+    const service = new RealWxService({} as WxCloudService);
+
+    await expect(service.code2session('login-code')).rejects.toMatchObject({
+      code: ErrorCode.INTERNAL.code,
+      message: expect.stringContaining('ENETUNREACH'),
+    });
+  });
+
   it('使用手机号授权 code 换取手机号', async () => {
     const wxCloud = { getAccessToken: jest.fn().mockResolvedValue('access-token') } as unknown as WxCloudService;
     const fetchMock = jest.fn().mockResolvedValue({
