@@ -646,6 +646,7 @@ model Refund {
   tenantId          String
   communityId       String?
   paymentId         String         @unique
+  paymentOrderNo    String
   billId            String?
   merchantAccountId String
   mchid             String
@@ -686,6 +687,7 @@ model Refund {
   @@index([tenantId, communityId])
   @@index([tenantId, requestedBy])
   @@index([paymentId, status])
+  @@index([paymentOrderNo])
   @@index([billId])
 }
 
@@ -720,6 +722,7 @@ model ReconciliationRun {
   runNo                 String                  @unique
   merchantAccountId     String
   mchid                 String
+  appid                 String
   channel               PaymentChannel
   businessDate          DateTime                @db.Date
   billType              ReconciliationBillType

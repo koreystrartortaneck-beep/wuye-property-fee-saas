@@ -339,6 +339,12 @@ describe('finance expansion Prisma contract', () => {
       expect(fieldsFor('Refund').has(fieldName)).toBe(true);
     }
     expectField('Refund', 'communityId', { isRequired: false });
+    expectField('Refund', 'paymentOrderNo', {
+      kind: 'scalar',
+      type: 'String',
+      isRequired: true,
+      hasDefaultValue: false,
+    });
     expectField('Refund', 'providerRefundId', { isRequired: false, isUnique: true });
     expectUnique('Refund', ['paymentId']);
     expectUnique('Refund', ['refundNo']);
@@ -387,6 +393,12 @@ describe('finance expansion Prisma contract', () => {
     expectField('ReconciliationRun', 'billType', {
       kind: 'enum',
       type: 'ReconciliationBillType',
+    });
+    expectField('ReconciliationRun', 'appid', {
+      kind: 'scalar',
+      type: 'String',
+      isRequired: true,
+      hasDefaultValue: false,
     });
     expectUnique('ReconciliationRun', ['merchantAccountId', 'businessDate', 'billType']);
 
@@ -634,6 +646,21 @@ describe('finance expansion SQL contract', () => {
         new RegExp('ADD COLUMN `' + fieldName + '` VARCHAR\\(191\\) NULL'),
       );
     }
+  });
+
+  it('persists required payment-order and merchant-app snapshots for refund and reconciliation', () => {
+    const refundTable = normalizedMigrationSql.match(/CREATE TABLE `Refund` \(.*?;/)?.[0];
+    expect(refundTable).toBeDefined();
+    expect(refundTable).toContain('`paymentOrderNo` VARCHAR(191) NOT NULL');
+    expect(refundTable).toContain(
+      'INDEX `Refund_paymentOrderNo_idx`(`paymentOrderNo`)',
+    );
+
+    const reconciliationRunTable = normalizedMigrationSql.match(
+      /CREATE TABLE `ReconciliationRun` \(.*?;/,
+    )?.[0];
+    expect(reconciliationRunTable).toBeDefined();
+    expect(reconciliationRunTable).toContain('`appid` VARCHAR(191) NOT NULL');
   });
 
   it('enforces batch source exclusivity and polymorphic payment event ownership with CHECKs', () => {
