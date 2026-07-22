@@ -261,6 +261,7 @@ model Tenant {
 
   admins           AdminUser[]
   communities      Community[]
+  auditLogs         AuditLog[] @relation("AuditLogTenant")
   collectionPolicy TenantCollectionPolicy?
 }
 
@@ -810,7 +811,8 @@ model AuditLog {
   afterSummary  Json?
   createdAt     DateTime       @default(now())
 
-  community Community? @relation("AuditLogCommunity", fields: [tenantId, communityId], references: [tenantId, id])
+  tenant    Tenant     @relation("AuditLogTenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  community Community? @relation("AuditLogCommunity", fields: [tenantId, communityId], references: [tenantId, id], onUpdate: Restrict, map: "AuditLog_tenantId_communityId_restrict_fkey")
 
   @@index([tenantId, createdAt])
   @@index([tenantId, communityId, createdAt])
@@ -908,6 +910,7 @@ model OutboxEvent {
 
   @@unique([tenantId, dedupKey])
   @@index([tenantId, status, availableAt])
+  @@index([tenantId, availableAt, createdAt, id])
   @@index([status, claimExpiresAt])
   @@index([tenantId, communityId])
   @@index([aggregateType, aggregateId])

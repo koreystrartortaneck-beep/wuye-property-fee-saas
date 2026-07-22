@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AdminModule } from './admin/admin.module';
+import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.module';
 import { NotifyModule } from './notify/notify.module';
@@ -25,6 +26,7 @@ import { WxModule } from './wx/wx.module';
     PrismaModule,
     WxModule,
     AuthModule,
+    AuditModule,
     AdminModule,
     OwnerModule,
     NotifyModule,
