@@ -47,6 +47,9 @@ describe('PaymentService 微信支付回调入账', () => {
     const service = new PaymentService(prisma as never, provider);
 
     await expect(service.createPayment('owner-1', ['bill-1'])).rejects.toThrow('账单已被其他支付占用');
+    expect(tx.payment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tenantId: 'tenant-1', wxUserId: 'owner-1' }),
+    });
     expect(tx.bill.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ['bill-1'] }, status: 'UNPAID', paymentId: null },
       data: { paymentId: 'payment-1' },

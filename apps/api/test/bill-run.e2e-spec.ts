@@ -198,13 +198,14 @@ describe('出账批次：幂等生成', () => {
       ruleId: areaRuleId,
       billRunId: run.id,
       batchId: null,
-      source: 'BILL_RUN',
+      source: null,
+      sourceRowKey: null,
       publishedAt: null,
-      voidedAt: null,
+      canceledAt: null,
       replacesBillId: null,
     });
-    expect(found?.rule.id).toBe(areaRuleId);
-    expect(found?.billRun.id).toBe(run.id);
+    expect(found?.rule?.id).toBe(areaRuleId);
+    expect(found?.billRun?.id).toBe(run.id);
     expect(found?.paymentBills).toEqual([]);
   });
 });

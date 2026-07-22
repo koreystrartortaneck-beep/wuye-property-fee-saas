@@ -38,9 +38,10 @@ export class OwnerBillsService {
       by: ['ruleId'],
       where: { houseId },
     });
-    if (grouped.length === 0) return [];
+    const ruleIds = grouped.flatMap(({ ruleId }) => (ruleId ? [ruleId] : []));
+    if (ruleIds.length === 0) return [];
     const rules = await this.prisma.raw.feeRule.findMany({
-      where: { id: { in: grouped.map((g) => g.ruleId) } },
+      where: { id: { in: ruleIds } },
       select: { id: true, name: true },
     });
     return rules.map((r) => ({ ruleId: r.id, name: r.name }));

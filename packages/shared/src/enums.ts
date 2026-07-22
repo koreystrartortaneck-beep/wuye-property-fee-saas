@@ -30,13 +30,16 @@ export type PaymentChannel = (typeof PAYMENT_CHANNELS)[number];
 export const BILL_BATCH_STATUSES = ['DRAFT', 'GENERATING', 'READY', 'PUBLISHED', 'FAILED', 'CANCELED'] as const;
 export type BillBatchStatus = (typeof BILL_BATCH_STATUSES)[number];
 
-export const BILL_SOURCES = ['BILL_RUN', 'MANUAL', 'IMPORT', 'ADJUSTMENT'] as const;
+export const BILL_SOURCES = ['RULE', 'IMPORT'] as const;
 export type BillSource = (typeof BILL_SOURCES)[number];
 
-export const REFUND_TYPES = ['FULL', 'PARTIAL'] as const;
+export const PAYMENT_CONFIRMATION_SOURCES = ['WXPAY_NOTIFY', 'WXPAY_QUERY', 'OFFLINE', 'MOCK'] as const;
+export type PaymentConfirmationSource = (typeof PAYMENT_CONFIRMATION_SOURCES)[number];
+
+export const REFUND_TYPES = ['FULL'] as const;
 export type RefundType = (typeof REFUND_TYPES)[number];
 
-export const REFUND_STATUSES = ['CREATED', 'PROCESSING', 'SUCCESS', 'FAILED', 'CLOSED'] as const;
+export const REFUND_STATUSES = ['CREATED', 'PROCESSING', 'SUCCESS', 'FAILED', 'CLOSED', 'ABNORMAL'] as const;
 export type RefundStatus = (typeof REFUND_STATUSES)[number];
 
 export const REFUND_ATTEMPT_STATUSES = ['PENDING', 'SUCCESS', 'FAILED', 'UNKNOWN'] as const;
@@ -45,15 +48,23 @@ export type RefundAttemptStatus = (typeof REFUND_ATTEMPT_STATUSES)[number];
 export const RECONCILIATION_RUN_STATUSES = ['RUNNING', 'COMPLETED', 'FAILED'] as const;
 export type ReconciliationRunStatus = (typeof RECONCILIATION_RUN_STATUSES)[number];
 
-export const RECONCILIATION_ITEM_TYPES = ['PAYMENT', 'REFUND'] as const;
-export type ReconciliationItemType = (typeof RECONCILIATION_ITEM_TYPES)[number];
+export const RECONCILIATION_BILL_TYPES = ['TRANSACTION', 'REFUND'] as const;
+export type ReconciliationBillType = (typeof RECONCILIATION_BILL_TYPES)[number];
+
+export const RECONCILIATION_DIFFERENCE_TYPES = [
+  'CHANNEL_MISSING',
+  'LOCAL_MISSING',
+  'AMOUNT_MISMATCH',
+  'STATUS_MISMATCH',
+  'REFUND_MISMATCH',
+] as const;
+export type ReconciliationDifferenceType = (typeof RECONCILIATION_DIFFERENCE_TYPES)[number];
 
 export const RECONCILIATION_ITEM_STATUSES = [
-  'MATCHED',
-  'AMOUNT_MISMATCH',
-  'LOCAL_MISSING',
-  'CHANNEL_MISSING',
-  'IGNORED',
+  'OPEN',
+  'AUTO_RESOLVED',
+  'MANUALLY_CLOSED',
+  'ESCALATED',
 ] as const;
 export type ReconciliationItemStatus = (typeof RECONCILIATION_ITEM_STATUSES)[number];
 
@@ -64,7 +75,7 @@ export const AUDIT_ACTIONS = [
   'CREATE',
   'UPDATE',
   'PUBLISH',
-  'VOID',
+  'CANCEL',
   'PAY',
   'REFUND',
   'RECONCILE',
@@ -86,6 +97,9 @@ export const PAYMENT_EVENT_TYPES = [
 ] as const;
 export type PaymentEventType = (typeof PAYMENT_EVENT_TYPES)[number];
 
+export const PAYMENT_EVENT_STATUSES = ['PENDING', 'PROCESSING', 'PROCESSED', 'FAILED'] as const;
+export type PaymentEventStatus = (typeof PAYMENT_EVENT_STATUSES)[number];
+
 export const IDEMPOTENCY_STATUSES = ['PROCESSING', 'SUCCEEDED', 'FAILED'] as const;
 export type IdempotencyStatus = (typeof IDEMPOTENCY_STATUSES)[number];
 
@@ -95,11 +109,19 @@ export type OutboxEventStatus = (typeof OUTBOX_EVENT_STATUSES)[number];
 export const INVOICE_TITLE_TYPES = ['PERSONAL', 'ENTERPRISE'] as const;
 export type InvoiceTitleType = (typeof INVOICE_TITLE_TYPES)[number];
 
-export const INVOICE_APPLICATION_STATUSES = ['SUBMITTED', 'PROCESSING', 'ISSUED', 'REJECTED', 'CANCELED'] as const;
+export const INVOICE_APPLICATION_STATUSES = [
+  'SUBMITTED',
+  'PROCESSING',
+  'ISSUED',
+  'REJECTED',
+  'CANCELED',
+  'REVERSAL_REQUIRED',
+  'REVERSED',
+] as const;
 export type InvoiceApplicationStatus = (typeof INVOICE_APPLICATION_STATUSES)[number];
 
-export const COLLECTION_MODES = ['PLATFORM', 'TENANT', 'COMMUNITY'] as const;
-export type CollectionMode = (typeof COLLECTION_MODES)[number];
+export const COLLECTION_POLICY_STATUSES = ['OPEN', 'PAUSED'] as const;
+export type CollectionPolicyStatus = (typeof COLLECTION_POLICY_STATUSES)[number];
 
 export const BINDING_STATUSES = ['PENDING', 'ACTIVE', 'REJECTED'] as const;
 export type BindingStatus = (typeof BINDING_STATUSES)[number];

@@ -41,6 +41,7 @@ export const TENANT_MODELS = new Set([
 const NONE = '__none__';
 
 const CREATE_OPS = new Set(['create', 'createMany']);
+const UPDATE_OPS = new Set(['update', 'updateMany']);
 const WHERE_OPS = new Set([
   'findUnique',
   'findUniqueOrThrow',
@@ -97,6 +98,7 @@ export function createTenantedClient(client: PrismaClient) {
               where?: Record<string, unknown>;
               data?: unknown;
               create?: Record<string, unknown>;
+              update?: Record<string, unknown>;
             };
 
             if (CREATE_OPS.has(operation)) {
@@ -105,11 +107,15 @@ export function createTenantedClient(client: PrismaClient) {
             }
             if (operation === 'upsert') {
               a.where = { ...(a.where ?? {}), tenantId };
-              a.create = { ...(a.create ?? {}), tenantId };
+              a.create = injectData(a.create, tenantId) as Record<string, unknown>;
+              a.update = injectData(a.update, tenantId) as Record<string, unknown>;
               return query(args);
             }
             if (WHERE_OPS.has(operation)) {
               a.where = { ...(a.where ?? {}), tenantId };
+              if (UPDATE_OPS.has(operation)) {
+                a.data = injectData(a.data, tenantId);
+              }
               return query(args);
             }
             return query(args);
