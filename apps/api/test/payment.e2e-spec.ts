@@ -8,7 +8,9 @@ describe('支付闭环：出账 → 查账 → 合并支付 → PAID', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let tenantId: string;
+  let communityId: string;
   let houseId: string;
+  let ownerId: string;
   let adminToken: string;
   let ownerToken: string;
   let orderNo: string;
@@ -16,10 +18,22 @@ describe('支付闭环：出账 → 查账 → 合并支付 → PAID', () => {
   const CLEAN = async () => {
     const t = await prisma.raw.tenant.findUnique({ where: { code: 'pay-t15' } });
     if (t) {
-      await prisma.raw.notifyLog.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.reconciliationItem.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.refundAttempt.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.paymentEvent.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.invoiceApplication.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.refund.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.paymentBill.deleteMany({ where: { payment: { tenantId: t.id } } });
       await prisma.raw.payment.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.bill.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.billBatch.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.reconciliationRun.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.auditLog.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.idempotencyRecord.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.outboxEvent.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.communityCollectionPolicy.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.tenantCollectionPolicy.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.notifyLog.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.billRun.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.sharePool.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.feeRule.deleteMany({ where: { tenantId: t.id } });
@@ -43,6 +57,7 @@ describe('支付闭环：出账 → 查账 → 合并支付 → PAID', () => {
       data: { tenantId, username: 'pay-t15-adm', passwordHash: await bcrypt.hash('p123456', 10), name: 'a', role: 'TENANT_ADMIN' },
     });
     const community = await prisma.raw.community.create({ data: { tenantId, name: '支付测试小区' } });
+    communityId = community.id;
     const house = await prisma.raw.house.create({
       data: {
         tenantId, communityId: community.id, code: 'p-101', displayName: 'p101',
@@ -90,6 +105,7 @@ describe('支付闭环：出账 → 查账 → 合并支付 → PAID', () => {
       .post('/api/v1/auth/phone')
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ code: 'phone:13511110000' });
+    ownerId = (await prisma.raw.wxUser.findUnique({ where: { openid: 'pay-t15-user' } }))!.id;
   });
 
   afterAll(async () => {
@@ -189,5 +205,119 @@ describe('支付闭环：出账 → 查账 → 合并支付 → PAID', () => {
       .expect(200);
     expect(res.body.code).toBe(40400);
     await prisma.raw.wxUser.deleteMany({ where: { openid: 'pay-t15-other' } });
+  });
+
+  it('旧式跨小区多账单订单仍由 PaymentBill 完整读取', async () => {
+    const secondCommunity = await prisma.raw.community.create({
+      data: { tenantId, name: '支付测试第二小区' },
+    });
+    const secondHouse = await prisma.raw.house.create({
+      data: {
+        tenantId,
+        communityId: secondCommunity.id,
+        code: 'p-201',
+        displayName: 'p201',
+        area: 80,
+      },
+    });
+    const firstRule = await prisma.raw.feeRule.create({
+      data: {
+        tenantId,
+        communityId,
+        name: '历史账单A',
+        ruleType: 'FIXED',
+        params: { amount: 10 },
+      },
+    });
+    const secondRule = await prisma.raw.feeRule.create({
+      data: {
+        tenantId,
+        communityId: secondCommunity.id,
+        name: '历史账单B',
+        ruleType: 'FIXED',
+        params: { amount: 20 },
+      },
+    });
+    const firstRun = await prisma.raw.billRun.create({
+      data: { tenantId, ruleId: firstRule.id, period: '2026-08', status: 'DONE' },
+    });
+    const secondRun = await prisma.raw.billRun.create({
+      data: { tenantId, ruleId: secondRule.id, period: '2026-08', status: 'DONE' },
+    });
+    const paidAt = new Date('2026-08-20T00:00:00.000Z');
+    const historicalPayment = await prisma.raw.payment.create({
+      data: {
+        tenantId,
+        wxUserId: ownerId,
+        orderNo: 'LEGACY-PAY-T15',
+        totalAmount: '30.00',
+        channel: 'MOCK',
+        status: 'SUCCESS',
+        transactionId: 'LEGACY-TXN-T15',
+        paidAt,
+      },
+    });
+    const firstBill = await prisma.raw.bill.create({
+      data: {
+        tenantId,
+        communityId,
+        houseId,
+        ruleId: firstRule.id,
+        billRunId: firstRun.id,
+        period: '2026-08',
+        title: '历史账单A 2026-08',
+        snapshot: {},
+        amount: '10.00',
+        status: 'PAID',
+        dueDate: paidAt,
+        paidAt,
+      },
+    });
+    const secondBill = await prisma.raw.bill.create({
+      data: {
+        tenantId,
+        communityId: secondCommunity.id,
+        houseId: secondHouse.id,
+        ruleId: secondRule.id,
+        billRunId: secondRun.id,
+        period: '2026-08',
+        title: '历史账单B 2026-08',
+        snapshot: {},
+        amount: '20.00',
+        status: 'PAID',
+        dueDate: paidAt,
+        paidAt,
+      },
+    });
+    await prisma.raw.paymentBill.createMany({
+      data: [firstBill, secondBill].map((bill) => ({ paymentId: historicalPayment.id, billId: bill.id })),
+    });
+
+    const stored = await prisma.raw.payment.findUnique({
+      where: { id: historicalPayment.id },
+      select: {
+        billId: true,
+        communityId: true,
+        paymentBills: { include: { bill: { select: { title: true, communityId: true } } } },
+      },
+    });
+    expect(stored?.billId).toBeNull();
+    expect(stored?.communityId).toBeNull();
+    expect(stored?.paymentBills.map((item) => item.bill.title).sort()).toEqual([
+      '历史账单A 2026-08',
+      '历史账单B 2026-08',
+    ]);
+    expect(new Set(stored?.paymentBills.map((item) => item.bill.communityId))).toEqual(
+      new Set([communityId, secondCommunity.id]),
+    );
+
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/owner/payments/LEGACY-PAY-T15')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(res.body.data.bills.map((bill: { title: string }) => bill.title).sort()).toEqual([
+      '历史账单A 2026-08',
+      '历史账单B 2026-08',
+    ]);
   });
 });

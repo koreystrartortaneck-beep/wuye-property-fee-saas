@@ -17,8 +17,22 @@ describe('出账批次：幂等生成', () => {
   const CLEAN = async () => {
     const t = await prisma.raw.tenant.findUnique({ where: { code: 'run-t12' } });
     if (t) {
-      await prisma.raw.notifyLog.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.reconciliationItem.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.refundAttempt.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.paymentEvent.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.invoiceApplication.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.refund.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.paymentBill.deleteMany({ where: { payment: { tenantId: t.id } } });
+      await prisma.raw.payment.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.bill.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.billBatch.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.reconciliationRun.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.auditLog.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.idempotencyRecord.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.outboxEvent.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.communityCollectionPolicy.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.tenantCollectionPolicy.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.notifyLog.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.billRun.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.sharePool.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.feeRule.deleteMany({ where: { tenantId: t.id } });
@@ -154,5 +168,43 @@ describe('出账批次：幂等生成', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
     expect(res.body.data.total).toBe(6); // 3 物业费 + 3 公摊
+  });
+
+  it('旧式账单写入无需批次、发布、作废或替代字段且仍可读', async () => {
+    const run = await prisma.raw.billRun.create({
+      data: { tenantId, ruleId: areaRuleId, period: '2026-08', status: 'DONE' },
+    });
+    const created = await prisma.raw.bill.create({
+      data: {
+        tenantId,
+        communityId,
+        houseId: houseNoAreaId,
+        ruleId: areaRuleId,
+        billRunId: run.id,
+        period: '2026-08',
+        title: '旧式物业费 2026-08',
+        snapshot: { unitPrice: 2, area: 80 },
+        amount: '160.00',
+        dueDate: new Date('2026-08-15T00:00:00.000Z'),
+      },
+    });
+
+    const found = await prisma.raw.bill.findUnique({
+      where: { id: created.id },
+      include: { rule: true, billRun: true, paymentBills: true },
+    });
+    expect(found).toMatchObject({
+      title: '旧式物业费 2026-08',
+      ruleId: areaRuleId,
+      billRunId: run.id,
+      batchId: null,
+      source: 'BILL_RUN',
+      publishedAt: null,
+      voidedAt: null,
+      replacesBillId: null,
+    });
+    expect(found?.rule.id).toBe(areaRuleId);
+    expect(found?.billRun.id).toBe(run.id);
+    expect(found?.paymentBills).toEqual([]);
   });
 });

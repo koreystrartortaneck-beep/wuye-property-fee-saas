@@ -44,6 +44,9 @@ enum BillStatus {
   UNPAID
   PAID
   CANCELED
+  DRAFT
+  REFUNDING
+  REFUNDED
 }
 
 enum BillRunStatus {
@@ -58,11 +61,130 @@ enum PaymentStatus {
   FAILED
   CLOSED
   REFUNDED
+  PREPAY_UNKNOWN
 }
 
 enum PaymentChannel {
   MOCK
   WXPAY
+  OFFLINE
+}
+
+enum BillBatchStatus {
+  DRAFT
+  GENERATING
+  READY
+  PUBLISHED
+  FAILED
+  CANCELED
+}
+
+enum BillSource {
+  BILL_RUN
+  MANUAL
+  IMPORT
+  ADJUSTMENT
+}
+
+enum RefundType {
+  FULL
+  PARTIAL
+}
+
+enum RefundStatus {
+  CREATED
+  PROCESSING
+  SUCCESS
+  FAILED
+  CLOSED
+}
+
+enum RefundAttemptStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  UNKNOWN
+}
+
+enum ReconciliationRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ReconciliationItemType {
+  PAYMENT
+  REFUND
+}
+
+enum ReconciliationItemStatus {
+  MATCHED
+  AMOUNT_MISMATCH
+  LOCAL_MISSING
+  CHANNEL_MISSING
+  IGNORED
+}
+
+enum AuditActorType {
+  SYSTEM
+  ADMIN
+  WX_USER
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  PUBLISH
+  VOID
+  PAY
+  REFUND
+  RECONCILE
+  INVOICE
+  RECOVER
+}
+
+enum PaymentEventType {
+  CREATED
+  CHANNEL_ORDER_CREATED
+  NOTIFIED
+  CONFIRMED
+  CLOSED
+  FAILED
+  REFUNDING
+  REFUNDED
+  RECOVERED
+}
+
+enum IdempotencyStatus {
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+enum OutboxEventStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+}
+
+enum InvoiceTitleType {
+  PERSONAL
+  ENTERPRISE
+}
+
+enum InvoiceApplicationStatus {
+  SUBMITTED
+  PROCESSING
+  ISSUED
+  REJECTED
+  CANCELED
+}
+
+enum CollectionMode {
+  PLATFORM
+  TENANT
+  COMMUNITY
 }
 
 enum BindingStatus {
@@ -117,8 +239,9 @@ model Tenant {
   status       EntityStatus @default(ACTIVE)
   createdAt    DateTime     @default(now())
 
-  admins      AdminUser[]
-  communities Community[]
+  admins           AdminUser[]
+  communities      Community[]
+  collectionPolicy TenantCollectionPolicy?
 }
 
 model AdminUser {
@@ -145,9 +268,13 @@ model Community {
   status       EntityStatus @default(ACTIVE)
   createdAt    DateTime     @default(now())
 
-  tenant Tenant  @relation(fields: [tenantId], references: [id])
-  houses House[]
+  tenant           Tenant                     @relation(fields: [tenantId], references: [id])
+  houses           House[]
+  billBatches      BillBatch[]
+  payments         Payment[]                  @relation("PaymentCommunity")
+  collectionPolicy CommunityCollectionPolicy?
 
+  @@unique([tenantId, id])
   @@index([tenantId])
 }
 
@@ -289,30 +416,44 @@ model BillRun {
 }
 
 model Bill {
-  id          String     @id @default(cuid())
-  tenantId    String
-  communityId String
-  houseId     String
-  ruleId      String
-  billRunId   String
-  period      String
-  title       String
-  snapshot    Json
-  amount      Decimal    @db.Decimal(12, 2)
-  status      BillStatus @default(UNPAID)
-  dueDate     DateTime
-  paidAt      DateTime?
-  paymentId   String?
-  createdAt   DateTime   @default(now())
+  id             String     @id @default(cuid())
+  tenantId       String
+  communityId    String
+  houseId        String
+  ruleId         String
+  billRunId      String
+  batchId        String?
+  source         BillSource @default(BILL_RUN)
+  period         String
+  title          String
+  snapshot       Json
+  amount         Decimal    @db.Decimal(12, 2)
+  status         BillStatus @default(UNPAID)
+  dueDate        DateTime
+  publishedAt    DateTime?
+  publishedBy    String?
+  paidAt         DateTime?
+  paymentId      String?
+  voidedAt       DateTime?
+  voidedBy       String?
+  voidReason     String?
+  replacesBillId String?
+  createdAt      DateTime   @default(now())
 
-  house   House   @relation(fields: [houseId], references: [id])
-  rule    FeeRule @relation(fields: [ruleId], references: [id])
-  billRun BillRun @relation(fields: [billRunId], references: [id])
-
-  paymentBills PaymentBill[]
+  house            House         @relation(fields: [houseId], references: [id])
+  rule             FeeRule       @relation(fields: [ruleId], references: [id])
+  billRun          BillRun       @relation(fields: [billRunId], references: [id])
+  batch            BillBatch?    @relation(fields: [tenantId, batchId], references: [tenantId, id])
+  replacesBill     Bill?         @relation("BillReplacement", fields: [tenantId, replacesBillId], references: [tenantId, id])
+  replacementBills Bill[]        @relation("BillReplacement")
+  primaryPayments  Payment[]     @relation("PaymentPrimaryBill")
+  refunds          Refund[]
+  paymentBills     PaymentBill[]
 
   @@unique([ruleId, houseId, period])
+  @@unique([tenantId, id])
   @@index([tenantId])
+  @@index([batchId])
   @@index([houseId, status])
   @@index([status, dueDate])
 }
@@ -320,22 +461,44 @@ model Bill {
 // ---------- 支付与通知 ----------
 
 model Payment {
-  id            String         @id @default(cuid())
-  tenantId      String
-  wxUserId      String
-  orderNo       String         @unique
-  totalAmount   Decimal        @db.Decimal(12, 2)
-  channel       PaymentChannel @default(MOCK)
-  status        PaymentStatus  @default(CREATED)
-  transactionId String?
-  paidAt        DateTime?
-  createdAt     DateTime       @default(now())
+  id               String         @id @default(cuid())
+  tenantId         String
+  wxUserId         String
+  billId           String?
+  communityId      String?
+  orderNo          String         @unique
+  totalAmount      Decimal        @db.Decimal(12, 2)
+  channel          PaymentChannel @default(MOCK)
+  status           PaymentStatus  @default(CREATED)
+  transactionId    String?
+  merchantSnapshot Json?
+  confirmedBy      String?
+  confirmedAt      DateTime?
+  wxpayNotifiedAt  DateTime?
+  receiptSnapshot  Json?
+  offlineSnapshot  Json?
+  recoverySnapshot Json?
+  recoveredAt      DateTime?
+  recoveredBy      String?
+  recoveryReason   String?
+  paidAt           DateTime?
+  createdAt        DateTime       @default(now())
 
-  wxUser       WxUser        @relation(fields: [wxUserId], references: [id])
-  paymentBills PaymentBill[]
+  wxUser              WxUser               @relation(fields: [wxUserId], references: [id])
+  bill                Bill?                @relation("PaymentPrimaryBill", fields: [tenantId, billId], references: [tenantId, id])
+  community           Community?           @relation("PaymentCommunity", fields: [tenantId, communityId], references: [tenantId, id])
+  refunds             Refund[]
+  reconciliationItems ReconciliationItem[]
+  events              PaymentEvent[]
+  invoiceApplications InvoiceApplication[]
+  paymentBills        PaymentBill[]
 
+  @@unique([tenantId, id])
   @@index([tenantId])
   @@index([wxUserId])
+  @@index([billId])
+  @@index([communityId, status])
+  @@index([transactionId])
 }
 
 model PaymentBill {
@@ -347,6 +510,330 @@ model PaymentBill {
 
   @@id([paymentId, billId])
   @@index([billId])
+}
+
+model BillBatch {
+  id           String          @id @default(cuid())
+  tenantId     String
+  communityId  String
+  batchNo      String
+  period       String
+  title        String?
+  source       BillSource      @default(BILL_RUN)
+  status       BillBatchStatus @default(DRAFT)
+  totalBills   Int             @default(0)
+  totalAmount  Decimal         @default(0) @db.Decimal(12, 2)
+  createdBy    String?
+  publishedAt  DateTime?
+  publishedBy  String?
+  canceledAt   DateTime?
+  canceledBy   String?
+  cancelReason String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @default(now()) @updatedAt
+
+  community Community @relation(fields: [tenantId, communityId], references: [tenantId, id])
+  bills     Bill[]
+
+  @@unique([tenantId, batchNo])
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@index([communityId, status])
+  @@index([period])
+}
+
+model Refund {
+  id              String         @id @default(cuid())
+  tenantId        String
+  communityId     String?
+  paymentId       String
+  billId          String?
+  refundNo        String         @unique
+  type            RefundType
+  amount          Decimal        @db.Decimal(12, 2)
+  reason          String?
+  channel         PaymentChannel
+  status          RefundStatus   @default(CREATED)
+  channelRefundId String?
+  requestedBy     String?
+  approvedBy      String?
+  approvedAt      DateTime?
+  refundedAt      DateTime?
+  failedAt        DateTime?
+  failureCode     String?
+  failureMessage  String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @default(now()) @updatedAt
+
+  payment             Payment              @relation(fields: [tenantId, paymentId], references: [tenantId, id])
+  bill                Bill?                @relation(fields: [tenantId, billId], references: [tenantId, id])
+  attempts            RefundAttempt[]
+  reconciliationItems ReconciliationItem[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@index([communityId])
+  @@index([paymentId, status])
+  @@index([billId])
+  @@index([channelRefundId])
+}
+
+model RefundAttempt {
+  id               String              @id @default(cuid())
+  tenantId         String
+  communityId      String?
+  refundId         String
+  attemptNo        Int
+  status           RefundAttemptStatus @default(PENDING)
+  requestSnapshot  Json?
+  responseSnapshot Json?
+  errorCode        String?
+  errorMessage     String?
+  finishedAt       DateTime?
+  createdAt        DateTime            @default(now())
+
+  refund Refund @relation(fields: [tenantId, refundId], references: [tenantId, id])
+
+  @@unique([refundId, attemptNo])
+  @@index([tenantId])
+  @@index([communityId])
+  @@index([status, createdAt])
+}
+
+model ReconciliationRun {
+  id              String                  @id @default(cuid())
+  tenantId        String
+  communityId     String?
+  runNo           String                  @unique
+  channel         PaymentChannel
+  businessDate    DateTime                @db.Date
+  status          ReconciliationRunStatus @default(RUNNING)
+  totalItems      Int                     @default(0)
+  matchedItems    Int                     @default(0)
+  mismatchedItems Int                     @default(0)
+  localTotal      Decimal                 @default(0) @db.Decimal(12, 2)
+  channelTotal    Decimal                 @default(0) @db.Decimal(12, 2)
+  differenceTotal Decimal                 @default(0) @db.Decimal(12, 2)
+  sourceSnapshot  Json?
+  errorMessage    String?
+  createdBy       String?
+  startedAt       DateTime                @default(now())
+  finishedAt      DateTime?
+  createdAt       DateTime                @default(now())
+
+  items ReconciliationItem[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@index([communityId])
+  @@index([channel, businessDate])
+  @@index([status, startedAt])
+}
+
+model ReconciliationItem {
+  id               String                   @id @default(cuid())
+  tenantId         String
+  communityId      String?
+  runId            String
+  paymentId        String?
+  refundId         String?
+  type             ReconciliationItemType
+  referenceNo      String
+  status           ReconciliationItemStatus
+  localAmount      Decimal?                 @db.Decimal(12, 2)
+  channelAmount    Decimal?                 @db.Decimal(12, 2)
+  differenceAmount Decimal?                 @db.Decimal(12, 2)
+  channelTradeNo   String?
+  detail           Json?
+  createdAt        DateTime                 @default(now())
+
+  run     ReconciliationRun @relation(fields: [tenantId, runId], references: [tenantId, id])
+  payment Payment?          @relation(fields: [tenantId, paymentId], references: [tenantId, id])
+  refund  Refund?           @relation(fields: [tenantId, refundId], references: [tenantId, id])
+
+  @@unique([runId, type, referenceNo])
+  @@index([tenantId])
+  @@index([communityId])
+  @@index([paymentId])
+  @@index([refundId])
+  @@index([status])
+}
+
+model AuditLog {
+  id           String         @id @default(cuid())
+  tenantId     String
+  communityId  String?
+  actorType    AuditActorType @default(SYSTEM)
+  actorId      String?
+  action       AuditAction
+  resourceType String
+  resourceId   String
+  beforeData   Json?
+  afterData    Json?
+  metadata     Json?
+  createdAt    DateTime       @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([communityId, createdAt])
+  @@index([resourceType, resourceId])
+  @@index([actorId, createdAt])
+}
+
+model PaymentEvent {
+  id          String           @id @default(cuid())
+  tenantId    String
+  communityId String?
+  paymentId   String
+  eventKey    String
+  type        PaymentEventType
+  source      String?
+  payload     Json?
+  occurredAt  DateTime         @default(now())
+  createdAt   DateTime         @default(now())
+
+  payment Payment @relation(fields: [tenantId, paymentId], references: [tenantId, id])
+
+  @@unique([paymentId, eventKey])
+  @@index([tenantId])
+  @@index([communityId])
+  @@index([paymentId, occurredAt])
+  @@index([type, occurredAt])
+}
+
+model IdempotencyRecord {
+  id           String            @id @default(cuid())
+  tenantId     String
+  communityId  String?
+  scope        String
+  key          String
+  status       IdempotencyStatus @default(PROCESSING)
+  requestHash  String
+  responseCode Int?
+  responseBody Json?
+  errorCode    String?
+  errorMessage String?
+  lockedUntil  DateTime?
+  expiresAt    DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @default(now()) @updatedAt
+
+  @@unique([tenantId, scope, key])
+  @@index([tenantId])
+  @@index([communityId])
+  @@index([status, lockedUntil])
+  @@index([expiresAt])
+}
+
+model OutboxEvent {
+  id            String            @id @default(cuid())
+  tenantId      String
+  communityId   String?
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  dedupKey      String?
+  payload       Json
+  status        OutboxEventStatus @default(PENDING)
+  attempts      Int               @default(0)
+  availableAt   DateTime          @default(now())
+  lockedAt      DateTime?
+  lockedBy      String?
+  publishedAt   DateTime?
+  lastError     String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @default(now()) @updatedAt
+
+  @@unique([tenantId, dedupKey])
+  @@index([tenantId, status, availableAt])
+  @@index([communityId])
+  @@index([aggregateType, aggregateId])
+}
+
+model InvoiceApplication {
+  id            String                   @id @default(cuid())
+  tenantId      String
+  communityId   String?
+  paymentId     String?
+  wxUserId      String?
+  applicationNo String                   @unique
+  titleType     InvoiceTitleType
+  title         String
+  taxNo         String?
+  email         String?
+  amount        Decimal                  @db.Decimal(12, 2)
+  status        InvoiceApplicationStatus @default(SUBMITTED)
+  invoiceNo     String?
+  invoiceUrl    String?
+  requestedBy   String?
+  processedBy   String?
+  appliedAt     DateTime                 @default(now())
+  issuedAt      DateTime?
+  rejectedAt    DateTime?
+  rejectReason  String?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @default(now()) @updatedAt
+
+  payment Payment? @relation(fields: [tenantId, paymentId], references: [tenantId, id])
+
+  @@index([tenantId])
+  @@index([communityId])
+  @@index([paymentId])
+  @@index([wxUserId])
+  @@index([status, appliedAt])
+  @@index([invoiceNo])
+}
+
+model PlatformCollectionPolicy {
+  id               String         @id @default(cuid())
+  code             String         @unique
+  name             String
+  mode             CollectionMode @default(PLATFORM)
+  merchantSnapshot Json?
+  enabled          Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @default(now()) @updatedAt
+
+  tenantPolicies TenantCollectionPolicy[]
+
+  @@index([enabled])
+}
+
+model TenantCollectionPolicy {
+  id               String         @id @default(cuid())
+  tenantId         String         @unique
+  platformPolicyId String?
+  mode             CollectionMode @default(TENANT)
+  merchantSnapshot Json?
+  enabled          Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @default(now()) @updatedAt
+
+  tenant            Tenant                      @relation(fields: [tenantId], references: [id])
+  platformPolicy    PlatformCollectionPolicy?   @relation(fields: [platformPolicyId], references: [id], onDelete: SetNull)
+  communityPolicies CommunityCollectionPolicy[]
+
+  @@unique([tenantId, id])
+  @@index([platformPolicyId])
+  @@index([tenantId, enabled])
+}
+
+model CommunityCollectionPolicy {
+  id               String         @id @default(cuid())
+  tenantId         String
+  communityId      String
+  tenantPolicyId   String?
+  mode             CollectionMode @default(COMMUNITY)
+  merchantSnapshot Json?
+  enabled          Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @default(now()) @updatedAt
+
+  community    Community               @relation(fields: [tenantId, communityId], references: [tenantId, id])
+  tenantPolicy TenantCollectionPolicy? @relation(fields: [tenantId, tenantPolicyId], references: [tenantId, id])
+
+  @@unique([tenantId, communityId])
+  @@index([tenantId, enabled])
+  @@index([tenantPolicyId])
 }
 
 model NotifyLog {
