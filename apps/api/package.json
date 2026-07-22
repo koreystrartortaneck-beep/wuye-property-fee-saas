@@ -7,7 +7,7 @@
     "build": "nest build",
     "start": "node dist/apps/api/src/main.js",
     "test": "jest",
-    "test:e2e": "jest --config test/jest-e2e.json --runInBand",
+    "test:e2e": "prisma generate && prisma validate && jest --config test/jest-e2e.json --runInBand",
     "seed": "ts-node --transpile-only prisma/seed.ts"
   },
   "prisma": {

@@ -41,6 +41,10 @@ const migrationSql = readFileSync(
   'utf8',
 );
 const normalizedMigrationSql = migrationSql.replace(/\s+/g, ' ').trim();
+const schemaSql = readFileSync(join(__dirname, '../prisma/schema.prisma'), 'utf8');
+const apiPackageJson = JSON.parse(
+  readFileSync(join(__dirname, '../package.json'), 'utf8'),
+) as { scripts?: Record<string, string> };
 
 const tenantModels = [
   'BillBatch',
@@ -153,6 +157,13 @@ const enumContracts: Record<string, { shared: string; values: string[] }> = {
     values: ['OPEN', 'PAUSED'],
   },
 };
+
+function schemaModel(modelName: string): string {
+  const start = schemaSql.indexOf(`model ${modelName} {`);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const nextModel = schemaSql.indexOf('\nmodel ', start + 1);
+  return schemaSql.slice(start, nextModel === -1 ? schemaSql.length : nextModel);
+}
 
 function fieldsFor(modelName: string): Map<string, DmmfField> {
   const model = modelByName.get(modelName);
@@ -308,6 +319,7 @@ describe('finance expansion Prisma contract', () => {
       expectUnique('Payment', [fieldName]);
     }
     expect(fieldsFor('Payment').get('billId')).toMatchObject({ isUnique: false });
+    expect(schemaModel('Payment')).toContain('@@index([channel, status, createdAt])');
     for (const forbiddenField of ['merchantSnapshot', 'offlineSnapshot', 'recoverySnapshot']) {
       expect(fieldsFor('Payment').has(forbiddenField)).toBe(false);
     }
@@ -368,6 +380,7 @@ describe('finance expansion Prisma contract', () => {
       expect(fieldsFor('RefundAttempt').has(forbiddenField)).toBe(false);
     }
     expectUnique('RefundAttempt', ['tenantId', 'refundId', 'attemptNo']);
+    expect(schemaModel('Refund')).not.toContain('@@index([paymentId, status])');
   });
 
   it('defines leased reconciliation runs and independently handled differences', () => {
@@ -607,18 +620,60 @@ describe('finance expansion Prisma contract', () => {
 });
 
 describe('finance expansion SQL contract', () => {
-  it('is expansion-only and contains no data rewrite or destructive statement', () => {
+  it('runs every named legacy-data preflight before the first persistent DDL', () => {
+    const statements = migrationSql
+      .split(';')
+      .map((statement) => statement.replace(/^\s*--.*$/gm, '').trim())
+      .filter(Boolean);
+    const firstPersistentDdl = statements.findIndex(
+      (statement) =>
+        !/^CREATE\s+TEMPORARY\s+TABLE\b/i.test(statement) &&
+        /^(ALTER\s+TABLE|CREATE\s+(?:UNIQUE\s+)?INDEX|CREATE\s+TABLE)\b/i.test(statement),
+    );
+    const preflightSql = statements.slice(0, firstPersistentDdl).join(' ').replace(/\s+/g, ' ');
+
+    expect(firstPersistentDdl).toBeGreaterThan(0);
+    expect(statements[0]).toMatch(/^CREATE\s+TEMPORARY\s+TABLE\b/i);
+    expect(preflightSql).toMatch(/INSERT\s+INTO\s+`_finance_expand_preflight`/i);
+    for (const constraintName of [
+      'finance_preflight_payment_transaction_id_unique_chk',
+      'finance_preflight_house_community_tenant_chk',
+      'finance_preflight_fee_rule_community_tenant_chk',
+      'finance_preflight_bill_run_rule_tenant_chk',
+      'finance_preflight_bill_community_tenant_chk',
+      'finance_preflight_bill_house_tenant_chk',
+      'finance_preflight_bill_rule_tenant_chk',
+      'finance_preflight_bill_bill_run_tenant_chk',
+      'finance_preflight_payment_bill_tenant_chk',
+      'finance_preflight_bill_payment_tenant_chk',
+    ]) {
+      expect(preflightSql).toContain(`CONSTRAINT \`${constraintName}\``);
+    }
+  });
+
+  it('is expansion-only and limits preflight DML to a temporary table', () => {
     const statements = migrationSql
       .split(';')
       .map((statement) => statement.replace(/^\s*--.*$/gm, '').trim())
       .filter(Boolean);
 
     for (const statement of statements) {
+      if (/^INSERT\b/i.test(statement)) {
+        expect(statement).toMatch(/^INSERT\s+INTO\s+`_finance_expand_preflight`\s*\(/i);
+        continue;
+      }
+      if (/^DROP\s+TEMPORARY\s+TABLE\b/i.test(statement)) continue;
       expect(statement).not.toMatch(/^(UPDATE|DELETE|DROP|RENAME|TRUNCATE)\b/i);
       if (/^ALTER\s+TABLE\b/i.test(statement)) {
         expect(statement).not.toMatch(/\b(DROP|RENAME|CHANGE)\b/i);
       }
     }
+  });
+
+  it('runs Prisma generate and validate before the real-database E2E suite', () => {
+    expect(apiPackageJson.scripts?.['test:e2e']).toMatch(
+      /^prisma generate && prisma validate && jest\b/,
+    );
   });
 
   it('adds Bill source as nullable without a default and only loosens legacy rule links', () => {
@@ -715,6 +770,7 @@ describe('finance expansion SQL contract', () => {
       'UNIQUE INDEX `Payment_transactionId_key` ON `Payment`(`transactionId`)',
       'UNIQUE INDEX `Payment_receiptNo_key` ON `Payment`(`receiptNo`)',
       'UNIQUE INDEX `Payment_offlineVoucherNo_key` ON `Payment`(`offlineVoucherNo`)',
+      'CREATE INDEX `Payment_channel_status_createdAt_idx` ON `Payment`(`channel`, `status`, `createdAt`)',
       'UNIQUE INDEX `Refund_paymentId_key`(`paymentId`)',
       'UNIQUE INDEX `Refund_refundNo_key`(`refundNo`)',
       'UNIQUE INDEX `Refund_providerRefundId_key`(`providerRefundId`)',
@@ -727,6 +783,10 @@ describe('finance expansion SQL contract', () => {
     ]) {
       expect(normalizedMigrationSql).toContain(indexSql);
     }
+
+    expect(normalizedMigrationSql).not.toContain(
+      'INDEX `Refund_paymentId_status_idx`(`paymentId`, `status`)',
+    );
 
     for (const foreignKeySql of [
       'FOREIGN KEY (`tenantId`, `communityId`) REFERENCES `Community`(`tenantId`, `id`)',

@@ -62,12 +62,16 @@ describe('租户行级隔离（真库）', () => {
   });
 
   afterAll(async () => {
-    if (tenantA && tenantB) {
-      await prisma.raw.outboxEvent.deleteMany({ where: { tenantId: { in: [tenantA, tenantB] } } });
-      await prisma.raw.community.deleteMany({ where: { tenantId: { in: [tenantA, tenantB] } } });
-      await prisma.raw.tenant.deleteMany({ where: { id: { in: [tenantA, tenantB] } } });
+    try {
+      const tenantIds = [tenantA, tenantB].filter((id): id is string => Boolean(id));
+      if (tenantIds.length > 0) {
+        await prisma.raw.outboxEvent.deleteMany({ where: { tenantId: { in: tenantIds } } });
+        await prisma.raw.community.deleteMany({ where: { tenantId: { in: tenantIds } } });
+        await prisma.raw.tenant.deleteMany({ where: { id: { in: tenantIds } } });
+      }
+    } finally {
+      await prisma.$disconnect();
     }
-    await prisma.$disconnect();
   });
 
   it('create 始终覆盖调用方伪造的 tenantId', async () => {
@@ -182,15 +186,15 @@ describe('租户行级隔离（真库）', () => {
     ).rejects.toThrow();
   });
 
-  it('超管可见两个租户，非租户模型不受过滤', async () => {
+  it('超管可跨租户读取租户模型，但非租户模型只能使用 raw client', async () => {
     const list = await runWithTenant(null, () =>
       prisma.t.outboxEvent.findMany({ where: { aggregateType: 'TenantIsolation' } }),
     );
     expect(new Set(list.map(({ id }) => id))).toEqual(new Set([eventAId, eventBId]));
 
-    const tenant = await runWithTenant(tenantB, () =>
-      prisma.t.tenant.findUnique({ where: { id: tenantA } }),
-    );
-    expect(tenant?.id).toBe(tenantA);
+    await expect(
+      runWithTenant(tenantB, () => prisma.t.tenant.findUnique({ where: { id: tenantA } })),
+    ).rejects.toThrow();
+    await expect(prisma.raw.platformCollectionPolicy.findMany({ take: 1 })).resolves.toBeDefined();
   });
 });

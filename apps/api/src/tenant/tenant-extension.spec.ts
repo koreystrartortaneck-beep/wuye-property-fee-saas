@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { ErrorCode } from '@pf/shared';
 import { createTenantedClient, TENANT_MODELS } from './tenant-extension';
 import { runWithTenant } from './tenant-cls';
@@ -28,6 +28,12 @@ type CapturedOperation = {
   create?: Record<string, unknown>;
   update?: Record<string, unknown>;
 };
+
+type OperationInvoker = (
+  model: string,
+  operation: string,
+  args?: CapturedOperation,
+) => Promise<CapturedOperation>;
 
 function createCapturingClient() {
   const fake = {
@@ -72,6 +78,40 @@ function createCapturingClient() {
   };
 }
 
+function createOperationHarness() {
+  const rawPlatformCreate = jest.fn(async (args: CapturedOperation) => args);
+  const query = jest.fn(async (args: CapturedOperation) => args);
+  const fake = {
+    platformCollectionPolicy: { create: rawPlatformCreate },
+    $extends(extension: unknown): unknown {
+      if (typeof extension === 'function') {
+        return (extension as (client: unknown) => unknown)(fake);
+      }
+      const operation = (extension as {
+        query: {
+          $allModels: {
+            $allOperations(args: {
+              model: string;
+              operation: string;
+              args: CapturedOperation;
+              query(nextArgs: CapturedOperation): Promise<CapturedOperation>;
+            }): Promise<CapturedOperation>;
+          };
+        };
+      }).query.$allModels.$allOperations;
+      return {
+        invoke: (model: string, operationName: string, args: CapturedOperation = {}) =>
+          operation({ model, operation: operationName, args, query }),
+      };
+    },
+  };
+
+  const tenanted = createTenantedClient(fake as never) as unknown as {
+    invoke: OperationInvoker;
+  };
+  return { invoke: tenanted.invoke, query, rawPlatformCreate };
+}
+
 describe('finance models tenant isolation', () => {
   const raw = new PrismaClient();
   const tenanted = createTenantedClient(raw);
@@ -89,13 +129,41 @@ describe('finance models tenant isolation', () => {
     ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN.code });
   });
 
-  it('does not apply tenant filtering to the platform collection policy', async () => {
+  it('rejects platform models from the tenant client', async () => {
     expect(TENANT_MODELS.has('PlatformCollectionPolicy')).toBe(false);
-    const delegate = (tenanted as unknown as Record<string, CreateDelegate>).platformCollectionPolicy;
+    const { invoke, query } = createOperationHarness();
 
     await expect(
-      Promise.resolve().then(() => delegate.create({ data: {} })),
-    ).rejects.not.toMatchObject({ code: ErrorCode.FORBIDDEN.code });
+      invoke('PlatformCollectionPolicy', 'create', { data: {} }),
+    ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN.code });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('keeps platform model access available on the raw client', async () => {
+    const { rawPlatformCreate } = createOperationHarness();
+
+    await expect(rawPlatformCreate({ data: {} })).resolves.toEqual({ data: {} });
+    expect(rawPlatformCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects unknown tenant operations by default', async () => {
+    const { invoke, query } = createOperationHarness();
+
+    await expect(
+      runWithTenant('tenant-a', () => invoke('OutboxEvent', 'futureWrite', { data: {} })),
+    ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN.code });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['$queryRaw', () => tenanted.$queryRaw(Prisma.sql`SELECT 1`)],
+    ['$queryRawUnsafe', () => tenanted.$queryRawUnsafe('SELECT 1')],
+    ['$executeRaw', () => tenanted.$executeRaw(Prisma.sql`SELECT 1`)],
+    ['$executeRawUnsafe', () => tenanted.$executeRawUnsafe('SELECT 1')],
+  ])('rejects client-level %s before it reaches the database', async (_operation, invoke) => {
+    await expect(Promise.resolve().then(invoke)).rejects.toMatchObject({
+      code: ErrorCode.FORBIDDEN.code,
+    });
   });
 
   it('overrides spoofed tenantId on create, update, and both upsert branches', async () => {

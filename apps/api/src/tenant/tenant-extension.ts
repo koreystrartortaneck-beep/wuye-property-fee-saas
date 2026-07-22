@@ -57,6 +57,7 @@ const WHERE_OPS = new Set([
   'deleteMany',
 ]);
 const WRITE_OPS = new Set(['create', 'createMany', 'update', 'updateMany', 'delete', 'deleteMany', 'upsert']);
+const SUPPORTED_OPS = new Set([...CREATE_OPS, ...WHERE_OPS, 'upsert']);
 
 function injectData(data: unknown, tenantId: string): unknown {
   if (Array.isArray(data)) return data.map((d) => ({ ...(d as object), tenantId }));
@@ -68,16 +69,34 @@ function injectData(data: unknown, tenantId: string): unknown {
  * - 查询/更新/删除：where 自动 AND {tenantId}（Prisma 5+ 的 where 允许唯一键旁携带普通字段）
  * - 创建：data 自动写入 tenantId
  * - 上下文缺失：读 → 空结果；写 → 抛 FORBIDDEN
- * - runWithTenant(null)（超管平台视角）与非租户模型不做处理
+ * - runWithTenant(null) 仅放开租户模型的跨租户视角；平台模型必须使用 raw client
+ * - 非租户模型与未知操作默认拒绝
  */
 export function createTenantedClient(client: PrismaClient) {
   return client.$extends(
     Prisma.defineExtension({
       name: 'tenant-isolation',
       query: {
+        async $queryRaw() {
+          throw new BizException(ErrorCode.FORBIDDEN, '租户客户端禁止原始数据库操作');
+        },
+        async $queryRawUnsafe() {
+          throw new BizException(ErrorCode.FORBIDDEN, '租户客户端禁止原始数据库操作');
+        },
+        async $executeRaw() {
+          throw new BizException(ErrorCode.FORBIDDEN, '租户客户端禁止原始数据库操作');
+        },
+        async $executeRawUnsafe() {
+          throw new BizException(ErrorCode.FORBIDDEN, '租户客户端禁止原始数据库操作');
+        },
         $allModels: {
           async $allOperations({ model, operation, args, query }) {
-            if (!model || !TENANT_MODELS.has(model)) return query(args);
+            if (!model || !TENANT_MODELS.has(model)) {
+              throw new BizException(ErrorCode.FORBIDDEN, '租户客户端禁止访问非租户模型');
+            }
+            if (!SUPPORTED_OPS.has(operation)) {
+              throw new BizException(ErrorCode.FORBIDDEN, '租户客户端禁止未知数据库操作');
+            }
 
             const ctx = getTenantContext();
 
@@ -118,7 +137,7 @@ export function createTenantedClient(client: PrismaClient) {
               }
               return query(args);
             }
-            return query(args);
+            throw new BizException(ErrorCode.FORBIDDEN, '租户客户端禁止未知数据库操作');
           },
         },
       },

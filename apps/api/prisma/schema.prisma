@@ -583,6 +583,7 @@ model Payment {
   @@index([wxUserId])
   @@index([billId])
   @@index([communityId, status])
+  @@index([channel, status, createdAt])
   @@index([tenantId, offlineOperatorId])
 }
 
@@ -686,7 +687,6 @@ model Refund {
   @@index([tenantId])
   @@index([tenantId, communityId])
   @@index([tenantId, requestedBy])
-  @@index([paymentId, status])
   @@index([paymentOrderNo])
   @@index([billId])
 }

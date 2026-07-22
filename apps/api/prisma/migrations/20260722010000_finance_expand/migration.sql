@@ -1,3 +1,122 @@
+-- Fail before any persistent DDL when legacy rows cannot satisfy the expansion contract.
+CREATE TEMPORARY TABLE `_finance_expand_preflight` (
+    `payment_transaction_id_duplicates` BIGINT UNSIGNED NOT NULL,
+    `house_community_tenant_mismatches` BIGINT UNSIGNED NOT NULL,
+    `fee_rule_community_tenant_mismatches` BIGINT UNSIGNED NOT NULL,
+    `bill_run_rule_tenant_mismatches` BIGINT UNSIGNED NOT NULL,
+    `bill_community_tenant_mismatches` BIGINT UNSIGNED NOT NULL,
+    `bill_house_tenant_mismatches` BIGINT UNSIGNED NOT NULL,
+    `bill_rule_tenant_mismatches` BIGINT UNSIGNED NOT NULL,
+    `bill_bill_run_tenant_mismatches` BIGINT UNSIGNED NOT NULL,
+    `payment_bill_tenant_mismatches` BIGINT UNSIGNED NOT NULL,
+    `bill_payment_tenant_mismatches` BIGINT UNSIGNED NOT NULL,
+
+    CONSTRAINT `finance_preflight_payment_transaction_id_unique_chk`
+      CHECK (`payment_transaction_id_duplicates` = 0),
+    CONSTRAINT `finance_preflight_house_community_tenant_chk`
+      CHECK (`house_community_tenant_mismatches` = 0),
+    CONSTRAINT `finance_preflight_fee_rule_community_tenant_chk`
+      CHECK (`fee_rule_community_tenant_mismatches` = 0),
+    CONSTRAINT `finance_preflight_bill_run_rule_tenant_chk`
+      CHECK (`bill_run_rule_tenant_mismatches` = 0),
+    CONSTRAINT `finance_preflight_bill_community_tenant_chk`
+      CHECK (`bill_community_tenant_mismatches` = 0),
+    CONSTRAINT `finance_preflight_bill_house_tenant_chk`
+      CHECK (`bill_house_tenant_mismatches` = 0),
+    CONSTRAINT `finance_preflight_bill_rule_tenant_chk`
+      CHECK (`bill_rule_tenant_mismatches` = 0),
+    CONSTRAINT `finance_preflight_bill_bill_run_tenant_chk`
+      CHECK (`bill_bill_run_tenant_mismatches` = 0),
+    CONSTRAINT `finance_preflight_payment_bill_tenant_chk`
+      CHECK (`payment_bill_tenant_mismatches` = 0),
+    CONSTRAINT `finance_preflight_bill_payment_tenant_chk`
+      CHECK (`bill_payment_tenant_mismatches` = 0)
+);
+
+INSERT INTO `_finance_expand_preflight` (
+    `payment_transaction_id_duplicates`,
+    `house_community_tenant_mismatches`,
+    `fee_rule_community_tenant_mismatches`,
+    `bill_run_rule_tenant_mismatches`,
+    `bill_community_tenant_mismatches`,
+    `bill_house_tenant_mismatches`,
+    `bill_rule_tenant_mismatches`,
+    `bill_bill_run_tenant_mismatches`,
+    `payment_bill_tenant_mismatches`,
+    `bill_payment_tenant_mismatches`
+)
+SELECT
+    (
+      SELECT COUNT(*)
+      FROM (
+        SELECT `transactionId`
+        FROM `Payment`
+        WHERE `transactionId` IS NOT NULL
+        GROUP BY `transactionId`
+        HAVING COUNT(*) > 1
+      ) AS `duplicate_payment_transactions`
+    ),
+    (
+      SELECT COUNT(*)
+      FROM `House` AS `h`
+      LEFT JOIN `Community` AS `c` ON `c`.`id` = `h`.`communityId`
+      WHERE `c`.`id` IS NULL OR NOT (`c`.`tenantId` <=> `h`.`tenantId`)
+    ),
+    (
+      SELECT COUNT(*)
+      FROM `FeeRule` AS `fr`
+      LEFT JOIN `Community` AS `c` ON `c`.`id` = `fr`.`communityId`
+      WHERE `c`.`id` IS NULL OR NOT (`c`.`tenantId` <=> `fr`.`tenantId`)
+    ),
+    (
+      SELECT COUNT(*)
+      FROM `BillRun` AS `br`
+      LEFT JOIN `FeeRule` AS `fr` ON `fr`.`id` = `br`.`ruleId`
+      WHERE `fr`.`id` IS NULL OR NOT (`fr`.`tenantId` <=> `br`.`tenantId`)
+    ),
+    (
+      SELECT COUNT(*)
+      FROM `Bill` AS `b`
+      LEFT JOIN `Community` AS `c` ON `c`.`id` = `b`.`communityId`
+      WHERE `c`.`id` IS NULL OR NOT (`c`.`tenantId` <=> `b`.`tenantId`)
+    ),
+    (
+      SELECT COUNT(*)
+      FROM `Bill` AS `b`
+      LEFT JOIN `House` AS `h` ON `h`.`id` = `b`.`houseId`
+      WHERE `h`.`id` IS NULL OR NOT (`h`.`tenantId` <=> `b`.`tenantId`)
+    ),
+    (
+      SELECT COUNT(*)
+      FROM `Bill` AS `b`
+      LEFT JOIN `FeeRule` AS `fr` ON `fr`.`id` = `b`.`ruleId`
+      WHERE `fr`.`id` IS NULL OR NOT (`fr`.`tenantId` <=> `b`.`tenantId`)
+    ),
+    (
+      SELECT COUNT(*)
+      FROM `Bill` AS `b`
+      LEFT JOIN `BillRun` AS `br` ON `br`.`id` = `b`.`billRunId`
+      WHERE `br`.`id` IS NULL OR NOT (`br`.`tenantId` <=> `b`.`tenantId`)
+    ),
+    (
+      SELECT COUNT(*)
+      FROM `PaymentBill` AS `pb`
+      LEFT JOIN `Payment` AS `p` ON `p`.`id` = `pb`.`paymentId`
+      LEFT JOIN `Bill` AS `b` ON `b`.`id` = `pb`.`billId`
+      WHERE `p`.`id` IS NULL
+         OR `b`.`id` IS NULL
+         OR NOT (`p`.`tenantId` <=> `b`.`tenantId`)
+    ),
+    (
+      SELECT COUNT(*)
+      FROM `Bill` AS `b`
+      LEFT JOIN `Payment` AS `p` ON `p`.`id` = `b`.`paymentId`
+      WHERE `b`.`paymentId` IS NOT NULL
+        AND (`p`.`id` IS NULL OR NOT (`p`.`tenantId` <=> `b`.`tenantId`))
+    );
+
+DROP TEMPORARY TABLE `_finance_expand_preflight`;
+
 -- Existing tables: additive columns, enum expansion, and nullable loosening only.
 ALTER TABLE `FeeRule` ADD COLUMN `category` VARCHAR(191) NULL;
 
@@ -134,7 +253,6 @@ CREATE TABLE `Refund` (
     INDEX `Refund_tenantId_idx`(`tenantId`),
     INDEX `Refund_tenantId_communityId_idx`(`tenantId`, `communityId`),
     INDEX `Refund_tenantId_requestedBy_idx`(`tenantId`, `requestedBy`),
-    INDEX `Refund_paymentId_status_idx`(`paymentId`, `status`),
     INDEX `Refund_paymentOrderNo_idx`(`paymentOrderNo`),
     INDEX `Refund_billId_idx`(`billId`),
     UNIQUE INDEX `Refund_tenantId_id_key`(`tenantId`, `id`),
@@ -487,6 +605,7 @@ CREATE UNIQUE INDEX `Payment_receiptNo_key` ON `Payment`(`receiptNo`);
 CREATE UNIQUE INDEX `Payment_offlineVoucherNo_key` ON `Payment`(`offlineVoucherNo`);
 CREATE INDEX `Payment_billId_idx` ON `Payment`(`billId`);
 CREATE INDEX `Payment_communityId_status_idx` ON `Payment`(`communityId`, `status`);
+CREATE INDEX `Payment_channel_status_createdAt_idx` ON `Payment`(`channel`, `status`, `createdAt`);
 CREATE INDEX `Payment_tenantId_offlineOperatorId_idx` ON `Payment`(`tenantId`, `offlineOperatorId`);
 CREATE UNIQUE INDEX `Payment_tenantId_id_key` ON `Payment`(`tenantId`, `id`);
 
