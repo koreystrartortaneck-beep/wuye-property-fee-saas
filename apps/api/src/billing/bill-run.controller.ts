@@ -59,12 +59,18 @@ export class BillsAdminService {
   }
 
   async cancel(id: string) {
+    const canceled = await this.prisma.t.bill.updateMany({
+      where: { id, status: 'UNPAID', paymentId: null },
+      data: { status: 'CANCELED' },
+    });
+    if (canceled.count === 1) return this.prisma.t.bill.findUnique({ where: { id } });
+
     const bill = await this.prisma.t.bill.findUnique({ where: { id } });
     if (!bill) throw new BizException(ErrorCode.NOT_FOUND);
-    if (bill.status !== 'UNPAID') {
-      throw new BizException(ErrorCode.BILL_NOT_PAYABLE, '仅未缴账单可作废');
+    if (bill.paymentId && bill.status === 'UNPAID') {
+      throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '账单正在支付中，暂不可作废');
     }
-    return this.prisma.t.bill.update({ where: { id }, data: { status: 'CANCELED' } });
+    throw new BizException(ErrorCode.BILL_NOT_PAYABLE, '仅未缴账单可作废');
   }
 }
 

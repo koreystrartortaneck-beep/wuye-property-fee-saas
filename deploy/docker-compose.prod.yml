@@ -32,7 +32,16 @@ services:
       WX_MODE: ${WX_MODE:-mock}
       WX_APPID: ${WX_APPID:-}
       WX_SECRET: ${WX_SECRET:-}
-      PAY_MODE: ${PAY_MODE:-mock}
+      PAY_MODE: ${PAY_MODE:?PAY_MODE must be mock or wxpay}
+      ALLOW_MOCK_PAYMENTS: ${ALLOW_MOCK_PAYMENTS:-false}
+      WX_PAY_APP_ID: ${WX_PAY_APP_ID:-}
+      WX_PAY_MCH_ID: ${WX_PAY_MCH_ID:-}
+      WX_PAY_API_V3_KEY: ${WX_PAY_API_V3_KEY:-}
+      WX_PAY_MERCHANT_SERIAL: ${WX_PAY_MERCHANT_SERIAL:-}
+      WX_PAY_PRIVATE_KEY: ${WX_PAY_PRIVATE_KEY:-}
+      WX_PAY_PUBLIC_KEY: ${WX_PAY_PUBLIC_KEY:-}
+      WX_PAY_PUBLIC_KEY_ID: ${WX_PAY_PUBLIC_KEY_ID:-}
+      WX_PAY_NOTIFY_URL: ${WX_PAY_NOTIFY_URL:-}
       TZ: Asia/Shanghai
       PORT: "3000"
       UPLOAD_DIR: /app/uploads

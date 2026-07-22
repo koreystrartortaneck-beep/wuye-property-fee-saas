@@ -10,4 +10,5 @@ outputs/*.zip
 apps/miniprogram/project.private.config.json
 apps/api/uploads/
 deploy/secrets/
+/商户所需材料/
 output/

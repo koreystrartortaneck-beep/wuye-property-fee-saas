@@ -3,7 +3,7 @@ import { ErrorCode } from '@pf/shared';
 import { toCents } from '../billing/engine/money';
 import { BizException } from '../common/biz.exception';
 import { PrismaService } from '../prisma/prisma.service';
-import { PAYMENT_PROVIDER, PaymentProvider } from './provider';
+import { PAYMENT_PROVIDER, PaymentProvider, PaymentProviderError, WxPayTransaction } from './provider';
 
 /**
  * 支付服务（业主端，跨租户经绑定校验 → raw client）。
@@ -67,31 +67,100 @@ export class PaymentService {
           status: 'CREATED',
         },
       });
+      const reserved = await tx.bill.updateMany({
+        where: { id: { in: billIds }, status: 'UNPAID', paymentId: null },
+        data: { paymentId: p.id },
+      });
+      if (reserved.count !== billIds.length) {
+        throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '账单已被其他支付占用');
+      }
       await tx.paymentBill.createMany({ data: billIds.map((billId) => ({ paymentId: p.id, billId })) });
       return p;
     });
 
-    const payParams = await this.provider.createOrder({
-      orderNo: payment.orderNo,
-      totalCents,
-      description: bills.map((b) => b.title).join('、').slice(0, 100),
-      payerOpenid: user?.openid ?? '',
-      tenantId,
+    try {
+      const payParams = await this.provider.createOrder({
+        orderNo: payment.orderNo,
+        totalCents,
+        description: bills.map((b) => b.title).join('、').slice(0, 100),
+        payerOpenid: user?.openid ?? '',
+        tenantId,
+      });
+      return { orderNo: payment.orderNo, totalAmount: payment.totalAmount, payParams };
+    } catch (error) {
+      await this.prisma.raw.$transaction(async (tx) => {
+        await tx.payment.updateMany({
+          where: { id: payment.id, status: 'CREATED' },
+          data: { status: 'FAILED' },
+        });
+        await tx.bill.updateMany({
+          where: { paymentId: payment.id, status: 'UNPAID' },
+          data: { paymentId: null },
+        });
+      });
+      throw error;
+    }
+  }
+
+  /** 微信支付成功回调：验签解密已由 Provider 完成，此处核对业务订单并幂等入账。 */
+  async handleWxPaySuccess(transaction: WxPayTransaction) {
+    const payment = await this.prisma.raw.payment.findUnique({
+      where: { orderNo: transaction.out_trade_no },
+      include: { paymentBills: true },
+    });
+    if (!payment) throw new Error('支付回调订单不存在');
+    if (payment.channel !== 'WXPAY') throw new Error('支付回调订单渠道不匹配');
+
+    const expectedCents = toCents(payment.totalAmount.toString());
+    if (transaction.amount.total !== expectedCents) throw new Error('支付回调金额不一致');
+
+    if (payment.status === 'SUCCESS') {
+      if (payment.transactionId !== transaction.transaction_id) throw new Error('支付回调交易号不一致');
+      return { orderNo: payment.orderNo, status: 'SUCCESS' as const };
+    }
+    if (payment.status !== 'CREATED') throw new Error(`支付回调订单状态不可入账：${payment.status}`);
+
+    const paidAt = transaction.success_time ? new Date(transaction.success_time) : new Date();
+    if (Number.isNaN(paidAt.getTime())) throw new Error('支付回调成功时间无效');
+
+    await this.prisma.raw.$transaction(async (tx) => {
+      const updated = await tx.payment.updateMany({
+        where: { id: payment.id, status: 'CREATED' },
+        data: {
+          status: 'SUCCESS',
+          transactionId: transaction.transaction_id,
+          paidAt,
+        },
+      });
+      if (updated.count === 0) return;
+
+      const bills = await tx.bill.updateMany({
+        where: {
+          id: { in: payment.paymentBills.map((item) => item.billId) },
+          status: 'UNPAID',
+          paymentId: payment.id,
+        },
+        data: { status: 'PAID', paidAt },
+      });
+      if (bills.count !== payment.paymentBills.length) throw new Error('支付订单关联账单状态异常');
     });
 
-    return { orderNo: payment.orderNo, totalAmount: payment.totalAmount, payParams };
+    return { orderNo: payment.orderNo, status: 'SUCCESS' as const };
   }
 
   /** mock 确认支付：事务内翻转订单与账单状态；重复调用幂等 */
   async mockConfirm(ownerId: string, orderNo: string) {
-    if (process.env.PAY_MODE === 'wxpay') {
-      throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '真实支付模式下不可 mock 确认');
+    const mockAllowed = process.env.PAY_MODE === 'mock'
+      && process.env.ALLOW_MOCK_PAYMENTS === 'true';
+    if (!mockAllowed) {
+      throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '当前环境不可 mock 确认');
     }
     const payment = await this.prisma.raw.payment.findUnique({
       where: { orderNo },
       include: { paymentBills: true },
     });
     if (!payment || payment.wxUserId !== ownerId) throw new BizException(ErrorCode.NOT_FOUND);
+    if (payment.channel !== 'MOCK') throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '真实支付订单不可 mock 确认');
     if (payment.status === 'SUCCESS') return { orderNo, status: 'SUCCESS' }; // 幂等
     if (payment.status !== 'CREATED') {
       throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, `订单状态 ${payment.status}`);
@@ -104,12 +173,112 @@ export class PaymentService {
         data: { status: 'SUCCESS', paidAt, transactionId: `MOCK-${orderNo}` },
       });
       if (updated.count === 0) return; // 并发下已被处理
-      await tx.bill.updateMany({
-        where: { id: { in: payment.paymentBills.map((pb) => pb.billId) }, status: 'UNPAID' },
-        data: { status: 'PAID', paidAt, paymentId: payment.id },
+      const bills = await tx.bill.updateMany({
+        where: {
+          id: { in: payment.paymentBills.map((pb) => pb.billId) },
+          status: 'UNPAID',
+          paymentId: payment.id,
+        },
+        data: { status: 'PAID', paidAt },
       });
+      if (bills.count !== payment.paymentBills.length) throw new Error('Mock 支付关联账单状态异常');
     });
     return { orderNo, status: 'SUCCESS', paidAt };
+  }
+
+  private async finishUnpaidPayment(paymentId: string, status: 'CLOSED' | 'FAILED'): Promise<void> {
+    await this.prisma.raw.$transaction(async (tx) => {
+      const updated = await tx.payment.updateMany({
+        where: { id: paymentId, status: 'CREATED' },
+        data: { status },
+      });
+      if (updated.count === 0) return;
+      await tx.bill.updateMany({
+        where: { paymentId, status: 'UNPAID' },
+        data: { paymentId: null },
+      });
+    });
+  }
+
+  /** 用户取消收银台后先查单，确认未支付才关单并释放账单。 */
+  async cancelWxPay(ownerId: string, orderNo: string) {
+    const payment = await this.prisma.raw.payment.findUnique({ where: { orderNo } });
+    if (!payment || payment.wxUserId !== ownerId) throw new BizException(ErrorCode.NOT_FOUND);
+    if (payment.status === 'SUCCESS') return { orderNo, status: 'SUCCESS' as const };
+    if (payment.channel !== 'WXPAY' || payment.status !== 'CREATED') {
+      return { orderNo, status: payment.status };
+    }
+    if (!this.provider.queryOrder) throw new Error('当前支付渠道不支持主动查单');
+
+    const transaction = await this.provider.queryOrder(orderNo);
+    if (transaction.trade_state === 'SUCCESS') return this.handleWxPaySuccess(transaction);
+    if (transaction.trade_state === 'REFUND') throw new Error('退款状态需通过退款单核对');
+    if (transaction.trade_state !== 'CLOSED') await this.provider.close(orderNo);
+    await this.finishUnpaidPayment(payment.id, 'CLOSED');
+    return { orderNo, status: 'CLOSED' as const };
+  }
+
+  /** 定时任务处理超过支付窗口的订单，避免账单被永久占用。 */
+  async reconcileStaleWxPay(orderNo: string) {
+    const payment = await this.prisma.raw.payment.findUnique({ where: { orderNo } });
+    if (!payment || payment.channel !== 'WXPAY' || payment.status !== 'CREATED') {
+      return payment ? { orderNo, status: payment.status } : null;
+    }
+    if (!this.provider.queryOrder) throw new Error('当前支付渠道不支持主动查单');
+
+    let transaction: WxPayTransaction;
+    try {
+      transaction = await this.provider.queryOrder(orderNo);
+    } catch (error) {
+      if (error instanceof PaymentProviderError && error.code === 'ORDER_NOT_EXIST') {
+        await this.finishUnpaidPayment(payment.id, 'FAILED');
+        return { orderNo, status: 'FAILED' as const };
+      }
+      throw error;
+    }
+    if (transaction.trade_state === 'SUCCESS') return this.handleWxPaySuccess(transaction);
+    if (transaction.trade_state === 'REFUND') throw new Error('退款状态需通过退款单核对');
+    if (transaction.trade_state === 'NOTPAY') {
+      await this.provider.close(orderNo);
+      await this.finishUnpaidPayment(payment.id, 'CLOSED');
+      return { orderNo, status: 'CLOSED' as const };
+    }
+    if (transaction.trade_state === 'CLOSED') {
+      await this.finishUnpaidPayment(payment.id, 'CLOSED');
+      return { orderNo, status: 'CLOSED' as const };
+    }
+    if (['REVOKED', 'PAYERROR'].includes(transaction.trade_state)) {
+      await this.finishUnpaidPayment(payment.id, 'FAILED');
+      return { orderNo, status: 'FAILED' as const };
+    }
+    return { orderNo, status: 'CREATED' as const };
+  }
+
+  /** 前端支付后主动查单，回调延迟或丢失时复用同一入账逻辑。 */
+  async syncWxPay(ownerId: string, orderNo: string) {
+    const payment = await this.prisma.raw.payment.findUnique({ where: { orderNo } });
+    if (!payment || payment.wxUserId !== ownerId) throw new BizException(ErrorCode.NOT_FOUND);
+    if (payment.status === 'SUCCESS') return { orderNo, status: 'SUCCESS' as const };
+    if (payment.channel !== 'WXPAY') return { orderNo, status: payment.status };
+    if (!this.provider.queryOrder) throw new Error('当前支付渠道不支持主动查单');
+
+    const transaction = await this.provider.queryOrder(orderNo);
+    if (transaction.out_trade_no !== orderNo) throw new Error('微信支付查单订单号不匹配');
+    if (transaction.trade_state === 'SUCCESS') {
+      if (!transaction.transaction_id) throw new Error('微信支付查单缺少交易号');
+      return this.handleWxPaySuccess(transaction);
+    }
+
+    if (transaction.trade_state === 'CLOSED') {
+      await this.finishUnpaidPayment(payment.id, 'CLOSED');
+      return { orderNo, status: 'CLOSED' as const };
+    }
+    if (transaction.trade_state === 'REFUND') throw new Error('退款状态需通过退款单核对');
+    if (['REVOKED', 'PAYERROR'].includes(transaction.trade_state)) {
+      await this.finishUnpaidPayment(payment.id, 'FAILED');
+      return { orderNo, status: 'FAILED' as const };
+    }
+    return { orderNo, status: 'CREATED' as const };
   }
 
   async listPayments(ownerId: string, page: number, pageSize: number) {

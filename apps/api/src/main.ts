@@ -6,7 +6,7 @@ import { setupApp } from './setup-app';
 import { UPLOAD_ROOT } from './upload/upload.controller';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   setupApp(app);
   // 上传图片静态托管（生产由 Nginx /wuye/uploads/ 反代到这里）
   app.useStaticAssets(UPLOAD_ROOT, { prefix: '/uploads/' });

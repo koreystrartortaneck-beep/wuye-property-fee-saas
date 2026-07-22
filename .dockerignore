@@ -8,6 +8,13 @@ apps/miniprogram
 apps/api/uploads
 **/*.log
 **/*.tsbuildinfo
+**/.env
+**/.env.*
+**/*.pem
+**/*.p12
+**/*.key
+deploy/secrets
+商户所需材料
 outputs
 output
 .DS_Store

@@ -22,6 +22,16 @@ export class OwnerPaymentController {
     return this.service.createPayment(cur.ownerId, dto.billIds);
   }
 
+  @Post(':orderNo/sync')
+  sync(@Current() cur: CurrentOwner, @Param('orderNo') orderNo: string) {
+    return this.service.syncWxPay(cur.ownerId, orderNo);
+  }
+
+  @Post(':orderNo/cancel')
+  cancel(@Current() cur: CurrentOwner, @Param('orderNo') orderNo: string) {
+    return this.service.cancelWxPay(cur.ownerId, orderNo);
+  }
+
   @Post(':orderNo/mock-confirm')
   mockConfirm(@Current() cur: CurrentOwner, @Param('orderNo') orderNo: string) {
     return this.service.mockConfirm(cur.ownerId, orderNo);
