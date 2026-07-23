@@ -49,11 +49,29 @@ export class PilotBootstrapController {
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
+    const payments = await p.payment.findMany({
+      select: {
+        id: true, orderNo: true, status: true, amount: true, channel: true,
+        transactionId: true, prepayId: true, paidAt: true, createdAt: true,
+        receiptSnapshot: true, tenantId: true, communityId: true, wxUserId: true,
+        bills: { select: { billId: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+    const paymentView = payments.map((x: Record<string, unknown>) => ({
+      id: x.id, orderNo: x.orderNo, status: x.status, amount: x.amount, channel: x.channel,
+      hasTransactionId: !!x.transactionId, hasPrepayId: !!x.prepayId,
+      paidAt: x.paidAt, createdAt: x.createdAt, hasReceipt: !!x.receiptSnapshot,
+      billIds: (x.bills as { billId: string }[]).map((b) => b.billId),
+    }));
     const scope = {
       WX_PAY_ALLOWED_TENANT_ID: process.env.WX_PAY_ALLOWED_TENANT_ID || null,
       WX_PAY_ALLOWED_COMMUNITY_ID: process.env.WX_PAY_ALLOWED_COMMUNITY_ID || null,
+      WX_PAY_NOTIFY_URL: process.env.WX_PAY_NOTIFY_URL || null,
+      PAY_MODE: process.env.PAY_MODE || null,
     };
-    return { tenants, communities, houses, unpaidBills: bills, scope };
+    return { tenants, communities, houses, unpaidBills: bills, payments: paymentView, scope };
   }
 
   /** 给指定房屋补一张 1 分钱未支付测试账单（幂等）。 */
