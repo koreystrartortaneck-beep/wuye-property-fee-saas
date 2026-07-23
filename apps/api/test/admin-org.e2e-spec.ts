@@ -52,14 +52,14 @@ describe('管理端组织管理（租户/小区/房产导入/绑定审核）', (
     const res = await request(app.getHttpServer())
       .post('/api/v1/admin/tenants')
       .set('Authorization', `Bearer ${superToken}`)
-      .send({ name: '组织测试物业', code: 'org-t8', adminUsername: 'org-t8-admin', adminPassword: 'admin123' })
+      .send({ name: '组织测试物业', code: 'org-t8', adminUsername: 'org-t8-admin', adminPassword: 'AdminOrg123456' })
       .expect(200);
     expect(res.body.code).toBe(0);
     tenantId = res.body.data.id;
 
     const login = await request(app.getHttpServer())
       .post('/api/v1/admin/auth/login')
-      .send({ username: 'org-t8-admin', password: 'admin123' });
+      .send({ username: 'org-t8-admin', password: 'AdminOrg123456' });
     expect(login.body.code).toBe(0);
     tenantAdminToken = login.body.data.token;
   });

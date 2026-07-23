@@ -21,6 +21,8 @@ const migrationFiles = [
   join(apiRoot, 'prisma/migrations/20260704071459_phase2_tickets_visitors_announcements/migration.sql'),
   join(apiRoot, 'prisma/migrations/20260711035914_phase3_worklog_service_coupon/migration.sql'),
   join(apiRoot, 'prisma/migrations/20260722010000_finance_expand/migration.sql'),
+  join(apiRoot, 'prisma/migrations/20260722030000_admin_session_hardening/migration.sql'),
+  join(apiRoot, 'prisma/migrations/20260722120000_owner_identity_hardening/migration.sql'),
 ];
 const auditGuardMigrationFile = join(
   apiRoot,

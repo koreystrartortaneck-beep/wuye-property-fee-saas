@@ -32,7 +32,9 @@ export class VisitorsService {
     dto: { houseId: string; visitorName: string; visitorPhone?: string; plateNo?: string; visitDate: string },
   ) {
     await this.houses.assertOwnerHouse(ownerId, dto.houseId);
-    const visitDate = dayStart(new Date(dto.visitDate));
+    // 按本地日期解析 YYYY-MM-DD（避免 new Date 把纯日期当 UTC，导致西向时区误判"早于今天"）
+    const [vy, vm, vd] = dto.visitDate.split('-').map(Number);
+    const visitDate = new Date(vy, (vm || 1) - 1, vd || 1);
     if (Number.isNaN(visitDate.getTime())) throw new BizException(ErrorCode.VALIDATION, 'visitDate 非法');
     if (visitDate < dayStart(new Date())) throw new BizException(ErrorCode.VALIDATION, '到访日期不能早于今天');
 
