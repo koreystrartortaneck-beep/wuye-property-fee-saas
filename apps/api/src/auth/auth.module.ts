@@ -2,6 +2,8 @@ import { Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { OwnerAccountController } from './owner-account.controller';
+import { OwnerAccountService } from './owner-account.service';
 import { OwnerGuard } from './owner.guard';
 
 const DEFAULT_JWT_SECRET = 'dev-secret-change-me';
@@ -24,8 +26,8 @@ export function resolveJwtSecret(): string {
       secret: resolveJwtSecret(),
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, OwnerGuard],
+  controllers: [AuthController, OwnerAccountController],
+  providers: [AuthService, OwnerGuard, OwnerAccountService],
   exports: [AuthService, OwnerGuard],
 })
 export class AuthModule {}

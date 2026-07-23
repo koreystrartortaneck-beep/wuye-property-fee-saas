@@ -36,9 +36,11 @@ export class OwnerAnnouncementsController {
   async detail(@Current() cur: CurrentOwner, @Param('id') id: string) {
     const a = await this.prisma.raw.announcement.findUnique({ where: { id } });
     if (!a || a.status !== 'PUBLISHED') throw new BizException(ErrorCode.NOT_FOUND);
-    // 归属校验：本人须有该租户下的 ACTIVE 绑定
+    // 归属校验：小区公告须在「该公告所属小区」内有 ACTIVE 绑定；全租户公告（communityId 为空）须在该租户有 ACTIVE 绑定。
     const binding = await this.prisma.raw.houseBinding.findFirst({
-      where: { wxUserId: cur.ownerId, tenantId: a.tenantId, status: 'ACTIVE' },
+      where: a.communityId
+        ? { wxUserId: cur.ownerId, status: 'ACTIVE', house: { communityId: a.communityId } }
+        : { wxUserId: cur.ownerId, status: 'ACTIVE', tenantId: a.tenantId },
     });
     if (!binding) throw new BizException(ErrorCode.NO_BINDING);
     return a;

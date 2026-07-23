@@ -48,6 +48,7 @@ export class BindingsService {
     const binding = await this.prisma.t.houseBinding.findUnique({ where: { id } });
     if (!binding) throw new BizException(ErrorCode.NOT_FOUND);
     if (binding.status !== 'PENDING') throw new BizException(ErrorCode.VALIDATION, '该申请已处理');
+    // 人工审批证据（reviewedBy/reviewedAt）持久化，后续手机匹配不会覆盖（见 AuthService.bindPhone）。
     return this.prisma.t.houseBinding.update({
       where: { id },
       data: {

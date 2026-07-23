@@ -368,12 +368,15 @@ model House {
 // ---------- 业主与绑定 ----------
 
 model WxUser {
-  id        String   @id @default(cuid())
-  openid    String   @unique
-  unionid   String?
-  phone     String?
-  nickname  String?
-  createdAt DateTime @default(now())
+  id           String    @id @default(cuid())
+  openid       String    @unique
+  unionid      String?
+  phone        String?
+  nickname     String?
+  tokenVersion Int       @default(0)
+  phoneBoundAt DateTime?
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
 
   bindings            HouseBinding[]
   payments            Payment[]
@@ -390,12 +393,15 @@ model HouseBinding {
   houseId       String
   relation      BindingRelation @default(OWNER)
   status        BindingStatus   @default(PENDING)
-  source        BindingSource
-  applicantName String?
-  reviewedBy    String?
-  reviewedAt    DateTime?
-  rejectReason  String?
-  createdAt     DateTime        @default(now())
+  source         BindingSource
+  applicantName  String?
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  rejectReason   String?
+  phoneMatchedAt DateTime?
+  revokedAt      DateTime?
+  revokeReason   String?
+  createdAt      DateTime        @default(now())
 
   wxUser WxUser @relation(fields: [wxUserId], references: [id])
   house  House  @relation(fields: [houseId], references: [id])
