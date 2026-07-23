@@ -14,9 +14,11 @@ const prisma = new PrismaClient();
 
 async function upsertAdmin(username: string, password: string, name: string, role: 'SUPER_ADMIN' | 'TENANT_ADMIN' | 'STAFF', tenantId: string | null) {
   const passwordHash = await bcrypt.hash(password, 10);
+  // 生产环境不启用文档化的演示账号（Task 3：禁用 demo 账号）
+  const status = process.env.NODE_ENV === 'production' ? 'DISABLED' : 'ACTIVE';
   return prisma.adminUser.upsert({
     where: { username },
-    create: { username, passwordHash, name, role, tenantId },
+    create: { username, passwordHash, name, role, tenantId, status },
     update: { name, role, tenantId },
   });
 }

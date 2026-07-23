@@ -15,6 +15,8 @@ export interface AdminJwtPayload {
   typ: 'admin';
   tenantId: string | null;
   role: string;
+  ver: number; // tokenVersion，改密/吊销时递增使旧令牌失效
+  mcp?: boolean; // mustChangePassword：受限会话（仅可改密）
 }
 
 @Injectable()
@@ -79,5 +81,18 @@ export class AuthService {
 
   signAdminToken(payload: Omit<AdminJwtPayload, 'typ'>): Promise<string> {
     return this.jwt.signAsync({ ...payload, typ: 'admin' }, { expiresIn: '12h' });
+  }
+}
+
+/** 强口令策略：≥12 位，且至少包含字母与数字，不得为纯重复字符（Task 3）。 */
+export function assertStrongPassword(pw: string): void {
+  const ok =
+    typeof pw === 'string' &&
+    pw.length >= 12 &&
+    /[A-Za-z]/.test(pw) &&
+    /\d/.test(pw) &&
+    !/^(.)\1+$/.test(pw);
+  if (!ok) {
+    throw new BizException(ErrorCode.VALIDATION, '密码至少 12 位，且须包含字母和数字');
   }
 }

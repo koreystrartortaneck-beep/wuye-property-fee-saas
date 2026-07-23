@@ -3,6 +3,7 @@ import { IsIn, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validat
 import * as bcrypt from 'bcryptjs';
 import { ErrorCode } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
+import { assertStrongPassword } from '../auth/auth.service';
 import { Roles, RolesGuard } from '../auth/roles.decorator';
 import { BizException } from '../common/biz.exception';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
@@ -58,6 +59,7 @@ export class TenantsService {
 
   /** 创建租户 + 初始管理员（平台操作，用 raw） */
   async create(dto: CreateTenantDto) {
+    assertStrongPassword(dto.adminPassword); // 强口令策略（Task 3）
     const exists = await this.prisma.raw.tenant.findUnique({ where: { code: dto.code } });
     if (exists) throw new BizException(ErrorCode.VALIDATION, `租户编码 ${dto.code} 已存在`);
     const userExists = await this.prisma.raw.adminUser.findUnique({ where: { username: dto.adminUsername } });

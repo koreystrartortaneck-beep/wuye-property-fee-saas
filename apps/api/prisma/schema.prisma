@@ -275,6 +275,13 @@ model AdminUser {
   status       EntityStatus @default(ACTIVE)
   createdAt    DateTime     @default(now())
 
+  // 会话加固（Task 3）
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
+  tokenVersion       Int       @default(0)
+  passwordChangedAt  DateTime?
+  mustChangePassword Boolean   @default(false)
+
   tenant Tenant? @relation(fields: [tenantId], references: [id])
 
   publishedBills             Bill[]                      @relation("BillPublisher")
