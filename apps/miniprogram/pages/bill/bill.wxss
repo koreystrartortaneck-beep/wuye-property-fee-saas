@@ -122,27 +122,22 @@
   color: #8b8199;
 }
 
-/* ---------- 账单卡片 ---------- */
+/* ---------- 账单卡片（两行式：标题独占一行更舒展） ---------- */
 .bill-item {
-  padding: 26rpx 22rpx 26rpx 26rpx;
+  padding: 28rpx 26rpx;
   display: flex;
-  align-items: center;
-  gap: 20rpx;
+  align-items: stretch;
+  gap: 22rpx;
 }
 
 .bill-paid {
   opacity: 0.72;
 }
 
-.bill-info {
-  flex: 1;
-  min-width: 0;
-}
-
 .bill-dot {
   flex-shrink: 0;
-  width: 18rpx;
-  height: 72rpx;
+  width: 8rpx;
+  align-self: stretch;
   border-radius: 999rpx;
 }
 
@@ -150,31 +145,60 @@
 .emerald { background: linear-gradient(180deg, #6f9795, #315f63); }
 .amber { background: linear-gradient(180deg, #ddbd76, #9b743a); }
 
+.bill-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.bill-row1 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
 .bill-name {
-  font-size: 29rpx;
+  flex: 1;
+  min-width: 0;
+  font-size: 30rpx;
   font-weight: 900;
-}
-
-.bill-period {
-  margin-top: 8rpx;
-  color: #7c7288;
-  font-size: 23rpx;
-}
-
-.bill-side {
-  text-align: right;
-  flex-shrink: 0;
+  color: #251c38;
+  line-height: 1.35;
 }
 
 .bill-money {
-  font-size: 31rpx;
+  flex-shrink: 0;
+  font-size: 34rpx;
   font-weight: 900;
+  color: #251c38;
+}
+
+.bill-row2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.bill-meta {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  min-width: 0;
+}
+
+.bill-period {
+  color: #8b8199;
+  font-size: 23rpx;
 }
 
 .status {
+  flex-shrink: 0;
   display: inline-flex;
-  margin-top: 8rpx;
-  padding: 6rpx 14rpx;
+  padding: 5rpx 16rpx;
   border-radius: 999rpx;
   color: #9b743a;
   font-size: 21rpx;
@@ -216,6 +240,15 @@
   border-color: #c9a66b;
   background: linear-gradient(145deg, #e3bd7d, #9b743a);
   box-shadow: 0 6rpx 16rpx rgba(155, 116, 58, 0.35);
+}
+
+/* 卡内缴费按钮（小巧，不喧宾夺主） */
+.bill-pay-btn {
+  flex-shrink: 0;
+  height: 62rpx;
+  padding: 0 40rpx;
+  font-size: 26rpx;
+  box-shadow: 0 12rpx 26rpx rgba(155, 116, 58, 0.22);
 }
 
 /* 详情箭头（整卡可点的视觉引导） */

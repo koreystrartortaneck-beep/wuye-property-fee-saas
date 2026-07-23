@@ -55,17 +55,20 @@
               data-id="{{item.id}}" bindtap="goDetailById">
           <view class="bill-dot {{item.theme}}"></view>
 
-          <view class="bill-info">
-            <view class="bill-name">{{item.title}}</view>
-            <view class="bill-period">{{item.subline}}</view>
+          <view class="bill-body">
+            <view class="bill-row1">
+              <view class="bill-name">{{item.title}}</view>
+              <view class="bill-money amount">¥{{item.amount}}</view>
+            </view>
+            <view class="bill-row2">
+              <view class="bill-meta">
+                <text class="bill-period">{{item.subline}}</text>
+                <view class="status {{item.paid ? 'status-paid' : ''}} {{item.overdue ? 'status-overdue' : ''}}">{{item.status}}</view>
+              </view>
+              <button wx:if="{{!item.paid}}" class="gold-button bill-pay-btn" data-id="{{item.id}}" catchtap="payBill">缴费</button>
+              <view wx:else class="chevron">›</view>
+            </view>
           </view>
-
-          <view class="bill-side">
-            <view class="bill-money amount">¥{{item.amount}}</view>
-            <view class="status {{item.paid ? 'status-paid' : ''}} {{item.overdue ? 'status-overdue' : ''}}">{{item.status}}</view>
-          </view>
-          <button wx:if="{{!item.paid}}" class="gold-button bill-pay-btn" data-id="{{item.id}}" catchtap="payBill">缴费</button>
-          <view wx:else class="chevron">›</view>
         </view>
       </block>
     </block>

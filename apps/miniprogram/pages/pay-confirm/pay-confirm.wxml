@@ -11,8 +11,8 @@
   <view class="detail-card card">
     <view class="detail-title">费用明细</view>
     <view class="detail-row">
-      <text>{{title}}</text>
-      <text class="amount">¥{{totalAmount}}</text>
+      <text class="detail-name">{{title}}</text>
+      <text class="amount detail-amount">¥{{totalAmount}}</text>
     </view>
   </view>
 
