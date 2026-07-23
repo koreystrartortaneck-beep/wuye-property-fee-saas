@@ -51,6 +51,34 @@ export async function uploadImage(file: File): Promise<string> {
   throw new Error(json.message);
 }
 
+/**
+ * 上传文件 + 附带表单字段到指定路径（multipart/form-data），返回业务 data。
+ * 用于账单导入预览/确认等既有文件又有字段的接口。code!==0 时 toast 并抛错。
+ */
+export async function uploadForm<T = unknown>(
+  path: string,
+  file: File,
+  fields: Record<string, string | undefined> = {},
+): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (store.token) headers.Authorization = `Bearer ${store.token}`;
+  if (store.profile?.role === 'SUPER_ADMIN' && store.actingTenantId) {
+    headers['X-Tenant-Id'] = store.actingTenantId;
+  }
+  const form = new FormData();
+  form.append('file', file);
+  for (const [k, v] of Object.entries(fields)) if (v !== undefined && v !== '') form.append(k, v);
+  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers, body: form });
+  const json = await res.json();
+  if (json.code === 0) return json.data as T;
+  if (json.code === 40100) {
+    store.logout();
+    location.hash = '#/login';
+  }
+  ElMessage.error(json.message || '上传失败');
+  throw Object.assign(new Error(json.message), { code: json.code });
+}
+
 /** 图片相对路径 → 可访问 URL（dev 走代理，生产走 VITE_API_BASE 同源） */
 export function imgUrl(rel: string): string {
   if (!rel) return '';

@@ -17,6 +17,11 @@
         <el-menu-item index="/meters">抄表录入</el-menu-item>
         <el-menu-item index="/share-pools">公摊录入</el-menu-item>
         <el-menu-item index="/bills">出账与账单</el-menu-item>
+        <el-menu-item index="/payments">支付与退款</el-menu-item>
+        <el-menu-item index="/reconciliations">对账管理</el-menu-item>
+        <el-menu-item index="/invoices">开票申请</el-menu-item>
+        <el-menu-item index="/billing-settings">收款策略</el-menu-item>
+        <el-menu-item index="/audit-logs">审计日志</el-menu-item>
         <el-menu-item index="/notify-logs">通知记录</el-menu-item>
         <el-menu-item v-if="isSuper" index="/tenants">租户管理</el-menu-item>
       </el-menu>

@@ -1,4 +1,38 @@
 <template>
+  <el-card v-if="formulaRules.length > 0" class="mb">
+    <template #header>公式规则处置（自定义公式已停用，需逐条转换或退役后方可发布上线）</template>
+    <el-alert
+      class="mb"
+      :type="readiness.ready ? 'success' : 'warning'"
+      :closable="false"
+      :title="readiness.ready ? '所有公式规则已处置完毕，满足上线条件。' : `仍有 ${readiness.unresolvedFormulaRules.length} 条公式规则待处置，未满足上线条件。`"
+    />
+    <el-table :data="formulaRules" size="small">
+      <el-table-column prop="name" label="规则名称" min-width="140" />
+      <el-table-column label="小区" min-width="140">
+        <template #default="{ row }">{{ communityName(row.communityId) }}</template>
+      </el-table-column>
+      <el-table-column label="处置状态" width="120">
+        <template #default="{ row }">
+          <el-tag :type="row.disposition === 'RETIRED' ? 'info' : 'warning'">
+            {{ row.disposition === 'RETIRED' ? '已退役' : '待处置' }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="180">
+        <template #default="{ row }">
+          <template v-if="row.disposition !== 'RETIRED'">
+            <el-button size="small" type="primary" @click="openConvert(row)">转换</el-button>
+            <el-popconfirm title="退役后该公式规则永久不可再启用，确认？" @confirm="retire(row)">
+              <template #reference><el-button size="small" type="danger">退役</el-button></template>
+            </el-popconfirm>
+          </template>
+          <span v-else class="sub">已退役</span>
+        </template>
+      </el-table-column>
+    </el-table>
+  </el-card>
+
   <el-card>
     <div class="toolbar">
       <el-select v-model="communityId" placeholder="选择小区" style="width: 180px" @change="load">
@@ -30,12 +64,19 @@
       </el-table-column>
       <el-table-column label="启用" width="80">
         <template #default="{ row }">
-          <el-switch :model-value="row.enabled" @change="(v: boolean) => toggle(row, v)" />
+          <el-switch
+            :model-value="row.enabled"
+            :disabled="row.ruleType === 'FORMULA'"
+            @change="(v: boolean) => toggle(row, v)"
+          />
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="90">
+      <el-table-column label="操作" width="160">
         <template #default="{ row }">
-          <el-button size="small" @click="openEdit(row)">编辑</el-button>
+          <template v-if="row.ruleType === 'FORMULA'">
+            <el-button size="small" type="primary" @click="openConvert(row)">转换</el-button>
+          </template>
+          <el-button v-else size="small" @click="openEdit(row)">编辑</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -45,11 +86,10 @@
         <el-form-item label="规则名称"><el-input v-model="form.name" placeholder="如 物业管理费" /></el-form-item>
         <el-form-item label="计费方式">
           <el-select v-model="form.ruleType" :disabled="!!editing">
-            <el-option v-for="(label, val) in RULE_TYPE_LABEL" :key="val" :label="label" :value="val" />
+            <el-option v-for="(label, val) in CREATE_RULE_TYPE_LABEL" :key="val" :label="label" :value="val" />
           </el-select>
         </el-form-item>
 
-        <!-- 按类型动态参数 -->
         <template v-if="form.ruleType === 'AREA_PRICE'">
           <el-form-item label="单价"><el-input-number v-model="p.unitPrice" :min="0.01" :precision="2" /> 元/㎡/期</el-form-item>
         </template>
@@ -72,21 +112,6 @@
             </el-radio-group>
           </el-form-item>
           <el-alert type="info" :closable="false" title="公摊类规则每期需在「公摊录入」页登记总额后才能出账" />
-        </template>
-        <template v-else-if="form.ruleType === 'FORMULA'">
-          <el-form-item label="公式">
-            <el-input v-model="p.expr" placeholder="如 area * price * 0.9（可用变量：area + 下方自定义）" />
-          </el-form-item>
-          <el-form-item label="自定义变量">
-            <div class="vars">
-              <div v-for="(v, i) in formulaVars" :key="i" class="var-row">
-                <el-input v-model="v.key" placeholder="变量名" style="width: 130px" />
-                <el-input-number v-model="v.value" :precision="4" style="width: 150px" />
-                <el-button text type="danger" @click="formulaVars.splice(i, 1)">删除</el-button>
-              </div>
-              <el-button text type="primary" @click="formulaVars.push({ key: '', value: 0 })">+ 添加变量</el-button>
-            </div>
-          </el-form-item>
         </template>
 
         <el-form-item label="适用对象">
@@ -111,14 +136,60 @@
         <el-button type="primary" @click="save">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 公式规则转换为标准计费方式 -->
+    <el-dialog v-model="convertDialog" title="转换公式规则" width="520px">
+      <el-alert class="mb" type="warning" :closable="false" title="转换后规则变为标准计费方式且默认停用，公式将永久失效。" />
+      <el-form label-width="100px">
+        <el-form-item label="目标计费方式">
+          <el-select v-model="convertForm.ruleType">
+            <el-option v-for="(label, val) in CREATE_RULE_TYPE_LABEL" :key="val" :label="label" :value="val" />
+          </el-select>
+        </el-form-item>
+        <template v-if="convertForm.ruleType === 'AREA_PRICE'">
+          <el-form-item label="单价"><el-input-number v-model="cp.unitPrice" :min="0.01" :precision="2" /> 元/㎡/期</el-form-item>
+        </template>
+        <template v-else-if="convertForm.ruleType === 'FIXED'">
+          <el-form-item label="金额"><el-input-number v-model="cp.amount" :min="0.01" :precision="2" /> 元/期</el-form-item>
+        </template>
+        <template v-else-if="convertForm.ruleType === 'METER'">
+          <el-form-item label="表类型">
+            <el-select v-model="cp.meterType">
+              <el-option v-for="(label, val) in METER_LABEL" :key="val" :label="label" :value="val" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="单价"><el-input-number v-model="cp.unitPrice" :min="0.01" :precision="2" /> 元/单位</el-form-item>
+        </template>
+        <template v-else-if="convertForm.ruleType === 'SHARE'">
+          <el-form-item label="分摊方式">
+            <el-radio-group v-model="cp.shareBy">
+              <el-radio value="AREA">按面积</el-radio>
+              <el-radio value="HOUSE">按户均分</el-radio>
+            </el-radio-group>
+          </el-form-item>
+        </template>
+      </el-form>
+      <template #footer>
+        <el-button @click="convertDialog = false">取消</el-button>
+        <el-button type="primary" :loading="converting" @click="doConvert">确认转换</el-button>
+      </template>
+    </el-dialog>
   </el-card>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { HOUSE_TYPE_LABEL, METER_LABEL, PERIOD_LABEL, RULE_TYPE_LABEL, useCommunities } from '../composables';
+
+// 新建/转换只允许标准计费方式，FORMULA 已停用不可创建
+const CREATE_RULE_TYPE_LABEL: Record<string, string> = {
+  AREA_PRICE: RULE_TYPE_LABEL.AREA_PRICE,
+  FIXED: RULE_TYPE_LABEL.FIXED,
+  METER: RULE_TYPE_LABEL.METER,
+  SHARE: RULE_TYPE_LABEL.SHARE,
+};
 
 interface FeeRule {
   id: string;
@@ -131,6 +202,13 @@ interface FeeRule {
   dueDays: number;
   enabled: boolean;
 }
+interface FormulaReportItem {
+  id: string;
+  communityId: string;
+  name: string;
+  enabled: boolean;
+  disposition: string;
+}
 
 const { communities } = useCommunities();
 const communityId = ref('');
@@ -139,8 +217,16 @@ const loading = ref(false);
 const dialog = ref(false);
 const editing = ref<FeeRule | null>(null);
 const form = ref({ name: '', ruleType: 'AREA_PRICE', houseType: 'RESIDENCE', period: 'MONTHLY', billDay: 1, dueDays: 15 });
-const p = ref<Record<string, any>>({ unitPrice: 1, amount: 100, meterType: 'WATER', shareBy: 'AREA', expr: '' });
-const formulaVars = ref<{ key: string; value: number }[]>([]);
+const p = ref<Record<string, any>>({ unitPrice: 1, amount: 100, meterType: 'WATER', shareBy: 'AREA' });
+
+// 公式处置
+const formulaRules = ref<FormulaReportItem[]>([]);
+const readiness = ref<{ ready: boolean; unresolvedFormulaRules: unknown[] }>({ ready: true, unresolvedFormulaRules: [] });
+const convertDialog = ref(false);
+const converting = ref(false);
+const convertTarget = ref<{ id: string } | null>(null);
+const convertForm = ref({ ruleType: 'FIXED' });
+const cp = ref<Record<string, any>>({ unitPrice: 1, amount: 100, meterType: 'WATER', shareBy: 'AREA' });
 
 watch(communities, (list) => {
   if (!communityId.value && list.length > 0) {
@@ -148,6 +234,8 @@ watch(communities, (list) => {
     load();
   }
 });
+
+onMounted(loadFormulaReport);
 
 async function load() {
   loading.value = true;
@@ -159,6 +247,19 @@ async function load() {
   }
 }
 
+async function loadFormulaReport() {
+  const [report, gate] = await Promise.all([
+    api<FormulaReportItem[]>('/admin/fee-rules/formula-report'),
+    api<{ ready: boolean; unresolvedFormulaRules: unknown[] }>('/admin/fee-rules/launch-readiness'),
+  ]);
+  formulaRules.value = report;
+  readiness.value = gate;
+}
+
+function communityName(id: string): string {
+  return communities.value.find((c) => c.id === id)?.name || id;
+}
+
 function paramText(row: FeeRule): string {
   const pr = row.params as Record<string, any>;
   switch (row.ruleType) {
@@ -166,22 +267,17 @@ function paramText(row: FeeRule): string {
     case 'FIXED': return `${pr.amount} 元/期`;
     case 'METER': return `${METER_LABEL[pr.meterType]} ${pr.unitPrice} 元/单位`;
     case 'SHARE': return pr.shareBy === 'AREA' ? '按面积分摊' : '按户均分';
-    case 'FORMULA': return pr.expr;
+    case 'FORMULA': return `${pr.expr || '公式'}（已停用）`;
     default: return JSON.stringify(pr);
   }
 }
 
-function buildParams(): Record<string, unknown> {
-  switch (form.value.ruleType) {
-    case 'AREA_PRICE': return { unitPrice: p.value.unitPrice };
-    case 'FIXED': return { amount: p.value.amount };
-    case 'METER': return { unitPrice: p.value.unitPrice, meterType: p.value.meterType };
-    case 'SHARE': return { shareBy: p.value.shareBy };
-    case 'FORMULA': {
-      const vars: Record<string, number> = {};
-      for (const v of formulaVars.value) if (v.key.trim()) vars[v.key.trim()] = v.value;
-      return { expr: p.value.expr, vars };
-    }
+function buildParams(type: string, src: Record<string, any>): Record<string, unknown> {
+  switch (type) {
+    case 'AREA_PRICE': return { unitPrice: src.unitPrice };
+    case 'FIXED': return { amount: src.amount };
+    case 'METER': return { unitPrice: src.unitPrice, meterType: src.meterType };
+    case 'SHARE': return { shareBy: src.shareBy };
     default: return {};
   }
 }
@@ -189,31 +285,28 @@ function buildParams(): Record<string, unknown> {
 function openCreate() {
   editing.value = null;
   form.value = { name: '', ruleType: 'AREA_PRICE', houseType: 'RESIDENCE', period: 'MONTHLY', billDay: 1, dueDays: 15 };
-  p.value = { unitPrice: 1, amount: 100, meterType: 'WATER', shareBy: 'AREA', expr: '' };
-  formulaVars.value = [];
+  p.value = { unitPrice: 1, amount: 100, meterType: 'WATER', shareBy: 'AREA' };
   dialog.value = true;
 }
 
 function openEdit(row: FeeRule) {
   editing.value = row;
   form.value = { name: row.name, ruleType: row.ruleType, houseType: row.houseType, period: row.period, billDay: row.billDay, dueDays: row.dueDays };
-  p.value = { unitPrice: 1, amount: 100, meterType: 'WATER', shareBy: 'AREA', expr: '', ...(row.params as object) };
-  formulaVars.value = Object.entries(((row.params as any).vars ?? {}) as Record<string, number>).map(([key, value]) => ({ key, value }));
+  p.value = { unitPrice: 1, amount: 100, meterType: 'WATER', shareBy: 'AREA', ...(row.params as object) };
   dialog.value = true;
 }
 
 async function save() {
   if (!form.value.name.trim()) return ElMessage.warning('请填写规则名称');
-  const params = buildParams();
   if (editing.value) {
     await api(`/admin/fee-rules/${editing.value.id}`, {
       method: 'PATCH',
-      body: { name: form.value.name, params, billDay: form.value.billDay, dueDays: form.value.dueDays },
+      body: { name: form.value.name, params: buildParams(form.value.ruleType, p.value), billDay: form.value.billDay, dueDays: form.value.dueDays },
     });
   } else {
     await api('/admin/fee-rules', {
       method: 'POST',
-      body: { ...form.value, params, communityId: communityId.value },
+      body: { ...form.value, params: buildParams(form.value.ruleType, p.value), communityId: communityId.value },
     });
   }
   ElMessage.success('已保存');
@@ -225,9 +318,42 @@ async function toggle(row: FeeRule, enabled: boolean) {
   await api(`/admin/fee-rules/${row.id}`, { method: 'PATCH', body: { enabled } });
   row.enabled = enabled;
 }
+
+// ---- 公式处置 ----
+function openConvert(row: { id: string }) {
+  convertTarget.value = row;
+  convertForm.value = { ruleType: 'FIXED' };
+  cp.value = { unitPrice: 1, amount: 100, meterType: 'WATER', shareBy: 'AREA' };
+  convertDialog.value = true;
+}
+
+async function doConvert() {
+  if (!convertTarget.value) return;
+  converting.value = true;
+  try {
+    await api(`/admin/fee-rules/${convertTarget.value.id}/convert`, {
+      method: 'POST',
+      body: { ruleType: convertForm.value.ruleType, params: buildParams(convertForm.value.ruleType, cp.value) },
+    });
+    ElMessage.success('已转换（默认停用，请核对后启用）');
+    convertDialog.value = false;
+    await Promise.all([load(), loadFormulaReport()]);
+  } finally {
+    converting.value = false;
+  }
+}
+
+async function retire(row: { id: string }) {
+  await api(`/admin/fee-rules/${row.id}/retire`, { method: 'POST' });
+  ElMessage.success('已退役');
+  await Promise.all([load(), loadFormulaReport()]);
+}
 </script>
 
 <style scoped>
+.mb {
+  margin-bottom: 16px;
+}
 .toolbar {
   display: flex;
   gap: 10px;
@@ -236,14 +362,8 @@ async function toggle(row: FeeRule, enabled: boolean) {
 .spacer {
   flex: 1;
 }
-.vars {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.var-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+.sub {
+  color: #8a7f73;
+  font-size: 12px;
 }
 </style>
