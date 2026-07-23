@@ -19,6 +19,7 @@ import { ServicesModule } from './services/services.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { HealthController } from './health.controller';
 import { OwnerModule } from './owner/owner.module';
+import { PilotBootstrapModule } from './pilot-bootstrap/pilot-bootstrap.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { WxModule } from './wx/wx.module';
 
@@ -45,6 +46,7 @@ import { WxModule } from './wx/wx.module';
     WorkLogsModule,
     ServicesModule,
     CouponsModule,
+    PilotBootstrapModule,
   ],
   controllers: [HealthController],
 })
