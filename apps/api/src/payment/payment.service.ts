@@ -523,6 +523,24 @@ export class PaymentService {
     return { orderNo, status: payment.status };
   }
 
+  /**
+   * 管理端解决账单占用的订单（供账单作废前调用）：
+   * SUCCESS 直接返回；WXPAY 进行中 → 查单裁决；MOCK/OFFLINE 进行中 → 关单释放账单。
+   */
+  async resolveActiveOrder(orderNo: string): Promise<{ orderNo: string; status: string } | null> {
+    const payment = await this.prisma.raw.payment.findUnique({ where: { orderNo } });
+    if (!payment) return null;
+    if (!ACTIVE_PAYMENT_STATUSES.includes(payment.status as (typeof ACTIVE_PAYMENT_STATUSES)[number])) {
+      return { orderNo, status: payment.status };
+    }
+    if (payment.channel === 'WXPAY') {
+      const result = await this.reconcileStaleWxPay(orderNo);
+      return result ?? { orderNo, status: payment.status };
+    }
+    await this.finishUnpaidPayment(payment.id, 'CLOSED');
+    return { orderNo, status: 'CLOSED' };
+  }
+
   /** 前端支付后主动查单，回调延迟或丢失时复用同一入账逻辑。 */
   async syncWxPay(ownerId: string, orderNo: string) {
     const payment = await this.prisma.raw.payment.findUnique({ where: { orderNo } });

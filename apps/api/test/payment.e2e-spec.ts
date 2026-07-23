@@ -118,12 +118,16 @@ describe('支付闭环：出账 → 查账 → 合并支付 → PAID', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ houseId, meterType: 'WATER', period: '2026-07', value: 20 });
 
-    // 出账三张
+    // 出账三张（草稿）并发布
     for (const rule of [r1, r2, r3]) {
-      await request(app.getHttpServer())
+      const gen = await request(app.getHttpServer())
         .post('/api/v1/admin/bill-runs')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ ruleId: rule.id, period: '2026-07' });
+      await request(app.getHttpServer())
+        .post(`/api/v1/admin/bill-batches/${gen.body.data.batchId}/publish`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ requestId: `pub-${rule.id}` });
     }
 
     // 业主登录 + 手机号绑定

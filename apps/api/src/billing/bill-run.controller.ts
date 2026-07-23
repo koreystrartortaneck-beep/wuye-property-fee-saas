@@ -1,12 +1,13 @@
 import { Body, Controller, Get, Injectable, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { IsIn, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
-import { BILL_STATUSES, BillStatus, ErrorCode } from '@pf/shared';
+import { BILL_BATCH_STATUSES, BILL_STATUSES, BillBatchStatus, BillStatus } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
+import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { RolesGuard } from '../auth/roles.decorator';
-import { BizException } from '../common/biz.exception';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { BillRunService } from './bill-run.service';
+import { BillWorkflowService } from './bill-workflow.service';
 
 class TriggerRunDto {
   @IsString()
@@ -15,6 +16,28 @@ class TriggerRunDto {
 
   @Matches(/^\d{4}(-\d{2}|-Q[1-4])?$/, { message: 'period 格式须为 YYYY-MM / YYYY-Qn / YYYY' })
   period!: string;
+}
+
+class CancelBillDto {
+  @IsString()
+  @IsNotEmpty()
+  reason!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  requestId!: string;
+}
+
+class ReissueBillDto extends CancelBillDto {}
+
+class PublishBatchDto {
+  @IsString()
+  @IsNotEmpty()
+  requestId!: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }
 
 class ListBillsQuery extends PageQuery {
@@ -31,8 +54,26 @@ class ListBillsQuery extends PageQuery {
   period?: string;
 
   @IsOptional()
+  @IsString()
+  batchId?: string;
+
+  @IsOptional()
   @IsIn(BILL_STATUSES as unknown as string[])
   status?: BillStatus;
+}
+
+class ListBatchesQuery extends PageQuery {
+  @IsOptional()
+  @IsString()
+  communityId?: string;
+
+  @IsOptional()
+  @IsString()
+  period?: string;
+
+  @IsOptional()
+  @IsIn(BILL_BATCH_STATUSES as unknown as string[])
+  status?: BillBatchStatus;
 }
 
 @Injectable()
@@ -44,6 +85,7 @@ export class BillsAdminService {
       ...(q.communityId ? { communityId: q.communityId } : {}),
       ...(q.houseId ? { houseId: q.houseId } : {}),
       ...(q.period ? { period: q.period } : {}),
+      ...(q.batchId ? { batchId: q.batchId } : {}),
       ...(q.status ? { status: q.status } : {}),
     };
     const [list, total] = await Promise.all([
@@ -58,19 +100,17 @@ export class BillsAdminService {
     return pageResult(list, total, q);
   }
 
-  async cancel(id: string) {
-    const canceled = await this.prisma.t.bill.updateMany({
-      where: { id, status: 'UNPAID', paymentId: null },
-      data: { status: 'CANCELED' },
-    });
-    if (canceled.count === 1) return this.prisma.t.bill.findUnique({ where: { id } });
-
-    const bill = await this.prisma.t.bill.findUnique({ where: { id } });
-    if (!bill) throw new BizException(ErrorCode.NOT_FOUND);
-    if (bill.paymentId && bill.status === 'UNPAID') {
-      throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '账单正在支付中，暂不可作废');
-    }
-    throw new BizException(ErrorCode.BILL_NOT_PAYABLE, '仅未缴账单可作废');
+  async listBatches(q: ListBatchesQuery) {
+    const where = {
+      ...(q.communityId ? { communityId: q.communityId } : {}),
+      ...(q.period ? { period: q.period } : {}),
+      ...(q.status ? { status: q.status } : {}),
+    };
+    const [list, total] = await Promise.all([
+      this.prisma.t.billBatch.findMany({ where, ...pageArgs(q), orderBy: { createdAt: 'desc' } }),
+      this.prisma.t.billBatch.count({ where }),
+    ]);
+    return pageResult(list, total, q);
   }
 }
 
@@ -79,6 +119,7 @@ export class BillsAdminService {
 export class BillRunController {
   constructor(
     private readonly billRun: BillRunService,
+    private readonly workflow: BillWorkflowService,
     private readonly bills: BillsAdminService,
     private readonly prisma: PrismaService,
   ) {}
@@ -101,13 +142,46 @@ export class BillRunController {
     return pageResult(list, total, q);
   }
 
+  @Get('bill-batches')
+  listBatches(@Query() q: ListBatchesQuery) {
+    return this.bills.listBatches(q);
+  }
+
+  @Post('bill-batches/:id/publish')
+  publishBatch(@Current() cur: CurrentAdmin, @Param('id') id: string, @Body() dto: PublishBatchDto) {
+    return this.workflow.publishBatch({
+      batchId: id,
+      adminId: cur.adminId,
+      actingTenantId: cur.tenantId,
+      requestId: dto.requestId,
+      reason: dto.reason ?? null,
+    });
+  }
+
   @Get('bills')
   listBills(@Query() q: ListBillsQuery) {
     return this.bills.list(q);
   }
 
   @Post('bills/:id/cancel')
-  cancel(@Param('id') id: string) {
-    return this.bills.cancel(id);
+  cancel(@Current() cur: CurrentAdmin, @Param('id') id: string, @Body() dto: CancelBillDto) {
+    return this.workflow.cancelBill({
+      billId: id,
+      adminId: cur.adminId,
+      actingTenantId: cur.tenantId,
+      reason: dto.reason,
+      requestId: dto.requestId,
+    });
+  }
+
+  @Post('bills/:id/reissue')
+  reissue(@Current() cur: CurrentAdmin, @Param('id') id: string, @Body() dto: ReissueBillDto) {
+    return this.workflow.reissueBill({
+      billId: id,
+      adminId: cur.adminId,
+      actingTenantId: cur.tenantId,
+      reason: dto.reason,
+      requestId: dto.requestId,
+    });
   }
 }

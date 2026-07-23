@@ -47,5 +47,6 @@ import { WxPayRefundNotifyController } from './wxpay-refund-notify.controller';
       },
     },
   ],
+  exports: [PaymentService, RefundService],
 })
 export class PaymentModule {}

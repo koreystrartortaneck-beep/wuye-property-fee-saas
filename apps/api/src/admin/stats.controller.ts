@@ -52,7 +52,7 @@ export class StatsController {
   async summary(@Query() q: StatsQuery) {
     const bills = await this.prisma.t.bill.findMany({
       where: {
-        status: { not: 'CANCELED' },
+        status: { notIn: ['CANCELED', 'DRAFT'] },
         ...(q.communityId ? { communityId: q.communityId } : {}),
         ...(q.period ? { period: q.period } : {}),
       },
@@ -65,7 +65,7 @@ export class StatsController {
   async byCommunity(@Query() q: StatsQuery) {
     const [bills, communities] = await Promise.all([
       this.prisma.t.bill.findMany({
-        where: { status: { not: 'CANCELED' }, ...(q.period ? { period: q.period } : {}) },
+        where: { status: { notIn: ['CANCELED', 'DRAFT'] }, ...(q.period ? { period: q.period } : {}) },
         select: { communityId: true, amount: true, status: true },
       }),
       this.prisma.t.community.findMany({ select: { id: true, name: true } }),

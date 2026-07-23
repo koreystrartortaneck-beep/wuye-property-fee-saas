@@ -36,7 +36,7 @@ export class OwnerBillsService {
     await this.houses.assertOwnerHouse(ownerId, houseId);
     const grouped = await this.prisma.raw.bill.groupBy({
       by: ['ruleId'],
-      where: { houseId },
+      where: { houseId, status: { not: 'DRAFT' } },
     });
     const ruleIds = grouped.flatMap(({ ruleId }) => (ruleId ? [ruleId] : []));
     if (ruleIds.length === 0) return [];
@@ -49,9 +49,11 @@ export class OwnerBillsService {
 
   async list(ownerId: string, q: ListOwnerBillsQuery) {
     await this.houses.assertOwnerHouse(ownerId, q.houseId);
+    // 草稿账单对业主不可见：仅允许查询非 DRAFT 状态。
+    const statusFilter = q.status && q.status !== 'DRAFT' ? q.status : { not: 'DRAFT' as const };
     const where = {
       houseId: q.houseId,
-      ...(q.status ? { status: q.status } : {}),
+      status: statusFilter,
       ...(q.ruleId ? { ruleId: q.ruleId } : {}),
     };
     const [list, total] = await Promise.all([
@@ -97,7 +99,7 @@ export class OwnerBillsService {
       where: { id },
       include: { house: { select: { displayName: true } }, rule: { select: { name: true, ruleType: true } } },
     });
-    if (!bill) throw new BizException(ErrorCode.NOT_FOUND);
+    if (!bill || bill.status === 'DRAFT') throw new BizException(ErrorCode.NOT_FOUND);
     await this.houses.assertOwnerHouse(ownerId, bill.houseId);
     return bill;
   }
