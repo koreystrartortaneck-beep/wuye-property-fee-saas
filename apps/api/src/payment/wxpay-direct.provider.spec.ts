@@ -177,4 +177,115 @@ describe('WxPayDirectProvider', () => {
       'wechatpay-signature': 'invalid',
     }, body)).toThrow('微信支付回调时间戳无效');
   });
+
+  it('签名申请退款、验签应答并返回退款结果', async () => {
+    global.fetch = jest.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(init?.method).toBe('POST');
+      expect(url.pathname).toBe('/v3/refund/domestic/refunds');
+      const authorization = new Headers(init?.headers).get('Authorization')!;
+      const fields = Object.fromEntries(
+        [...authorization.matchAll(/([a-z_]+)="([^"]+)"/g)].map((match) => [match[1], match[2]]),
+      );
+      const body = String(init?.body ?? '');
+      const message = `${init?.method}\n${url.pathname}${url.search}\n${fields.timestamp}\n${fields.nonce_str}\n${body}\n`;
+      expect(verify('RSA-SHA256', Buffer.from(message), merchantPublicKey, Buffer.from(fields.signature, 'base64'))).toBe(true);
+      expect(JSON.parse(body)).toMatchObject({
+        out_trade_no: 'WY20260722000001',
+        out_refund_no: 'RF-WY20260722000001',
+        amount: { refund: 1, total: 1, currency: 'CNY' },
+      });
+      return signedResponse(JSON.stringify({
+        refund_id: '50000000001',
+        out_refund_no: 'RF-WY20260722000001',
+        out_trade_no: 'WY20260722000001',
+        transaction_id: '4200000000001',
+        status: 'SUCCESS',
+        amount: { total: 1, refund: 1, currency: 'CNY' },
+      }));
+    }) as typeof fetch;
+
+    const result = await new WxPayDirectProvider().createRefund({
+      outTradeNo: 'WY20260722000001',
+      outRefundNo: 'RF-WY20260722000001',
+      totalCents: 1,
+      refundCents: 1,
+      reason: '业主申请全额退款',
+      tenantId: 'tenant-1',
+    });
+    expect(result).toMatchObject({ refund_id: '50000000001', status: 'SUCCESS' });
+  });
+
+  it('拒绝退款金额非法（大于原额或非正整数）', async () => {
+    global.fetch = jest.fn() as typeof fetch;
+    await expect(new WxPayDirectProvider().createRefund({
+      outTradeNo: 'WY1', outRefundNo: 'RF-WY1', totalCents: 1, refundCents: 2, reason: 'x', tenantId: 't',
+    })).rejects.toThrow('退款金额');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('查询退款单', async () => {
+    global.fetch = jest.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(init?.method).toBe('GET');
+      expect(url.pathname).toBe('/v3/refund/domestic/refunds/RF-WY20260722000001');
+      return signedResponse(JSON.stringify({
+        refund_id: '50000000001', out_refund_no: 'RF-WY20260722000001',
+        status: 'PROCESSING', amount: { total: 1, refund: 1 },
+      }));
+    }) as typeof fetch;
+    const result = await new WxPayDirectProvider().queryRefund('RF-WY20260722000001');
+    expect(result.status).toBe('PROCESSING');
+  });
+
+  it('验签并解密退款成功回调', () => {
+    const refund = {
+      mchid: process.env.WX_PAY_MCH_ID,
+      out_trade_no: 'WY20260722000001',
+      transaction_id: '4200000000001',
+      out_refund_no: 'RF-WY20260722000001',
+      refund_id: '50000000001',
+      refund_status: 'SUCCESS',
+      success_time: '2026-07-22T10:05:00+08:00',
+      amount: { total: 1, refund: 1, payer_total: 1, payer_refund: 1 },
+    };
+    const resourceNonce = '0123456789ab';
+    const associatedData = 'refund';
+    const body = JSON.stringify({
+      id: 'evt-refund',
+      event_type: 'REFUND.SUCCESS',
+      resource_type: 'encrypt-resource',
+      resource: {
+        algorithm: 'AEAD_AES_256_GCM',
+        nonce: resourceNonce,
+        associated_data: associatedData,
+        ciphertext: encryptResource(refund, resourceNonce, associatedData),
+      },
+    });
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const nonce = 'refund-nonce';
+    const signature = sign('RSA-SHA256', Buffer.from(`${timestamp}\n${nonce}\n${body}\n`), wechatPayPrivateKey).toString('base64');
+
+    const result = new WxPayDirectProvider().parseRefundNotification({
+      'wechatpay-timestamp': timestamp,
+      'wechatpay-nonce': nonce,
+      'wechatpay-serial': process.env.WX_PAY_PUBLIC_KEY_ID!,
+      'wechatpay-signature': signature,
+    }, Buffer.from(body));
+
+    expect(result).toMatchObject({
+      out_refund_no: 'RF-WY20260722000001',
+      status: 'SUCCESS',
+      amount: { refund: 1, total: 1 },
+    });
+  });
+
+  it('退款回调公钥 ID 不匹配时拒绝', () => {
+    expect(() => new WxPayDirectProvider().parseRefundNotification({
+      'wechatpay-timestamp': String(Math.floor(Date.now() / 1000)),
+      'wechatpay-nonce': 'nonce',
+      'wechatpay-serial': 'WRONG_KEY_ID',
+      'wechatpay-signature': 'x',
+    }, Buffer.from('{}'))).toThrow('公钥 ID 不匹配');
+  });
 });

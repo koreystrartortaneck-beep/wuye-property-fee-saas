@@ -10,7 +10,14 @@ import {
 } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { CreateOrderInput, PaymentProvider, PaymentProviderError, WxPayTransaction } from './provider';
+import {
+  CreateOrderInput,
+  CreateRefundInput,
+  PaymentProvider,
+  PaymentProviderError,
+  WxPayRefund,
+  WxPayTransaction,
+} from './provider';
 
 export type { WxPayTransaction } from './provider';
 
@@ -25,6 +32,7 @@ interface WxPayConfig {
   publicKey: KeyObject;
   publicKeyId: string;
   notifyUrl: string;
+  refundNotifyUrl: string;
 }
 
 interface EncryptedResource {
@@ -75,6 +83,11 @@ export class WxPayDirectProvider implements PaymentProvider {
 
     const notifyUrl = required('WX_PAY_NOTIFY_URL');
     if (!notifyUrl.startsWith('https://')) throw new Error('WX_PAY_NOTIFY_URL 必须使用 HTTPS');
+    const refundNotifyUrl = required(
+      'WX_PAY_REFUND_NOTIFY_URL',
+      notifyUrl.replace(/\/notify$/, '/refund-notify'),
+    );
+    if (!refundNotifyUrl.startsWith('https://')) throw new Error('WX_PAY_REFUND_NOTIFY_URL 必须使用 HTTPS');
 
     this.cachedConfig = {
       appId: required('WX_PAY_APP_ID', process.env.WX_APPID),
@@ -85,6 +98,7 @@ export class WxPayDirectProvider implements PaymentProvider {
       publicKey: createPublicKey(loadPem('WX_PAY_PUBLIC_KEY', 'WX_PAY_PUBLIC_KEY_PATH')),
       publicKeyId: required('WX_PAY_PUBLIC_KEY_ID'),
       notifyUrl,
+      refundNotifyUrl,
     };
     return this.cachedConfig;
   }
@@ -129,6 +143,98 @@ export class WxPayDirectProvider implements PaymentProvider {
     const config = this.config();
     const path = `/v3/pay/transactions/out-trade-no/${encodeURIComponent(orderNo)}/close`;
     await this.request<Record<string, never>>('POST', path, { mchid: config.mchId }, config);
+  }
+
+  async createRefund(input: CreateRefundInput): Promise<WxPayRefund> {
+    if (!Number.isInteger(input.totalCents) || input.totalCents <= 0) throw new Error('退款原订单金额必须为正整数分');
+    if (!Number.isInteger(input.refundCents) || input.refundCents <= 0 || input.refundCents > input.totalCents) {
+      throw new Error('退款金额必须为正整数分且不超过原订单金额');
+    }
+    const config = this.config();
+    const body: Record<string, unknown> = {
+      out_refund_no: input.outRefundNo,
+      reason: input.reason.slice(0, 80),
+      notify_url: config.refundNotifyUrl,
+      amount: { refund: input.refundCents, total: input.totalCents, currency: 'CNY' },
+    };
+    if (input.transactionId) body.transaction_id = input.transactionId;
+    else body.out_trade_no = input.outTradeNo;
+    return this.request<WxPayRefund>('POST', '/v3/refund/domestic/refunds', body, config);
+  }
+
+  async queryRefund(outRefundNo: string): Promise<WxPayRefund> {
+    const config = this.config();
+    const path = `/v3/refund/domestic/refunds/${encodeURIComponent(outRefundNo)}`;
+    return this.request<WxPayRefund>('GET', path, undefined, config);
+  }
+
+  /** 退款回调：与支付回调同等强度的验签、时间窗、商户、AES-GCM 校验后解密。 */
+  parseRefundNotification(headers: WxPayNotificationHeaders, rawBody: Buffer): WxPayRefund {
+    const config = this.config();
+    const timestamp = headerValue(headers, 'wechatpay-timestamp');
+    const nonce = headerValue(headers, 'wechatpay-nonce');
+    const serial = headerValue(headers, 'wechatpay-serial');
+    const signature = headerValue(headers, 'wechatpay-signature');
+    if (!timestamp || !nonce || !serial || !signature) throw new Error('微信退款回调签名头不完整');
+
+    const timestampSeconds = Number(timestamp);
+    if (!Number.isFinite(timestampSeconds) || Math.abs(Date.now() / 1000 - timestampSeconds) > 300) {
+      throw new Error('微信退款回调时间戳无效');
+    }
+    if (serial !== config.publicKeyId) throw new Error('微信退款回调公钥 ID 不匹配');
+
+    const message = Buffer.from(`${timestamp}\n${nonce}\n${rawBody.toString('utf8')}\n`);
+    if (!verify('RSA-SHA256', message, config.publicKey, Buffer.from(signature, 'base64'))) {
+      throw new Error('微信退款回调验签失败');
+    }
+
+    const envelope = JSON.parse(rawBody.toString('utf8')) as NotificationEnvelope;
+    const eventType = envelope.event_type || '';
+    if (!eventType.startsWith('REFUND.') || !envelope.resource) {
+      throw new Error(`不支持的微信退款回调事件：${eventType || 'unknown'}`);
+    }
+    if (envelope.resource.algorithm !== 'AEAD_AES_256_GCM') throw new Error('微信退款回调加密算法不支持');
+
+    const decrypted = this.decryptRefundResource(envelope.resource, config.apiV3Key);
+    if (decrypted.mchid && decrypted.mchid !== config.mchId) throw new Error('微信退款回调商户号不匹配');
+    return {
+      refund_id: decrypted.refund_id,
+      out_refund_no: decrypted.out_refund_no,
+      out_trade_no: decrypted.out_trade_no,
+      transaction_id: decrypted.transaction_id,
+      status: decrypted.refund_status,
+      success_time: decrypted.success_time,
+      amount: {
+        total: decrypted.amount?.total ?? 0,
+        refund: decrypted.amount?.refund ?? 0,
+        payer_total: decrypted.amount?.payer_total,
+        payer_refund: decrypted.amount?.payer_refund,
+      },
+    };
+  }
+
+  private decryptRefundResource(
+    resource: EncryptedResource,
+    key: Buffer,
+  ): {
+    mchid?: string;
+    out_trade_no?: string;
+    transaction_id?: string;
+    out_refund_no: string;
+    refund_id: string;
+    refund_status: string;
+    success_time?: string;
+    amount?: { total?: number; refund?: number; payer_total?: number; payer_refund?: number };
+  } {
+    const encrypted = Buffer.from(resource.ciphertext, 'base64');
+    if (encrypted.length <= 16) throw new Error('微信退款回调密文无效');
+    const ciphertext = encrypted.subarray(0, encrypted.length - 16);
+    const authTag = encrypted.subarray(encrypted.length - 16);
+    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(resource.nonce));
+    decipher.setAuthTag(authTag);
+    decipher.setAAD(Buffer.from(resource.associated_data || ''));
+    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    return JSON.parse(plaintext.toString('utf8'));
   }
 
   parseNotification(headers: WxPayNotificationHeaders, rawBody: Buffer): WxPayTransaction {
