@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { AdminCollectionController } from './admin-collection.controller';
+import { AdminPaymentController, AdminPaymentsService } from './admin-payment.controller';
 import { AdminRefundController } from './admin-refund.controller';
 import { CollectionPolicyService } from './collection-policy.service';
 import { MockPaymentProvider } from './mock.provider';
+import { OfflinePaymentService } from './offline-payment.service';
 import { OwnerPaymentController } from './owner-payment.controller';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
 import { PaymentService } from './payment.service';
@@ -12,6 +14,7 @@ import { RefundService } from './refund.service';
 import { WxPayDirectProvider } from './wxpay-direct.provider';
 import { WxPayNotifyController } from './wxpay-notify.controller';
 import { WxPayRefundNotifyController } from './wxpay-refund-notify.controller';
+import { BILL_ORDER_CLOSER } from '../billing/bill-workflow.service';
 
 @Module({
   controllers: [
@@ -20,6 +23,7 @@ import { WxPayRefundNotifyController } from './wxpay-refund-notify.controller';
     WxPayRefundNotifyController,
     AdminCollectionController,
     AdminRefundController,
+    AdminPaymentController,
   ],
   providers: [
     PaymentService,
@@ -27,6 +31,9 @@ import { WxPayRefundNotifyController } from './wxpay-refund-notify.controller';
     RefundService,
     RefundRecoveryService,
     PaymentReconciliationService,
+    OfflinePaymentService,
+    AdminPaymentsService,
+    { provide: BILL_ORDER_CLOSER, useExisting: PaymentService },
     MockPaymentProvider,
     WxPayDirectProvider,
     {
