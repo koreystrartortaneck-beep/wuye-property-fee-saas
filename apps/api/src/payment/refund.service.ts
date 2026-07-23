@@ -1,10 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ErrorCode } from '@pf/shared';
 import { AuditService } from '../audit/audit.service';
 import { toCents } from '../billing/engine/money';
 import { BizException } from '../common/biz.exception';
 import { IdempotencyService } from '../common/idempotency.service';
 import { hashCanonicalJson } from '../common/idempotency.service';
+import { INVOICE_REFUND_LINK, InvoiceRefundLink } from '../invoice/invoice.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { runWithTenant } from '../tenant/tenant-cls';
 import { PAYMENT_PROVIDER, PaymentProvider, PaymentProviderError, WxPayRefund } from './provider';
@@ -65,6 +66,7 @@ export class RefundService {
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
     private readonly idempotency: IdempotencyService,
     private readonly audit: AuditService,
+    @Optional() @Inject(INVOICE_REFUND_LINK) private readonly invoiceLink?: InvoiceRefundLink,
   ) {}
 
   private refundNoFor(orderNo: string): string {
@@ -294,6 +296,10 @@ export class RefundService {
         where: { paymentId: refund.paymentId, status: { in: ['REFUNDING', 'PAID'] } },
         data: { status: 'REFUNDED' },
       });
+      // 退款成功联动开票：未开票申请置 CANCELED，已开票生成冲红任务（同事务原子）。
+      if (this.invoiceLink) {
+        await this.invoiceLink.onPaymentRefunded(tx, refund.tenantId, refund.paymentId);
+      }
       await this.audit.append(
         {
           tenantId: refund.tenantId,

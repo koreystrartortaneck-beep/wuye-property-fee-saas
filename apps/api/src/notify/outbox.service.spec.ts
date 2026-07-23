@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { runWithTenant } from '../tenant/tenant-cls';
 import { NotifyModule } from './notify.module';
+import { NotifyService } from './notify.service';
 import { OutboxService } from './outbox.service';
 
 type OutboxStatus = 'PENDING' | 'PROCESSING' | 'PUBLISHED' | 'FAILED';
@@ -813,5 +814,123 @@ describe('OutboxService', () => {
         }),
       ),
     ).rejects.toMatchObject({ code: 40300 });
+  });
+});
+
+describe('NotifyService Outbox 投递适配器', () => {
+  function makeDeliverer(overrides: {
+    bindings?: Array<{ wxUser: { openid: string } }>;
+    wxUser?: { openid: string } | null;
+    sendSubscribeMessage?: jest.Mock;
+  } = {}) {
+    const wx = {
+      sendSubscribeMessage: overrides.sendSubscribeMessage ?? jest.fn().mockResolvedValue({ ok: true }),
+    };
+    const outbox = {
+      claimBatch: jest.fn(),
+      markPublished: jest.fn().mockResolvedValue(undefined),
+      markFailed: jest.fn().mockResolvedValue(undefined),
+    };
+    const prisma = {
+      raw: {
+        houseBinding: { findMany: jest.fn().mockResolvedValue(overrides.bindings ?? []) },
+        wxUser: { findUnique: jest.fn().mockResolvedValue(overrides.wxUser ?? null) },
+        outboxEvent: { findMany: jest.fn().mockResolvedValue([]) },
+      },
+    };
+    const service = new NotifyService(prisma as never, wx as never, outbox as never);
+    return { service, wx, outbox, prisma };
+  }
+
+  it('无订阅模板的事件（如开票）跳过投递，不呼叫微信', async () => {
+    const { service, wx } = makeDeliverer({ wxUser: { openid: 'openid-1' } });
+    await expect(
+      service.deliverOutboxEvent({
+        id: 'e-1',
+        tenantId: 'tenant-1',
+        aggregateType: 'InvoiceApplication',
+        eventType: 'invoice.submitted',
+        payload: { wxUserId: 'wx-1' },
+      }),
+    ).resolves.toBe('SKIPPED');
+    expect(wx.sendSubscribeMessage).not.toHaveBeenCalled();
+  });
+
+  it('账单发布事件按房屋 ACTIVE 绑定去重投递，成功返回 DELIVERED', async () => {
+    const send = jest.fn().mockResolvedValue({ ok: true });
+    const { service } = makeDeliverer({
+      bindings: [{ wxUser: { openid: 'openid-1' } }, { wxUser: { openid: 'openid-1' } }, { wxUser: { openid: 'openid-2' } }],
+      sendSubscribeMessage: send,
+    });
+    await expect(
+      service.deliverOutboxEvent({
+        id: 'e-2',
+        tenantId: 'tenant-1',
+        aggregateType: 'Bill',
+        eventType: 'bill.published',
+        payload: { billId: 'b-1', houseId: 'house-1', period: '2026-07', amount: '100.00' },
+      }),
+    ).resolves.toBe('DELIVERED');
+    // 同一 openid 只发一次（唯一收件人/渠道投递）
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls.map((c) => c[0].openid).sort()).toEqual(['openid-1', 'openid-2']);
+  });
+
+  it('收件人未订阅（denied）时跳过，不重试', async () => {
+    const send = jest.fn().mockResolvedValue({ ok: false, error: 'errcode 43101 user not subscribed' });
+    const { service } = makeDeliverer({ bindings: [{ wxUser: { openid: 'openid-1' } }], sendSubscribeMessage: send });
+    await expect(
+      service.deliverOutboxEvent({
+        id: 'e-3',
+        tenantId: 'tenant-1',
+        aggregateType: 'Bill',
+        eventType: 'bill.published',
+        payload: { houseId: 'house-1' },
+      }),
+    ).resolves.toBe('SKIPPED');
+  });
+
+  it('网络/暂时性错误返回 RETRY', async () => {
+    const send = jest.fn().mockRejectedValue(new Error('网络超时'));
+    const { service } = makeDeliverer({ bindings: [{ wxUser: { openid: 'openid-1' } }], sendSubscribeMessage: send });
+    await expect(
+      service.deliverOutboxEvent({
+        id: 'e-4',
+        tenantId: 'tenant-1',
+        aggregateType: 'Bill',
+        eventType: 'bill.published',
+        payload: { houseId: 'house-1' },
+      }),
+    ).resolves.toBe('RETRY');
+  });
+
+  it('dispatchOutboxBatch 领取后：投递成功 markPublished、可重试 markFailed', async () => {
+    const send = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: true })
+      .mockRejectedValueOnce(new Error('网络超时'));
+    const { service, outbox } = makeDeliverer({ bindings: [{ wxUser: { openid: 'openid-1' } }], sendSubscribeMessage: send });
+    const lease = new Date('2030-01-01T00:00:30.000Z');
+    outbox.claimBatch.mockResolvedValue([
+      { id: 'ok-1', tenantId: 'tenant-1', aggregateType: 'Bill', eventType: 'bill.published', payload: { houseId: 'house-1' }, claimOwner: 'w-1', claimExpiresAt: lease },
+      { id: 'retry-1', tenantId: 'tenant-1', aggregateType: 'Bill', eventType: 'bill.published', payload: { houseId: 'house-1' }, claimOwner: 'w-1', claimExpiresAt: lease },
+    ]);
+
+    const stats = await service.dispatchOutboxBatch({ tenantId: 'tenant-1', workerId: 'w-1' });
+
+    expect(stats).toEqual({ delivered: 1, skipped: 0, retried: 1 });
+    expect(outbox.markPublished).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: 'ok-1', workerId: 'w-1', claimExpiresAt: lease }),
+    );
+    expect(outbox.markFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: 'retry-1', workerId: 'w-1', claimExpiresAt: lease }),
+    );
+  });
+
+  it('定时投递默认关闭', async () => {
+    const { service, outbox } = makeDeliverer();
+    delete process.env.OUTBOX_DISPATCH_ENABLED;
+    await service.scheduledOutboxDispatch();
+    expect(outbox.claimBatch).not.toHaveBeenCalled();
   });
 });

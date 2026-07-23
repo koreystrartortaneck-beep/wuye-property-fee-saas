@@ -61,8 +61,14 @@ describe('RefundService 微信全额退款闭环', () => {
     };
   }
 
-  function makeService(prisma: unknown): RefundService {
-    return new RefundService(prisma as never, provider as unknown as PaymentProvider, idempotency as never, audit as never);
+  function makeService(prisma: unknown, invoiceLink?: unknown): RefundService {
+    return new RefundService(
+      prisma as never,
+      provider as unknown as PaymentProvider,
+      idempotency as never,
+      audit as never,
+      invoiceLink as never,
+    );
   }
 
   const refundResult = (over: Partial<WxPayRefund> = {}): WxPayRefund => ({
@@ -94,6 +100,18 @@ describe('RefundService 微信全额退款闭环', () => {
     // 事务内审计（创建 + 成功）
     expect(audit.append).toHaveBeenCalledWith(expect.objectContaining({ action: 'REFUND' }), tx);
     expect(idempotency.complete).toHaveBeenCalled();
+  });
+
+  it('退款成功在同一事务内联动开票申请（取消/冲红）', async () => {
+    provider.createRefund.mockResolvedValue(refundResult());
+    const tx = makeTx();
+    const prisma = makePrisma(tx);
+    const invoiceLink = { onPaymentRefunded: jest.fn().mockResolvedValue(undefined) };
+    const service = makeService(prisma, invoiceLink);
+
+    await service.createRefund({ orderNo: 'WY202607220001', adminId: 'admin-1', actingTenantId: 'tenant-1', reason: '业主申请', requestId: 'req-link' });
+
+    expect(invoiceLink.onPaymentRefunded).toHaveBeenCalledWith(tx, 'tenant-1', 'payment-1');
   });
 
   it('相同 requestId 重放直接返回已存结果，不重复退款', async () => {

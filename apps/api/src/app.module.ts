@@ -5,6 +5,7 @@ import { AdminModule } from './admin/admin.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.module';
+import { InvoiceModule } from './invoice/invoice.module';
 import { NotifyModule } from './notify/notify.module';
 import { PaymentModule } from './payment/payment.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
@@ -32,6 +33,7 @@ import { WxModule } from './wx/wx.module';
     OwnerModule,
     NotifyModule,
     BillingModule,
+    InvoiceModule,
     PaymentModule,
     ReconciliationModule,
     UploadModule,
