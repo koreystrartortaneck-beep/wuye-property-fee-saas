@@ -1,4 +1,4 @@
-import { Controller, Headers, Post } from '@nestjs/common';
+import { Controller, Get, Headers, Post } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { ErrorCode } from '@pf/shared';
 import { BizException } from '../common/biz.exception';
@@ -18,12 +18,76 @@ const ADMIN_PW = 'GangCheng2026';
 export class PilotBootstrapController {
   constructor(private readonly prisma: PrismaService) {}
 
-  @Post()
-  async run(@Headers('x-bootstrap-token') token?: string) {
+  private assert(token?: string) {
     const expected = process.env.JWT_SECRET || '';
     if (!expected || !token || token !== expected) {
       throw new BizException(ErrorCode.NOT_FOUND); // 不暴露端点存在
     }
+  }
+
+  /** 只读盘点：列出全部租户/小区/房屋/未支付账单，用于对齐真机已绑的那套数据。 */
+  @Get('inspect')
+  async inspect(@Headers('x-bootstrap-token') token?: string) {
+    this.assert(token);
+    const p = this.prisma.raw;
+    const tenants = await p.tenant.findMany({ select: { id: true, name: true, code: true } });
+    const communities = await p.community.findMany({
+      select: { id: true, name: true, tenantId: true },
+    });
+    const houses = await p.house.findMany({
+      select: {
+        id: true, code: true, displayName: true, ownerPhone: true, status: true,
+        tenantId: true, communityId: true,
+      },
+    });
+    const bills = await p.bill.findMany({
+      where: { status: { in: ['UNPAID', 'PARTIAL'] } },
+      select: {
+        id: true, title: true, period: true, amount: true, status: true,
+        tenantId: true, communityId: true, houseId: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    const scope = {
+      WX_PAY_ALLOWED_TENANT_ID: process.env.WX_PAY_ALLOWED_TENANT_ID || null,
+      WX_PAY_ALLOWED_COMMUNITY_ID: process.env.WX_PAY_ALLOWED_COMMUNITY_ID || null,
+    };
+    return { tenants, communities, houses, unpaidBills: bills, scope };
+  }
+
+  /** 给指定房屋补一张 1 分钱未支付测试账单（幂等）。 */
+  @Post('bill')
+  async makeBill(
+    @Headers('x-bootstrap-token') token?: string,
+    @Headers('x-house-id') houseId?: string,
+  ) {
+    this.assert(token);
+    const p = this.prisma.raw;
+    if (!houseId) throw new BizException(ErrorCode.NOT_FOUND);
+    const house = await p.house.findUnique({ where: { id: houseId } });
+    if (!house) throw new BizException(ErrorCode.NOT_FOUND);
+    let bill = await p.bill.findFirst({
+      where: { houseId: house.id, period: '2026-07', title: '物业费（联调测试）' },
+    });
+    if (!bill) {
+      bill = await p.bill.create({
+        data: {
+          tenantId: house.tenantId, communityId: house.communityId, houseId: house.id,
+          period: '2026-07', title: '物业费（联调测试）', amount: '0.01',
+          dueDate: new Date(Date.now() + 30 * 86400000), status: 'UNPAID', source: 'IMPORT', snapshot: {},
+        },
+      });
+    }
+    return {
+      billId: bill.id, houseId: house.id, tenantId: house.tenantId, communityId: house.communityId,
+      status: bill.status, amount: bill.amount,
+    };
+  }
+
+  @Post()
+  async run(@Headers('x-bootstrap-token') token?: string) {
+    this.assert(token);
     const p = this.prisma.raw;
 
     let tenant = await p.tenant.findUnique({ where: { code: 'gangcheng' } });
