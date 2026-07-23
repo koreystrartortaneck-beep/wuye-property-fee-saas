@@ -6,7 +6,7 @@ import { CollectionPolicyService } from './collection-policy.service';
 import { MockPaymentProvider } from './mock.provider';
 import { OfflinePaymentService } from './offline-payment.service';
 import { OwnerPaymentController } from './owner-payment.controller';
-import { PaymentReconciliationService } from './payment-reconciliation.service';
+import { PaymentRecoveryService } from './payment-recovery.service';
 import { PaymentService } from './payment.service';
 import { PAYMENT_PROVIDER, PaymentProvider } from './provider';
 import { RefundRecoveryService } from './refund-recovery.service';
@@ -30,7 +30,7 @@ import { BILL_ORDER_CLOSER } from '../billing/bill-workflow.service';
     CollectionPolicyService,
     RefundService,
     RefundRecoveryService,
-    PaymentReconciliationService,
+    PaymentRecoveryService,
     OfflinePaymentService,
     AdminPaymentsService,
     { provide: BILL_ORDER_CLOSER, useExisting: PaymentService },

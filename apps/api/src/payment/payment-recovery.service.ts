@@ -4,8 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PaymentService } from './payment.service';
 
 @Injectable()
-export class PaymentReconciliationService {
-  private readonly logger = new Logger(PaymentReconciliationService.name);
+export class PaymentRecoveryService {
+  private readonly logger = new Logger(PaymentRecoveryService.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -19,7 +19,7 @@ export class PaymentReconciliationService {
   async closeStaleOrders(now: Date = new Date()): Promise<void> {
     if (process.env.PAY_MODE !== 'wxpay') return;
     const cutoff = new Date(now.getTime() - 30 * 60 * 1000);
-    const leaseCutoff = new Date(now.getTime() - PaymentReconciliationService.LEASE_MS);
+    const leaseCutoff = new Date(now.getTime() - PaymentRecoveryService.LEASE_MS);
     // 同时扫描 CREATED 与 PREPAY_UNKNOWN，两者都会占用账单、需查单裁决终态。
     const stale = await this.prisma.raw.payment.findMany({
       where: {

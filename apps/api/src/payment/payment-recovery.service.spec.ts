@@ -1,6 +1,6 @@
-import { PaymentReconciliationService } from './payment-reconciliation.service';
+import { PaymentRecoveryService } from './payment-recovery.service';
 
-describe('PaymentReconciliationService', () => {
+describe('PaymentRecoveryService', () => {
   const originalMode = process.env.PAY_MODE;
 
   afterEach(() => {
@@ -26,7 +26,7 @@ describe('PaymentReconciliationService', () => {
         .mockRejectedValueOnce(new Error('network'))
         .mockResolvedValueOnce({ status: 'CLOSED' }),
     };
-    const service = new PaymentReconciliationService(prisma as never, payments as never);
+    const service = new PaymentRecoveryService(prisma as never, payments as never);
 
     await service.closeStaleOrders(new Date('2026-07-22T10:00:00Z'));
 
@@ -52,7 +52,7 @@ describe('PaymentReconciliationService', () => {
       },
     };
     const payments = { reconcileStaleWxPay: jest.fn() };
-    const service = new PaymentReconciliationService(prisma as never, payments as never);
+    const service = new PaymentRecoveryService(prisma as never, payments as never);
 
     await service.closeStaleOrders(new Date('2026-07-22T10:00:00Z'));
 

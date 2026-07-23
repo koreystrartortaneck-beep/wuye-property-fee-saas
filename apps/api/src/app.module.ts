@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.module';
 import { NotifyModule } from './notify/notify.module';
 import { PaymentModule } from './payment/payment.module';
+import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { AnnouncementsModule } from './announcements/announcements.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { UploadModule } from './upload/upload.module';
@@ -32,6 +33,7 @@ import { WxModule } from './wx/wx.module';
     NotifyModule,
     BillingModule,
     PaymentModule,
+    ReconciliationModule,
     UploadModule,
     TicketsModule,
     AnnouncementsModule,
