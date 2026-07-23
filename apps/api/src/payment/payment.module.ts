@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { AdminCollectionController } from './admin-collection.controller';
+import { CollectionPolicyService } from './collection-policy.service';
 import { MockPaymentProvider } from './mock.provider';
 import { OwnerPaymentController } from './owner-payment.controller';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
@@ -8,9 +10,10 @@ import { WxPayDirectProvider } from './wxpay-direct.provider';
 import { WxPayNotifyController } from './wxpay-notify.controller';
 
 @Module({
-  controllers: [OwnerPaymentController, WxPayNotifyController],
+  controllers: [OwnerPaymentController, WxPayNotifyController, AdminCollectionController],
   providers: [
     PaymentService,
+    CollectionPolicyService,
     PaymentReconciliationService,
     MockPaymentProvider,
     WxPayDirectProvider,

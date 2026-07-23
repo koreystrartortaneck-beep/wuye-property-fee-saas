@@ -3,6 +3,7 @@ import { ErrorCode } from '@pf/shared';
 import { toCents } from '../billing/engine/money';
 import { BizException } from '../common/biz.exception';
 import { PrismaService } from '../prisma/prisma.service';
+import { CollectionPolicyService } from './collection-policy.service';
 import { PAYMENT_PROVIDER, PaymentProvider, PaymentProviderError, WxPayTransaction } from './provider';
 
 /**
@@ -14,7 +15,24 @@ export class PaymentService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
+    private readonly collectionPolicy: CollectionPolicyService,
   ) {}
+
+  private resolveChannel(): 'WXPAY' | 'MOCK' {
+    return process.env.PAY_MODE === 'wxpay' ? 'WXPAY' : 'MOCK';
+  }
+
+  /** 微信支付部署范围校验：预下单前拦截未开通在线支付的租户/小区。 */
+  private assertWxPayScope(tenantId: string, communityIds: string[]): void {
+    const allowedTenant = process.env.WX_PAY_ALLOWED_TENANT_ID;
+    const allowedCommunity = process.env.WX_PAY_ALLOWED_COMMUNITY_ID;
+    if (!allowedTenant || !allowedCommunity) {
+      throw new Error('微信支付开通范围未配置：WX_PAY_ALLOWED_TENANT_ID / WX_PAY_ALLOWED_COMMUNITY_ID');
+    }
+    if (tenantId !== allowedTenant || communityIds.some((id) => id !== allowedCommunity)) {
+      throw new BizException(ErrorCode.PAYMENT_SCOPE_FORBIDDEN);
+    }
+  }
 
   private genOrderNo(): string {
     const d = new Date();
@@ -55,15 +73,20 @@ export class PaymentService {
     const totalCents = bills.reduce((s, b) => s + toCents(b.amount.toString()), 0);
     const user = await this.prisma.raw.wxUser.findUnique({ where: { id: ownerId } });
     const tenantId = bills[0].tenantId;
+    const communityIds = [...new Set(bills.map((b) => b.communityId))];
+    const channel = this.resolveChannel();
+    if (channel === 'WXPAY') this.assertWxPayScope(tenantId, communityIds);
 
     const payment = await this.prisma.raw.$transaction(async (tx) => {
+      // 与账单预占同事务加锁复核分层收款策略，防止并发暂停被绕过。
+      await this.collectionPolicy.assertOpenForUpdate(tx, tenantId, communityIds);
       const p = await tx.payment.create({
         data: {
           tenantId,
           wxUserId: ownerId,
           orderNo: this.genOrderNo(),
           totalAmount: (totalCents / 100).toFixed(2),
-          channel: process.env.PAY_MODE === 'wxpay' ? 'WXPAY' : 'MOCK',
+          channel,
           status: 'CREATED',
         },
       });

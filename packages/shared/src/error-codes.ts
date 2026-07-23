@@ -30,6 +30,9 @@ export const ErrorCode = {
   // 43xxx 账单与支付
   BILL_NOT_PAYABLE: { code: 43001, message: '账单不可支付' },
   PAYMENT_STATE_INVALID: { code: 43002, message: '订单状态不允许该操作' },
+  COLLECTION_PAUSED: { code: 43003, message: '当前收款已暂停，暂不可发起支付' },
+  PAYMENT_SCOPE_FORBIDDEN: { code: 43004, message: '当前小区未开通在线支付' },
+  REFUND_STATE_INVALID: { code: 43005, message: '退款状态不允许该操作' },
 
   // 44xxx 工单与访客
   TICKET_STATE_INVALID: { code: 44001, message: '工单状态不允许该操作' },

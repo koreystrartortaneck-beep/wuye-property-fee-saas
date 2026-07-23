@@ -1,11 +1,19 @@
+import { ErrorCode } from '@pf/shared';
+import { BizException } from '../common/biz.exception';
+import type { CollectionPolicyService } from './collection-policy.service';
 import { PaymentService } from './payment.service';
 import { PaymentProviderError, type PaymentProvider, type WxPayTransaction } from './provider';
 
 describe('PaymentService 微信支付回调入账', () => {
   const provider = { createOrder: jest.fn(), close: jest.fn() } as PaymentProvider;
+  let collectionPolicy: CollectionPolicyService;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    collectionPolicy = {
+      assertOpenForUpdate: jest.fn().mockResolvedValue(undefined),
+      resolveEffectiveStatus: jest.fn().mockResolvedValue({ status: 'OPEN', pausedLayer: null, reason: null }),
+    } as unknown as CollectionPolicyService;
   });
 
   function transaction(overrides: Partial<WxPayTransaction> = {}): WxPayTransaction {
@@ -44,7 +52,7 @@ describe('PaymentService 微信支付回调入账', () => {
         $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
       },
     };
-    const service = new PaymentService(prisma as never, provider);
+    const service = new PaymentService(prisma as never, provider, collectionPolicy);
 
     await expect(service.createPayment('owner-1', ['bill-1'])).rejects.toThrow('账单已被其他支付占用');
     expect(tx.payment.create).toHaveBeenCalledWith({
@@ -73,7 +81,7 @@ describe('PaymentService 微信支付回调入账', () => {
         }) },
       },
     };
-    const service = new PaymentService(prisma as never, provider);
+    const service = new PaymentService(prisma as never, provider, collectionPolicy);
 
     await expect(service.mockConfirm('owner-1', 'WY1')).rejects.toThrow('真实支付订单不可 mock 确认');
     process.env.PAY_MODE = previousMode;
@@ -100,7 +108,7 @@ describe('PaymentService 微信支付回调入账', () => {
         $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
       },
     };
-    const service = new PaymentService(prisma as never, provider);
+    const service = new PaymentService(prisma as never, provider, collectionPolicy);
 
     await expect(service.handleWxPaySuccess(transaction())).resolves.toEqual({
       orderNo: payment.orderNo,
@@ -129,7 +137,7 @@ describe('PaymentService 微信支付回调入账', () => {
         $transaction: jest.fn(),
       },
     };
-    const service = new PaymentService(prisma as never, provider);
+    const service = new PaymentService(prisma as never, provider, collectionPolicy);
 
     await expect(service.handleWxPaySuccess(transaction())).rejects.toThrow('支付回调金额不一致');
     expect(prisma.raw.$transaction).not.toHaveBeenCalled();
@@ -150,7 +158,7 @@ describe('PaymentService 微信支付回调入账', () => {
         $transaction: jest.fn(),
       },
     };
-    const service = new PaymentService(prisma as never, provider);
+    const service = new PaymentService(prisma as never, provider, collectionPolicy);
 
     await expect(service.handleWxPaySuccess(transaction())).resolves.toEqual({
       orderNo: 'WY202607220001',
@@ -182,7 +190,7 @@ describe('PaymentService 微信支付回调入账', () => {
       close: jest.fn().mockResolvedValue(undefined),
       queryOrder: jest.fn().mockResolvedValue(transaction({ trade_state: 'NOTPAY' })),
     } as PaymentProvider;
-    const service = new PaymentService(prisma as never, queryProvider);
+    const service = new PaymentService(prisma as never, queryProvider, collectionPolicy);
 
     await expect(service.cancelWxPay('owner-1', payment.orderNo)).resolves.toEqual({
       orderNo: payment.orderNo,
@@ -217,7 +225,7 @@ describe('PaymentService 微信支付回调入账', () => {
       close: jest.fn(),
       queryOrder: jest.fn().mockRejectedValue(new PaymentProviderError(404, 'ORDER_NOT_EXIST', 'not found')),
     } as PaymentProvider;
-    const service = new PaymentService(prisma as never, queryProvider);
+    const service = new PaymentService(prisma as never, queryProvider, collectionPolicy);
 
     await expect(service.reconcileStaleWxPay(payment.orderNo)).resolves.toEqual({
       orderNo: payment.orderNo,
@@ -255,7 +263,7 @@ describe('PaymentService 微信支付回调入账', () => {
       close: jest.fn(),
       queryOrder: jest.fn().mockResolvedValue(transaction()),
     } as PaymentProvider;
-    const service = new PaymentService(prisma as never, queryProvider);
+    const service = new PaymentService(prisma as never, queryProvider, collectionPolicy);
 
     await expect(service.syncWxPay('owner-1', payment.orderNo)).resolves.toEqual({
       orderNo: payment.orderNo,
@@ -263,5 +271,105 @@ describe('PaymentService 微信支付回调入账', () => {
     });
     expect(queryProvider.queryOrder).toHaveBeenCalledWith(payment.orderNo);
     expect(tx.payment.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('收款暂停时事务内复核拒绝新支付且不创建渠道订单', async () => {
+    const bills = [{
+      id: 'bill-1',
+      tenantId: 'tenant-1',
+      communityId: 'community-1',
+      houseId: 'house-1',
+      title: '物业费',
+      amount: { toString: () => '1.00' },
+      status: 'UNPAID',
+    }];
+    const tx = {
+      payment: { create: jest.fn() },
+      bill: { updateMany: jest.fn() },
+      paymentBill: { createMany: jest.fn() },
+      $queryRaw: jest.fn(),
+    };
+    const prisma = {
+      raw: {
+        bill: { findMany: jest.fn().mockResolvedValue(bills) },
+        houseBinding: { findMany: jest.fn().mockResolvedValue([{ houseId: 'house-1' }]) },
+        paymentBill: { findFirst: jest.fn().mockResolvedValue(null) },
+        wxUser: { findUnique: jest.fn().mockResolvedValue({ openid: 'openid-1' }) },
+        $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+      },
+    };
+    (collectionPolicy.assertOpenForUpdate as jest.Mock).mockRejectedValue(
+      new BizException(ErrorCode.COLLECTION_PAUSED),
+    );
+    const service = new PaymentService(prisma as never, provider, collectionPolicy);
+
+    await expect(service.createPayment('owner-1', ['bill-1'])).rejects.toMatchObject({ code: 43003 });
+    expect(collectionPolicy.assertOpenForUpdate).toHaveBeenCalledWith(tx, 'tenant-1', ['community-1']);
+    expect(tx.payment.create).not.toHaveBeenCalled();
+    expect(provider.createOrder).not.toHaveBeenCalled();
+  });
+
+  it('收款暂停不影响支付回调入账', async () => {
+    const payment = {
+      id: 'payment-1',
+      orderNo: 'WY202607220001',
+      totalAmount: { toString: () => '1.00' },
+      channel: 'WXPAY',
+      status: 'CREATED',
+      transactionId: null,
+      paymentBills: [{ billId: 'bill-1' }],
+    };
+    const tx = {
+      payment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    };
+    const prisma = {
+      raw: {
+        payment: { findUnique: jest.fn().mockResolvedValue(payment) },
+        $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+      },
+    };
+    const service = new PaymentService(prisma as never, provider, collectionPolicy);
+
+    await expect(service.handleWxPaySuccess(transaction())).resolves.toEqual({
+      orderNo: payment.orderNo,
+      status: 'SUCCESS',
+    });
+    expect(collectionPolicy.assertOpenForUpdate).not.toHaveBeenCalled();
+  });
+
+  it('WXPAY 渠道拒绝超出开通范围的小区', async () => {
+    const previousMode = process.env.PAY_MODE;
+    const previousTenant = process.env.WX_PAY_ALLOWED_TENANT_ID;
+    const previousCommunity = process.env.WX_PAY_ALLOWED_COMMUNITY_ID;
+    process.env.PAY_MODE = 'wxpay';
+    process.env.WX_PAY_ALLOWED_TENANT_ID = 'tenant-1';
+    process.env.WX_PAY_ALLOWED_COMMUNITY_ID = 'community-allowed';
+    const bills = [{
+      id: 'bill-1',
+      tenantId: 'tenant-1',
+      communityId: 'community-other',
+      houseId: 'house-1',
+      title: '物业费',
+      amount: { toString: () => '1.00' },
+      status: 'UNPAID',
+    }];
+    const prisma = {
+      raw: {
+        bill: { findMany: jest.fn().mockResolvedValue(bills) },
+        houseBinding: { findMany: jest.fn().mockResolvedValue([{ houseId: 'house-1' }]) },
+        paymentBill: { findFirst: jest.fn().mockResolvedValue(null) },
+        wxUser: { findUnique: jest.fn().mockResolvedValue({ openid: 'openid-1' }) },
+        $transaction: jest.fn(),
+      },
+    };
+    const service = new PaymentService(prisma as never, provider, collectionPolicy);
+
+    await expect(service.createPayment('owner-1', ['bill-1'])).rejects.toMatchObject({ code: 43004 });
+    expect(prisma.raw.$transaction).not.toHaveBeenCalled();
+
+    process.env.PAY_MODE = previousMode;
+    process.env.WX_PAY_ALLOWED_TENANT_ID = previousTenant;
+    process.env.WX_PAY_ALLOWED_COMMUNITY_ID = previousCommunity;
   });
 });
