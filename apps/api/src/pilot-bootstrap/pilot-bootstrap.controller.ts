@@ -72,6 +72,12 @@ export class PilotBootstrapController {
       hasReceipt: !!x.receiptSnapshot,
       billIds: (x.paymentBills as { billId: string }[]).map((b) => b.billId),
     }));
+    // 最近账单（含各状态，用于核对退款后账单回退）
+    const recentBills = await p.bill.findMany({
+      select: { id: true, title: true, status: true, tenantId: true, houseId: true, paidAt: true, paymentId: true },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
     // 退款单
     const refunds = await p.refund.findMany({
       select: {
@@ -110,7 +116,7 @@ export class PilotBootstrapController {
       PAY_MODE: process.env.PAY_MODE || null,
     };
     return {
-      tenants, communities, houses, unpaidBills: bills,
+      tenants, communities, houses, unpaidBills: bills, recentBills,
       payments: paymentView, refunds, paymentEvents: events, callbackAlerts: alerts, scope,
     };
   }
@@ -188,6 +194,18 @@ export class PilotBootstrapController {
       requestId: `pilot-refund-${orderNo}`,
     });
     return { orderNo, paymentStatusBefore: payment.status, refund: result };
+  }
+
+  /** 强制查退款终态（不等 10 分钟定时任务）：调真实 recoverRefund 查微信并推进 SUCCESS/FAILED。 */
+  @Post('refund-sync')
+  async refundSync(
+    @Headers('x-bootstrap-token') token?: string,
+    @Headers('x-refund-no') refundNo?: string,
+  ) {
+    this.assert(token);
+    if (!refundNo) throw new BizException(ErrorCode.VALIDATION, '缺少 x-refund-no');
+    const result = await this.refundService.recoverRefund(refundNo);
+    return { refundNo, result };
   }
 
   @Post()
