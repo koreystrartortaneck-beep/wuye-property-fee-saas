@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { AlertService } from '../operations/alert.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RefundService } from './refund.service';
 
@@ -11,10 +12,13 @@ import { RefundService } from './refund.service';
 export class RefundRecoveryService {
   private readonly logger = new Logger(RefundRecoveryService.name);
   private static readonly LEASE_MS = 5 * 60 * 1000;
+  /** 恢复耗尽阈值：退款超过此时长仍未终态视为异常，触发告警。 */
+  private static readonly EXHAUST_MS = 2 * 60 * 60 * 1000;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly refunds: RefundService,
+    @Optional() private readonly alerts: AlertService | null = null,
   ) {}
 
   @Cron('30 */10 * * * *')
@@ -27,7 +31,7 @@ export class RefundRecoveryService {
         status: { in: ['CREATED', 'PROCESSING'] },
         OR: [{ lastQueriedAt: null }, { lastQueriedAt: { lt: leaseCutoff } }],
       },
-      select: { id: true, refundNo: true, lastQueriedAt: true },
+      select: { id: true, refundNo: true, lastQueriedAt: true, requestedAt: true, status: true, tenantId: true, communityId: true },
       orderBy: { requestedAt: 'asc' },
       take: 100,
     });
@@ -44,6 +48,18 @@ export class RefundRecoveryService {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         this.logger.warn(`退款恢复失败 refund=${refund.refundNo}: ${message}`);
+      }
+      // 恢复耗尽：长期未终态的退款触发告警（按退款单号去重）。
+      if (this.alerts && now.getTime() - refund.requestedAt.getTime() > RefundRecoveryService.EXHAUST_MS) {
+        await this.alerts.safeEmit({
+          tenantId: refund.tenantId,
+          communityId: refund.communityId ?? null,
+          alertType: 'STALE_REFUND',
+          severity: 'WARNING',
+          dedupKey: `STALE_REFUND:${refund.refundNo}`,
+          title: '退款长时间未终态',
+          summary: `退款 ${refund.refundNo} 状态 ${refund.status} 超过恢复阈值仍未终态`,
+        });
       }
     }
   }

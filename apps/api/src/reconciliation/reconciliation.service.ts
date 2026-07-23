@@ -4,6 +4,7 @@ import { ErrorCode, ReconciliationBillType, ReconciliationDifferenceType, Reconc
 import { AuditService } from '../audit/audit.service';
 import { toCents } from '../billing/engine/money';
 import { BizException } from '../common/biz.exception';
+import { AlertService } from '../operations/alert.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { runWithTenant } from '../tenant/tenant-cls';
 import { ChannelBill, WECHAT_BILL_PROVIDER, WechatBillProvider, shanghaiBillingDate } from './wechat-bill.provider';
@@ -56,6 +57,7 @@ export class ReconciliationService {
     private readonly audit: AuditService,
     @Inject(WECHAT_BILL_PROVIDER) private readonly billProvider: WechatBillProvider,
     @Optional() @Inject(RECON_RECOVERY) private readonly recovery: ReconRecovery | null = null,
+    @Optional() private readonly alerts: AlertService | null = null,
   ) {}
 
   private runNo(merchantAccountId: string, businessDate: string, billType: string): string {
@@ -79,6 +81,17 @@ export class ReconciliationService {
         await this.reconcile({ tenantId, communityId, merchantAccountId, mchid, appid, businessDate, billType });
       } catch (error) {
         this.logger.warn(`每日对账失败 ${businessDate} ${billType}: ${error instanceof Error ? error.message : error}`);
+        if (this.alerts) {
+          await this.alerts.safeEmit({
+            tenantId,
+            communityId,
+            alertType: 'SCHEDULER_FAILURE',
+            severity: 'CRITICAL',
+            dedupKey: `SCHEDULER_FAILURE:reconcile:${businessDate}:${billType}`,
+            title: '每日对账任务执行失败',
+            summary: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     }
   }
@@ -162,7 +175,19 @@ export class ReconciliationService {
 
         const localTotals = await this.localTotals(input, businessDate, input.billType);
         await this.persist(input, run.id, bill, drafts, localTotals, workerId);
-        return { runId: run.id, status: 'COMPLETED', differenceRecordCount: drafts.filter((d) => d.status === 'OPEN' || d.status === 'ESCALATED').length };
+        const openCount = drafts.filter((d) => d.status === 'OPEN' || d.status === 'ESCALATED').length;
+        if (this.alerts && openCount > 0) {
+          await this.alerts.safeEmit({
+            tenantId: input.tenantId,
+            communityId: input.communityId ?? null,
+            alertType: 'RECONCILIATION_DIFFERENCE',
+            severity: 'CRITICAL',
+            dedupKey: `RECONCILIATION_DIFFERENCE:${businessDate}:${input.billType}`,
+            title: '对账存在未处置差异',
+            summary: `账期 ${businessDate} ${input.billType} 存在 ${openCount} 条差异`,
+          });
+        }
+        return { runId: run.id, status: 'COMPLETED', differenceRecordCount: openCount };
       } catch (error) {
         await this.prisma.raw.reconciliationRun.updateMany({
           where: { id: run.id, status: 'RUNNING' },

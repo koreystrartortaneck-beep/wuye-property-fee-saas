@@ -1,5 +1,7 @@
-import { Controller, Logger, Post, RawBodyRequest, Req, Res } from '@nestjs/common';
+import { Controller, Logger, Optional, Post, RawBodyRequest, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { AlertService } from '../operations/alert.service';
+import { emitCallbackRejectedAlert } from './wxpay-alert.util';
 import { PaymentService } from './payment.service';
 import { WxPayDirectProvider } from './wxpay-direct.provider';
 
@@ -10,6 +12,7 @@ export class WxPayNotifyController {
   constructor(
     private readonly wxPay: WxPayDirectProvider,
     private readonly paymentService: PaymentService,
+    @Optional() private readonly alerts: AlertService | null = null,
   ) {}
 
   @Post('notify')
@@ -22,6 +25,7 @@ export class WxPayNotifyController {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(`微信支付回调拒绝：${message}`);
+      await emitCallbackRejectedAlert(this.alerts, 'PAYMENT_CALLBACK_REJECTED', '微信支付回调验签失败', message);
       res.status(401).json({ code: 'FAIL', message: '签名验证失败' });
     }
   }

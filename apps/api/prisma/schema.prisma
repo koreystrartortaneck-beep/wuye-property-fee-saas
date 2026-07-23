@@ -247,6 +247,24 @@ enum EntityStatus {
   DISABLED
 }
 
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  DELIVERED
+  FAILED
+}
+
+enum IncidentStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
 // ---------- 租户与组织 ----------
 
 model Tenant {
@@ -1267,4 +1285,83 @@ model UserCoupon {
   @@unique([tenantId, code])
   @@index([tenantId])
   @@index([wxUserId])
+}
+
+// ---------- 运营告警与事件（灰度）----------
+
+model OperationalAlert {
+  id          String        @id @default(cuid())
+  tenantId    String
+  communityId String?
+  alertType   String
+  severity    AlertSeverity @default(WARNING)
+  dedupKey    String
+  title       String
+  summary     String?       @db.Text
+  context     Json?
+  status      AlertStatus   @default(OPEN)
+  occurrences Int           @default(1)
+  incidentId  String?
+  firstSeenAt DateTime      @default(now())
+  lastSeenAt  DateTime      @default(now())
+  deliveredAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @default(now()) @updatedAt
+
+  incident Incident?      @relation(fields: [tenantId, incidentId], references: [tenantId, id])
+  attempts AlertAttempt[]
+
+  @@unique([tenantId, dedupKey])
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, severity])
+  @@index([tenantId, communityId])
+  @@index([tenantId, incidentId])
+}
+
+model AlertAttempt {
+  id         String   @id @default(cuid())
+  tenantId   String
+  alertId    String
+  attemptNo  Int
+  channel    String   @default("WEBHOOK")
+  success    Boolean  @default(false)
+  statusCode Int?
+  error      String?
+  createdAt  DateTime @default(now())
+
+  alert OperationalAlert @relation(fields: [tenantId, alertId], references: [tenantId, id])
+
+  @@unique([tenantId, alertId, attemptNo])
+  @@index([tenantId])
+  @@index([tenantId, alertId])
+}
+
+model Incident {
+  id             String         @id @default(cuid())
+  tenantId       String
+  communityId    String?
+  dedupKey       String
+  title          String
+  severity       AlertSeverity  @default(CRITICAL)
+  status         IncidentStatus @default(OPEN)
+  occurrences    Int            @default(1)
+  openedAt       DateTime       @default(now())
+  lastSeenAt     DateTime       @default(now())
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  resolvedAt     DateTime?
+  resolvedBy     String?
+  reason         String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @default(now()) @updatedAt
+
+  alerts OperationalAlert[]
+
+  @@unique([tenantId, dedupKey])
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, communityId])
 }

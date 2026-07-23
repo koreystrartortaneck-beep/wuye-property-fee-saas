@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { NotifyModule } from './notify/notify.module';
+import { OperationsModule } from './operations/operations.module';
 import { PaymentModule } from './payment/payment.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { AnnouncementsModule } from './announcements/announcements.module';
@@ -29,6 +30,7 @@ import { WxModule } from './wx/wx.module';
     WxModule,
     AuthModule,
     AuditModule,
+    OperationsModule,
     AdminModule,
     OwnerModule,
     NotifyModule,
