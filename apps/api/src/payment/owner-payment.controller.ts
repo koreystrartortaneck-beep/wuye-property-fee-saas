@@ -1,15 +1,19 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { ArrayNotEmpty, IsArray, IsString } from 'class-validator';
+import { IsNotEmpty, IsString } from 'class-validator';
 import { Current, CurrentOwner } from '../auth/current.decorator';
 import { OwnerGuard } from '../auth/owner.guard';
 import { PageQuery } from '../common/pagination';
 import { PaymentService } from './payment.service';
 
+/** 单账单单支付：只接受单个 billId + requestId（幂等）；数组入参由 @IsString 拒绝。 */
 class CreatePaymentDto {
-  @IsArray()
-  @ArrayNotEmpty()
-  @IsString({ each: true })
-  billIds!: string[];
+  @IsString()
+  @IsNotEmpty()
+  billId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  requestId!: string;
 }
 
 @Controller('owner/payments')
@@ -19,7 +23,12 @@ export class OwnerPaymentController {
 
   @Post()
   create(@Current() cur: CurrentOwner, @Body() dto: CreatePaymentDto) {
-    return this.service.createPayment(cur.ownerId, dto.billIds);
+    return this.service.createPayment(cur.ownerId, dto.billId, dto.requestId);
+  }
+
+  @Get('quote/:billId')
+  quote(@Current() cur: CurrentOwner, @Param('billId') billId: string) {
+    return this.service.quoteBill(cur.ownerId, billId);
   }
 
   @Post(':orderNo/sync')

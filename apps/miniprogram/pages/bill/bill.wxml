@@ -12,13 +12,12 @@
     <button class="gold-button state-cta" bindtap="goBind">去绑定房屋</button>
   </view>
 
-  <!-- 汇总细条 -->
+  <!-- 汇总细条（单账单单支付：仅展示待缴合计，逐张在卡片内缴费） -->
   <view wx:if="{{!noHouse}}" class="summary-card">
     <view class="summary-left">
-      <view class="summary-label">{{selectedIds.length > 0 ? '已选 ' + selectedIds.length + ' 笔' : '待缴合计 · ' + unpaidCount + ' 笔'}}</view>
-      <view class="summary-amount amount">¥ {{selectedIds.length > 0 ? selectedTotal : unpaidTotal}}</view>
+      <view class="summary-label">待缴合计 · {{unpaidCount}} 笔</view>
+      <view class="summary-amount amount">¥ {{unpaidTotal}}</view>
     </view>
-    <button class="gold-button summary-btn" bindtap="goPay">{{selectedIds.length > 0 ? '缴纳所选' : '全部缴纳'}}</button>
   </view>
 
   <!-- 筛选区：状态 + 科目 同卡分两行 -->
@@ -52,14 +51,9 @@
         <view class="group-subtotal">{{group.count}} 笔 · ¥{{group.subtotal}}</view>
       </view>
       <block wx:for="{{group.items}}" wx:key="id">
-        <view class="bill-item card {{item.paid ? 'bill-paid' : ''}} {{selMap[item.id] ? 'bill-selected' : ''}}"
+        <view class="bill-item card {{item.paid ? 'bill-paid' : ''}}"
               data-id="{{item.id}}" bindtap="goDetailById">
-          <view wx:if="{{!item.paid}}"
-                class="check-circle {{selMap[item.id] ? 'check-on' : ''}}"
-                data-id="{{item.id}}" catchtap="toggleSelect">
-            <text wx:if="{{selMap[item.id]}}">✓</text>
-          </view>
-          <view wx:else class="bill-dot {{item.theme}}"></view>
+          <view class="bill-dot {{item.theme}}"></view>
 
           <view class="bill-info">
             <view class="bill-name">{{item.title}}</view>
@@ -70,7 +64,8 @@
             <view class="bill-money amount">¥{{item.amount}}</view>
             <view class="status {{item.paid ? 'status-paid' : ''}} {{item.overdue ? 'status-overdue' : ''}}">{{item.status}}</view>
           </view>
-          <view class="chevron">›</view>
+          <button wx:if="{{!item.paid}}" class="gold-button bill-pay-btn" data-id="{{item.id}}" catchtap="payBill">缴费</button>
+          <view wx:else class="chevron">›</view>
         </view>
       </block>
     </block>

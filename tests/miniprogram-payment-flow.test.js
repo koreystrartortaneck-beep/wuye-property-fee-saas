@@ -49,3 +49,37 @@ test('未确认成功时不进入缴费成功页', () => {
   assert.match(source, /waitForPaymentConfirmation/);
   assert.match(source, /confirmed\.status !== 'SUCCESS'/);
 });
+
+test('账单页每张账单独立缴费、去除多选合并', () => {
+  const source = fs.readFileSync(
+    path.join(projectRoot, 'apps/miniprogram/pages/bill/bill.js'),
+    'utf8',
+  );
+  // 单账单支付：提供逐张缴费动作
+  assert.match(source, /payBill/);
+  // 去除多选合并支付的所有行为
+  assert.doesNotMatch(source, /selectedIds/);
+  assert.doesNotMatch(source, /toggleSelect/);
+  assert.doesNotMatch(source, /pendingBills/);
+
+  const wxml = fs.readFileSync(
+    path.join(projectRoot, 'apps/miniprogram/pages/bill/bill.wxml'),
+    'utf8',
+  );
+  assert.doesNotMatch(wxml, /toggleSelect/);
+  assert.doesNotMatch(wxml, /check-circle/);
+});
+
+test('确认页按单账单契约下单并向后端复核金额与收款状态', () => {
+  const source = fs.readFileSync(
+    path.join(projectRoot, 'apps/miniprogram/pages/pay-confirm/pay-confirm.js'),
+    'utf8',
+  );
+  // 单账单契约：billId + requestId，且不再发送 billIds 数组
+  assert.match(source, /billId/);
+  assert.match(source, /requestId/);
+  assert.doesNotMatch(source, /billIds/);
+  // 向后端复核（quote）账单金额与分层收款状态，不再信任本地缓存汇总
+  assert.match(source, /\/owner\/payments\/quote/);
+  assert.doesNotMatch(source, /pendingBills/);
+});

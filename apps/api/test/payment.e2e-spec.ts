@@ -1,8 +1,38 @@
+import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import * as bcrypt from 'bcryptjs';
 import { createTestApp } from './test-app';
 import { PrismaService } from '../src/prisma/prisma.service';
+
+/**
+ * 通过 prisma db execute 子进程运行原始 SQL（含触发器 DDL）。
+ * Prisma 客户端的 $executeRaw 走预处理协议，不支持 CREATE/DROP TRIGGER。
+ */
+function execSql(sql: string): void {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error('payment E2E requires DATABASE_URL');
+  const prismaCli = require.resolve('prisma/build/index.js');
+  const result = spawnSync(
+    process.execPath,
+    [prismaCli, 'db', 'execute', '--stdin', '--url', url],
+    { cwd: join(__dirname, '..'), input: sql, encoding: 'utf8', env: { ...process.env, DATABASE_URL: url }, timeout: 60_000 },
+  );
+  if (result.status !== 0) {
+    throw new Error(`execSql failed:\n${[result.stdout, result.stderr].filter(Boolean).join('\n')}`);
+  }
+}
+
+/** AuditLog 追加只读触发器禁止 DELETE；测试清理临时摘除后按原定义重建。 */
+function purgeAuditLogs(tenantId: string): void {
+  execSql(
+    "DROP TRIGGER IF EXISTS `AuditLog_before_delete_append_only`;\n" +
+      `DELETE FROM \`AuditLog\` WHERE \`tenantId\` = '${tenantId}';\n` +
+      "CREATE TRIGGER `AuditLog_before_delete_append_only` BEFORE DELETE ON `AuditLog` " +
+      "FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AuditLog is append-only: DELETE is forbidden';",
+  );
+}
 
 describe('支付闭环：出账 → 查账 → 合并支付 → PAID', () => {
   let app: INestApplication;
@@ -28,7 +58,7 @@ describe('支付闭环：出账 → 查账 → 合并支付 → PAID', () => {
       await prisma.raw.bill.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.billBatch.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.reconciliationRun.deleteMany({ where: { tenantId: t.id } });
-      await prisma.raw.auditLog.deleteMany({ where: { tenantId: t.id } });
+      purgeAuditLogs(t.id);
       await prisma.raw.idempotencyRecord.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.outboxEvent.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.communityCollectionPolicy.deleteMany({ where: { tenantId: t.id } });
@@ -129,43 +159,64 @@ describe('支付闭环：出账 → 查账 → 合并支付 → PAID', () => {
     expect(res.body.data.total).toBe(3);
   });
 
-  it('合并三张下单', async () => {
+  let firstBillId: string;
+
+  it('数组入参被拒（单账单契约只接受单个 billId）', async () => {
     const bills = await prisma.raw.bill.findMany({ where: { houseId } });
     const res = await request(app.getHttpServer())
       .post('/api/v1/owner/payments')
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ billIds: bills.map((b) => b.id) })
       .expect(200);
-    expect(res.body.code).toBe(0);
-    expect(res.body.data.totalAmount).toBe('262');
-    orderNo = res.body.data.orderNo;
-    expect(orderNo).toMatch(/^WY\d{14}$/);
+    expect(res.body.code).toBe(40000);
   });
 
-  it('进行中订单占用账单，重复下单被拒', async () => {
-    const bills = await prisma.raw.bill.findMany({ where: { houseId } });
+  it('单账单下单：billId + requestId', async () => {
+    const bill = await prisma.raw.bill.findFirst({ where: { houseId, status: 'UNPAID' } });
+    firstBillId = bill!.id;
     const res = await request(app.getHttpServer())
       .post('/api/v1/owner/payments')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ billIds: [bills[0].id] })
+      .send({ billId: firstBillId, requestId: 'e2e-req-1' })
+      .expect(200);
+    expect(res.body.code).toBe(0);
+    orderNo = res.body.data.orderNo;
+    expect(orderNo).toMatch(/^WY\d{14}$/);
+
+    const payment = await prisma.raw.payment.findUnique({ where: { orderNo } });
+    // 新订单写入单账单归属与小区快照
+    expect(payment!.billId).toBe(firstBillId);
+    expect(payment!.communityId).toBe(communityId);
+  });
+
+  it('相同 requestId 幂等重放，返回同一订单', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/owner/payments')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ billId: firstBillId, requestId: 'e2e-req-1' })
+      .expect(200);
+    expect(res.body.code).toBe(0);
+    expect(res.body.data.orderNo).toBe(orderNo);
+  });
+
+  it('进行中订单占用账单，换 requestId 重复下单被拒 43002', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/owner/payments')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ billId: firstBillId, requestId: 'e2e-req-2' })
       .expect(200);
     expect(res.body.code).toBe(43002);
   });
 
-  it('mock 确认：订单 SUCCESS、账单全 PAID、汇总归零', async () => {
+  it('mock 确认：订单 SUCCESS、该账单 PAID', async () => {
     const res = await request(app.getHttpServer())
       .post(`/api/v1/owner/payments/${orderNo}/mock-confirm`)
       .set('Authorization', `Bearer ${ownerToken}`)
       .expect(200);
     expect(res.body.data.status).toBe('SUCCESS');
 
-    const bills = await prisma.raw.bill.findMany({ where: { houseId } });
-    expect(bills.every((b) => b.status === 'PAID')).toBe(true);
-
-    const summary = await request(app.getHttpServer())
-      .get('/api/v1/owner/bills/summary')
-      .set('Authorization', `Bearer ${ownerToken}`);
-    expect(summary.body.data.unpaidCount).toBe(0);
+    const bill = await prisma.raw.bill.findUnique({ where: { id: firstBillId } });
+    expect(bill!.status).toBe('PAID');
   });
 
   it('重复确认幂等', async () => {
@@ -177,22 +228,33 @@ describe('支付闭环：出账 → 查账 → 合并支付 → PAID', () => {
   });
 
   it('已 PAID 账单再下单被拒 43001', async () => {
-    const bill = await prisma.raw.bill.findFirst({ where: { houseId } });
     const res = await request(app.getHttpServer())
       .post('/api/v1/owner/payments')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ billIds: [bill!.id] })
+      .send({ billId: firstBillId, requestId: 'e2e-req-3' })
       .expect(200);
     expect(res.body.code).toBe(43001);
   });
 
-  it('缴费记录含账单明细', async () => {
+  it('缴费记录含单张账单明细', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/v1/owner/payments')
       .set('Authorization', `Bearer ${ownerToken}`)
       .expect(200);
     expect(res.body.data.total).toBe(1);
-    expect(res.body.data.list[0].bills).toHaveLength(3);
+    expect(res.body.data.list[0].bills).toHaveLength(1);
+  });
+
+  it('确认页 quote 复核账单金额与收款状态', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/owner/payments/quote/${firstBillId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(res.body.code).toBe(0);
+    expect(res.body.data.billId).toBe(firstBillId);
+    expect(res.body.data.collection.status).toBe('OPEN');
+    // 已支付账单不可再缴
+    expect(res.body.data.payable).toBe(false);
   });
 
   it('他人不可见此订单', async () => {

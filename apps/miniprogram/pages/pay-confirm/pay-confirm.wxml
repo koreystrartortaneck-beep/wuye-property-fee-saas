@@ -10,12 +10,16 @@
 
   <view class="detail-card card">
     <view class="detail-title">费用明细</view>
-    <block wx:for="{{items}}" wx:key="name">
-      <view class="detail-row">
-        <text>{{item.name}}</text>
-        <text class="amount">¥{{item.amount}}</text>
-      </view>
-    </block>
+    <view class="detail-row">
+      <text>{{title}}</text>
+      <text class="amount">¥{{totalAmount}}</text>
+    </view>
+  </view>
+
+  <!-- 分层暂停收款提示 -->
+  <view wx:if="{{paused}}" class="paused-tip card">
+    <view class="paused-title">当前收款已暂停</view>
+    <view class="paused-desc">{{pausedReason || '请稍后再试或联系物业'}}</view>
   </view>
 
   <view class="method-card card">
@@ -29,5 +33,7 @@
     <view class="check-dot">✓</view>
   </view>
 
-  <button class="dark-button submit-btn" bindtap="submitPay">确认支付 ¥{{totalAmount}}</button>
+  <button class="dark-button submit-btn" bindtap="submitPay" disabled="{{!payable}}">
+    {{payable ? '确认支付 ¥' + totalAmount : (paused ? '收款已暂停' : '暂不可缴费')}}
+  </button>
 </view>

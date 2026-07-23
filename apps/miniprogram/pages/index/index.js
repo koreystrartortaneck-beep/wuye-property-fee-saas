@@ -150,13 +150,8 @@ Page({
     wx.switchTab({ url: '/pages/bill/bill' });
   },
 
-  /** 英雄卡主按钮：有待缴→合并缴纳；已缴清→查看账单 */
+  /** 英雄卡主按钮：单账单单支付，统一进入账单列表逐张缴费 */
   heroAction() {
-    if (this.data.paidUp) {
-      this.goBill();
-      return;
-    }
-    getApp().globalData.pendingBills = this._unpaidBills || [];
-    wx.navigateTo({ url: '/pages/pay-confirm/pay-confirm' });
+    this.goBill();
   },
 });

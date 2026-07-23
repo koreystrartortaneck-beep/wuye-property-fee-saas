@@ -14,14 +14,11 @@ Page({
     // 科目筛选条：首项恒为「全部」
     filters: [{ ruleId: '', name: '全部' }],
     activeRuleId: '',
-    bills: [], // 平铺（选择计算用）
+    bills: [], // 平铺
     groups: [], // 按账期分组（渲染用）[{period, subtotal, count, items}]
     page: 1,
     total: 0,
     loadingMore: false,
-    selectedIds: [],
-    selMap: {}, // WXML 不支持 indexOf()，用查表渲染选中态
-    selectedTotal: '0.00',
     unpaidCount: 0,
     unpaidTotal: '0.00',
   },
@@ -76,7 +73,7 @@ Page({
   },
 
   async reload() {
-    this.setData({ page: 1, bills: [], groups: [], selectedIds: [], selMap: {}, selectedTotal: '0.00' });
+    this.setData({ page: 1, bills: [], groups: [] });
     await this.fetchPage(1);
   },
 
@@ -173,51 +170,10 @@ Page({
     wx.navigateTo({ url: `/pages/bill-detail/bill-detail?id=${e.currentTarget.dataset.id}` });
   },
 
-  /** 左侧勾选圈（catchtap） */
-  toggleSelect(e) {
+  /** 单账单缴费：跳确认页（由确认页向后端复核金额与收款状态后下单） */
+  payBill(e) {
     const id = e.currentTarget.dataset.id;
-    const bill = this.data.bills.find((b) => b.id === id);
-    if (!bill || bill.paid) return;
-    const ids = [...this.data.selectedIds];
-    const pos = ids.indexOf(id);
-    if (pos >= 0) ids.splice(pos, 1);
-    else ids.push(id);
-    const selMap = {};
-    for (const i of ids) selMap[i] = true;
-    const totalCents = this.data.bills
-      .filter((b) => ids.includes(b.id))
-      .reduce((s, b) => s + Math.round(Number(b.amount) * 100), 0);
-    this.setData({ selectedIds: ids, selMap, selectedTotal: (totalCents / 100).toFixed(2) });
-  },
-
-  /** 合并缴纳：勾选的账单；没勾则全部未缴（拉全量，不止当前已加载页） */
-  async goPay() {
-    let chosen;
-    if (this.data.selectedIds.length) {
-      chosen = this.data.bills.filter((b) => !b.paid && this.data.selectedIds.includes(b.id));
-    } else {
-      chosen = await this.fetchAllUnpaid();
-    }
-    if (!chosen || chosen.length === 0) {
-      wx.showToast({ title: '没有可缴纳的账单', icon: 'none' });
-      return;
-    }
-    getApp().globalData.pendingBills = chosen.map((b) => ({ id: b.id, name: b.title, amount: b.amount }));
-    wx.navigateTo({ url: '/pages/pay-confirm/pay-confirm' });
-  },
-
-  /** 拉该房屋全部未缴账单（供"全部缴纳"，避免只缴当前页） */
-  async fetchAllUnpaid() {
-    const house = this.data.house;
-    if (!house) return [];
-    try {
-      const res = await request(`/owner/bills?houseId=${house.houseId}&status=UNPAID&page=1&pageSize=500`, {
-        silent: true,
-      });
-      return (res.list || []).map((b) => ({ id: b.id, title: b.title, amount: Number(b.amount).toFixed(2) }));
-    } catch (e) {
-      wx.showToast({ title: '获取待缴账单失败', icon: 'none' });
-      return [];
-    }
+    if (!id) return;
+    wx.navigateTo({ url: `/pages/pay-confirm/pay-confirm?billId=${id}` });
   },
 });

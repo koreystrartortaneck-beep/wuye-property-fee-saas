@@ -96,7 +96,7 @@ Page({
   goPay() {
     const b = this.data.bill;
     if (!b || b.status !== 'UNPAID') return;
-    getApp().globalData.pendingBills = [{ id: b.id, name: b.title, amount: b.amount }];
-    wx.navigateTo({ url: '/pages/pay-confirm/pay-confirm' });
+    // 单账单单支付：由确认页向后端复核金额与收款状态后下单
+    wx.navigateTo({ url: `/pages/pay-confirm/pay-confirm?billId=${b.id}` });
   },
 });
