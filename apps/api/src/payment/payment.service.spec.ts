@@ -444,4 +444,156 @@ describe('PaymentService', () => {
       expect(tx.payment.updateMany).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('回调证据与不可变收据', () => {
+    const paidBill = { billId: 'bill-1', bill: { title: '物业费', period: '2026-07', amount: { toString: () => '1.00' }, house: { displayName: 'p101', community: { name: '示例小区' } } } };
+
+    function notifyTx() {
+      return {
+        paymentEvent: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({}) },
+        payment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      };
+    }
+
+    it('notify-first：CREATED 订单经回调转 SUCCESS，写回调证据、wxpayNotifiedAt 与不可变收据快照', async () => {
+      const payment = {
+        id: 'payment-1', tenantId: 'tenant-1', communityId: 'community-1', orderNo: 'WY202607220001',
+        totalAmount: { toString: () => '1.00' }, channel: 'WXPAY', status: 'CREATED', transactionId: null,
+        wxpayNotifiedAt: null, paymentBills: [paidBill],
+      };
+      const tx = notifyTx();
+      const prisma = {
+        raw: {
+          payment: { findUnique: jest.fn().mockResolvedValue(payment) },
+          $transaction: jest.fn(async (cb: (client: typeof tx) => unknown) => cb(tx)),
+        },
+      };
+      const service = makeService(prisma);
+
+      await expect(service.handleWxPayNotification(transaction())).resolves.toEqual({
+        orderNo: payment.orderNo, status: 'SUCCESS',
+      });
+      // 回调证据
+      expect(tx.paymentEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ type: 'NOTIFIED', source: 'WXPAY_NOTIFY', paymentId: 'payment-1' }),
+      }));
+      // wxpayNotifiedAt 置位
+      expect(tx.payment.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'payment-1', wxpayNotifiedAt: null },
+        data: expect.objectContaining({ wxpayNotifiedAt: expect.any(Date) }),
+      }));
+      // 成功入账 + 收据快照（唯一收据号、不含付款人身份）
+      const successCall = tx.payment.updateMany.mock.calls.find(
+        ([arg]: [{ data: Record<string, unknown> }]) => arg.data.status === 'SUCCESS',
+      );
+      expect(successCall).toBeDefined();
+      const successData = successCall![0].data as Record<string, unknown>;
+      expect(successData.receiptNo).toBe('RCPT-WY202607220001');
+      expect(successData.confirmedBy).toBe('WXPAY_NOTIFY');
+      const snapshot = successData.receiptSnapshot as Record<string, unknown>;
+      expect(snapshot.orderNo).toBe('WY202607220001');
+      expect(JSON.stringify(snapshot)).not.toContain('openid');
+    });
+
+    it('query-first then notify：已 SUCCESS 仍记录回调证据与 wxpayNotifiedAt，不重复入账', async () => {
+      const payment = {
+        id: 'payment-1', tenantId: 'tenant-1', communityId: 'community-1', orderNo: 'WY202607220001',
+        totalAmount: { toString: () => '1.00' }, channel: 'WXPAY', status: 'SUCCESS',
+        transactionId: '420000000001', wxpayNotifiedAt: null, paymentBills: [paidBill],
+      };
+      const tx = notifyTx();
+      const prisma = {
+        raw: {
+          payment: { findUnique: jest.fn().mockResolvedValue(payment) },
+          $transaction: jest.fn(async (cb: (client: typeof tx) => unknown) => cb(tx)),
+        },
+      };
+      const service = makeService(prisma);
+
+      await expect(service.handleWxPayNotification(transaction())).resolves.toEqual({
+        orderNo: payment.orderNo, status: 'SUCCESS',
+      });
+      expect(tx.paymentEvent.create).toHaveBeenCalled();
+      // 仅证据事务；不再触发成功入账事务
+      expect(prisma.raw.$transaction).toHaveBeenCalledTimes(1);
+      const successCall = tx.payment.updateMany.mock.calls.find(
+        ([arg]: [{ data: Record<string, unknown> }]) => arg.data.status === 'SUCCESS',
+      );
+      expect(successCall).toBeUndefined();
+    });
+
+    it('duplicate notify：重复回调不重复写证据', async () => {
+      const payment = {
+        id: 'payment-1', tenantId: 'tenant-1', communityId: 'community-1', orderNo: 'WY202607220001',
+        totalAmount: { toString: () => '1.00' }, channel: 'WXPAY', status: 'SUCCESS',
+        transactionId: '420000000001', wxpayNotifiedAt: new Date(), paymentBills: [paidBill],
+      };
+      const tx = notifyTx();
+      tx.paymentEvent.findFirst.mockResolvedValue({ id: 'evt-1' });
+      const prisma = {
+        raw: {
+          payment: { findUnique: jest.fn().mockResolvedValue(payment) },
+          $transaction: jest.fn(async (cb: (client: typeof tx) => unknown) => cb(tx)),
+        },
+      };
+      const service = makeService(prisma);
+
+      await service.handleWxPayNotification(transaction());
+      expect(tx.paymentEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('transaction ID uniqueness：已成功但回调交易号不一致时拒绝', async () => {
+      const payment = {
+        id: 'payment-1', tenantId: 'tenant-1', communityId: 'community-1', orderNo: 'WY202607220001',
+        totalAmount: { toString: () => '1.00' }, channel: 'WXPAY', status: 'SUCCESS',
+        transactionId: '420000000001', wxpayNotifiedAt: null, paymentBills: [paidBill],
+      };
+      const tx = notifyTx();
+      const prisma = {
+        raw: {
+          payment: { findUnique: jest.fn().mockResolvedValue(payment) },
+          $transaction: jest.fn(async (cb: (client: typeof tx) => unknown) => cb(tx)),
+        },
+      };
+      const service = makeService(prisma);
+
+      await expect(
+        service.handleWxPayNotification(transaction({ transaction_id: '999999' })),
+      ).rejects.toThrow('交易号不一致');
+    });
+
+    it('非成功订单不返回收据快照', async () => {
+      const prisma = {
+        raw: {
+          payment: { findUnique: jest.fn().mockResolvedValue({
+            id: 'payment-1', wxUserId: 'owner-1', orderNo: 'WY1', totalAmount: '1.00', status: 'CREATED',
+            channel: 'WXPAY', paidAt: null, createdAt: new Date(), receiptSnapshot: null,
+            paymentBills: [{ bill: { title: '物业费', house: { displayName: 'p101', community: { name: '示例小区' } } } }],
+          }) },
+        },
+      };
+      const service = makeService(prisma);
+      const res = await service.getPayment('owner-1', 'WY1');
+      expect(res.receipt).toBeNull();
+      expect(res.receiptVoid).toBe(false);
+    });
+
+    it('退款后的收据标记作废', async () => {
+      const prisma = {
+        raw: {
+          payment: { findUnique: jest.fn().mockResolvedValue({
+            id: 'payment-1', wxUserId: 'owner-1', orderNo: 'WY1', totalAmount: '1.00', status: 'REFUNDED',
+            channel: 'WXPAY', paidAt: new Date(), createdAt: new Date(),
+            receiptNo: 'RCPT-WY1', receiptSnapshot: { orderNo: 'WY1', receiptNo: 'RCPT-WY1' },
+            paymentBills: [{ bill: { title: '物业费', house: { displayName: 'p101', community: { name: '示例小区' } } } }],
+          }) },
+        },
+      };
+      const service = makeService(prisma);
+      const res = await service.getPayment('owner-1', 'WY1');
+      expect(res.receipt).toMatchObject({ receiptNo: 'RCPT-WY1' });
+      expect(res.receiptVoid).toBe(true);
+    });
+  });
 });

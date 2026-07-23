@@ -17,7 +17,7 @@ export class WxPayNotifyController {
     try {
       if (!req.rawBody) throw new Error('支付回调缺少原始请求体');
       const transaction = this.wxPay.parseNotification(req.headers, req.rawBody);
-      await this.paymentService.handleWxPaySuccess(transaction);
+      await this.paymentService.handleWxPayNotification(transaction);
       res.status(200).json({ code: 'SUCCESS', message: '成功' });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

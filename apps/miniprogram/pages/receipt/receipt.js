@@ -1,7 +1,7 @@
 const { request } = require('../../utils/request');
 
 Page({
-  data: { r: null, loading: true, error: false, saving: false },
+  data: { r: null, loading: true, error: false, noReceipt: false, saving: false },
 
   onLoad(options) {
     this.orderNo = options.orderNo || '';
@@ -17,21 +17,29 @@ Page({
     try {
       await getApp().loginReady;
       const p = await request(`/owner/payments/${this.orderNo}`, { silent: true });
-      // 缴费房屋以订单本身对应的房屋为准（后端返回），而非当前选中房屋
-      const houseName = p.house ? `${p.house.communityName || ''} ${p.house.displayName || ''}`.trim() : '';
+      // 仅渲染后端不可变收据快照；无快照（未成功）视为无收据
+      const snap = p.receipt;
+      if (!snap) {
+        this.setData({ loading: false, error: false, r: null, noReceipt: true });
+        return;
+      }
       this.setData({
         loading: false,
         error: false,
+        noReceipt: false,
         r: {
-          orderNo: p.orderNo || '',
-          totalAmount: Number(p.totalAmount || 0).toFixed(2),
-          paidAt: p.paidAt ? String(p.paidAt).replace('T', ' ').slice(0, 19) : '',
-          houseName,
-          items: (p.bills || []).map((b) => ({
+          receiptNo: snap.receiptNo || '',
+          orderNo: snap.orderNo || p.orderNo || '',
+          totalAmount: Number(snap.totalAmount || p.totalAmount || 0).toFixed(2),
+          paidAt: snap.paidAt ? String(snap.paidAt).replace('T', ' ').slice(0, 19) : '',
+          houseName: `${snap.community || ''} ${snap.house || ''}`.trim(),
+          items: (snap.bills || []).map((b) => ({
             title: b.title || '费用',
             amount: Number(b.amount || 0).toFixed(2),
           })),
-          success: p.status === 'SUCCESS',
+          // 收据有效性完全由后端派生：退款订单标记作废
+          void: !!p.receiptVoid,
+          success: !p.receiptVoid,
         },
       });
     } catch (e) {
@@ -45,7 +53,7 @@ Page({
 
   /** 绘制收据为图片并保存到相册（替代不可行的"长按截图"） */
   async saveReceipt() {
-    if (this.data.saving || !this.data.r) return;
+    if (this.data.saving || !this.data.r || this.data.r.void) return;
     this.setData({ saving: true });
     try {
       const filePath = await this.drawToImage();
@@ -120,10 +128,10 @@ Page({
           this._line(ctx, W, y);
           y += 40;
           const rows = [
+            ['收据编号', r.receiptNo || '—'],
             ['缴费房屋', r.houseName || '—'],
             ['订单编号', r.orderNo],
             ['支付时间', r.paidAt || '—'],
-            ['支付方式', '微信支付'],
           ];
           ctx.font = '24px sans-serif';
           rows.forEach((row) => {

@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ErrorCode } from '@pf/shared';
+import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { toCents } from '../billing/engine/money';
 import { BizException } from '../common/biz.exception';
@@ -11,6 +12,19 @@ import { PAYMENT_PROVIDER, PaymentProvider, PaymentProviderError, WxPayTransacti
 
 /** 进行中订单（占用账单）的状态集合 */
 const ACTIVE_PAYMENT_STATUSES = ['CREATED', 'PREPAY_UNKNOWN'] as const;
+
+interface ReceiptBill {
+  title?: string | null;
+  period?: string | null;
+  amount?: unknown;
+  house?: { displayName?: string | null; community?: { name?: string | null } | null } | null;
+}
+interface ReceiptPayment {
+  orderNo: string;
+  channel: string;
+  totalAmount: unknown;
+  paymentBills?: Array<{ bill?: ReceiptBill | null }>;
+}
 
 /**
  * 支付服务（业主端，跨租户经绑定校验 → raw client）。
@@ -223,21 +237,54 @@ export class PaymentService {
     });
   }
 
-  /** 微信支付成功回调：验签解密已由 Provider 完成，此处核对业务订单并幂等入账。 */
-  async handleWxPaySuccess(transaction: WxPayTransaction) {
-    const payment = await this.prisma.raw.payment.findUnique({
-      where: { orderNo: transaction.out_trade_no },
-      include: { paymentBills: true },
-    });
-    if (!payment) throw new Error('支付回调订单不存在');
-    if (payment.channel !== 'WXPAY') throw new Error('支付回调订单渠道不匹配');
+  /** 成功入账时生成的不可变、与付款人无关的收据快照。 */
+  private buildReceipt(
+    payment: ReceiptPayment,
+    paidAt: Date,
+    transactionId: string | null,
+  ): { receiptNo: string; snapshot: Prisma.InputJsonObject } {
+    const receiptNo = `RCPT-${payment.orderNo}`;
+    const bills = (payment.paymentBills ?? []).map((pb) => ({
+      title: pb.bill?.title ?? null,
+      period: pb.bill?.period ?? null,
+      amount: pb.bill?.amount != null ? String(pb.bill.amount) : null,
+    }));
+    const firstHouse = payment.paymentBills?.[0]?.bill?.house ?? null;
+    const snapshot: Prisma.InputJsonObject = {
+      receiptNo,
+      orderNo: payment.orderNo,
+      channel: payment.channel,
+      transactionId: transactionId ?? null,
+      totalAmount: String(payment.totalAmount),
+      paidAt: paidAt.toISOString(),
+      community: firstHouse?.community?.name ?? null,
+      house: firstHouse?.displayName ?? null,
+      bills,
+      issuedAt: new Date().toISOString(),
+    };
+    return { receiptNo, snapshot };
+  }
 
-    const expectedCents = toCents(payment.totalAmount.toString());
-    if (transaction.amount.total !== expectedCents) throw new Error('支付回调金额不一致');
-
+  /**
+   * 幂等成功入账 + 事务内生成不可变收据快照。
+   * source 记录确认来源（回调/查单/mock），供审计与对账区分。
+   */
+  private async applyWxPaySuccess(
+    payment: {
+      id: string;
+      orderNo: string;
+      status: string;
+      transactionId: string | null;
+      channel: string;
+      totalAmount: unknown;
+      paymentBills: Array<{ billId: string; bill?: ReceiptBill | null }>;
+    },
+    transaction: WxPayTransaction,
+    source: 'WXPAY_NOTIFY' | 'WXPAY_QUERY',
+  ): Promise<{ orderNo: string; status: 'SUCCESS' }> {
     if (payment.status === 'SUCCESS') {
       if (payment.transactionId !== transaction.transaction_id) throw new Error('支付回调交易号不一致');
-      return { orderNo: payment.orderNo, status: 'SUCCESS' as const };
+      return { orderNo: payment.orderNo, status: 'SUCCESS' };
     }
     if (!ACTIVE_PAYMENT_STATUSES.includes(payment.status as (typeof ACTIVE_PAYMENT_STATUSES)[number])) {
       throw new Error(`支付回调订单状态不可入账：${payment.status}`);
@@ -245,6 +292,7 @@ export class PaymentService {
 
     const paidAt = transaction.success_time ? new Date(transaction.success_time) : new Date();
     if (Number.isNaN(paidAt.getTime())) throw new Error('支付回调成功时间无效');
+    const { receiptNo, snapshot } = this.buildReceipt(payment, paidAt, transaction.transaction_id);
 
     await this.prisma.raw.$transaction(async (tx) => {
       const updated = await tx.payment.updateMany({
@@ -253,6 +301,10 @@ export class PaymentService {
           status: 'SUCCESS',
           transactionId: transaction.transaction_id,
           paidAt,
+          confirmedBy: source,
+          confirmedAt: new Date(),
+          receiptNo,
+          receiptSnapshot: snapshot,
         },
       });
       if (updated.count === 0) return;
@@ -268,7 +320,87 @@ export class PaymentService {
       if (bills.count !== payment.paymentBills.length) throw new Error('支付订单关联账单状态异常');
     });
 
-    return { orderNo: payment.orderNo, status: 'SUCCESS' as const };
+    return { orderNo: payment.orderNo, status: 'SUCCESS' };
+  }
+
+  private receiptInclude() {
+    return {
+      paymentBills: {
+        include: { bill: { include: { house: { include: { community: { select: { name: true } } } } } } },
+      },
+    };
+  }
+
+  /** 主动查单成功入账（查单来源）：供 sync/cancel/reconcile 复用。 */
+  async handleWxPaySuccess(transaction: WxPayTransaction) {
+    const payment = await this.prisma.raw.payment.findUnique({
+      where: { orderNo: transaction.out_trade_no },
+      include: this.receiptInclude(),
+    });
+    if (!payment) throw new Error('支付回调订单不存在');
+    if (payment.channel !== 'WXPAY') throw new Error('支付回调订单渠道不匹配');
+
+    const expectedCents = toCents(payment.totalAmount.toString());
+    if (transaction.amount.total !== expectedCents) throw new Error('支付回调金额不一致');
+
+    return this.applyWxPaySuccess(payment, transaction, 'WXPAY_QUERY');
+  }
+
+  /**
+   * 微信支付回调：验签解密已由 Provider 完成。
+   * 先持久化回调证据（PaymentEvent + wxpayNotifiedAt，即使已通过查单成功也记录），再幂等成功入账。
+   */
+  async handleWxPayNotification(transaction: WxPayTransaction) {
+    const payment = await this.prisma.raw.payment.findUnique({
+      where: { orderNo: transaction.out_trade_no },
+      include: this.receiptInclude(),
+    });
+    if (!payment) throw new Error('支付回调订单不存在');
+    if (payment.channel !== 'WXPAY') throw new Error('支付回调订单渠道不匹配');
+
+    const expectedCents = toCents(payment.totalAmount.toString());
+    if (transaction.amount.total !== expectedCents) throw new Error('支付回调金额不一致');
+
+    await this.recordNotifyEvidence(payment, transaction);
+    return this.applyWxPaySuccess(payment, transaction, 'WXPAY_NOTIFY');
+  }
+
+  /** 记录回调证据：PaymentEvent(NOTIFIED) 幂等 + 首次置 wxpayNotifiedAt。证据不含付款人身份。 */
+  private async recordNotifyEvidence(
+    payment: { id: string; tenantId: string; communityId: string | null; orderNo: string },
+    transaction: WxPayTransaction,
+  ): Promise<void> {
+    const eventKey = `notify:${payment.orderNo}:${transaction.transaction_id}`;
+    await this.prisma.raw.$transaction(async (tx) => {
+      const existing = await tx.paymentEvent.findFirst({
+        where: { tenantId: payment.tenantId, eventKey },
+      });
+      if (!existing) {
+        await tx.paymentEvent.create({
+          data: {
+            tenantId: payment.tenantId,
+            communityId: payment.communityId,
+            paymentId: payment.id,
+            eventKey,
+            type: 'NOTIFIED',
+            status: 'PROCESSED',
+            source: 'WXPAY_NOTIFY',
+            summary: {
+              transactionId: transaction.transaction_id,
+              tradeState: transaction.trade_state,
+              amountTotal: transaction.amount.total,
+              successTime: transaction.success_time ?? null,
+            },
+            occurredAt: transaction.success_time ? new Date(transaction.success_time) : new Date(),
+            processedAt: new Date(),
+          },
+        });
+      }
+      await tx.payment.updateMany({
+        where: { id: payment.id, wxpayNotifiedAt: null },
+        data: { wxpayNotifiedAt: new Date() },
+      });
+    });
   }
 
   /** mock 确认支付：事务内翻转订单与账单状态；重复调用幂等 */
@@ -280,7 +412,7 @@ export class PaymentService {
     }
     const payment = await this.prisma.raw.payment.findUnique({
       where: { orderNo },
-      include: { paymentBills: true },
+      include: this.receiptInclude(),
     });
     if (!payment || payment.wxUserId !== ownerId) throw new BizException(ErrorCode.NOT_FOUND);
     if (payment.channel !== 'MOCK') throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '真实支付订单不可 mock 确认');
@@ -290,10 +422,20 @@ export class PaymentService {
     }
 
     const paidAt = new Date();
+    const transactionId = `MOCK-${orderNo}`;
+    const { receiptNo, snapshot } = this.buildReceipt(payment, paidAt, transactionId);
     await this.prisma.raw.$transaction(async (tx) => {
       const updated = await tx.payment.updateMany({
         where: { id: payment.id, status: 'CREATED' },
-        data: { status: 'SUCCESS', paidAt, transactionId: `MOCK-${orderNo}` },
+        data: {
+          status: 'SUCCESS',
+          paidAt,
+          transactionId,
+          confirmedBy: 'MOCK',
+          confirmedAt: new Date(),
+          receiptNo,
+          receiptSnapshot: snapshot,
+        },
       });
       if (updated.count === 0) return; // 并发下已被处理
       const bills = await tx.bill.updateMany({
@@ -492,6 +634,10 @@ export class PaymentService {
         const { house: _h, ...bill } = pb.bill as Record<string, unknown>;
         return bill;
       }),
+      // 收据仅渲染后端不可变快照；退款订单标记作废
+      receiptNo: p.receiptNo ?? null,
+      receipt: p.receiptSnapshot ?? null,
+      receiptVoid: p.status === 'REFUNDED',
     };
   }
 }

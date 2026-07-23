@@ -10,6 +10,11 @@
   <button class="rc-retry" bindtap="retry">点击重试</button>
 </view>
 
+<!-- 无收据态（订单未成功入账） -->
+<view wx:elif="{{noReceipt}}" class="rc-state">
+  <view class="rc-state-text">该订单暂无收据</view>
+</view>
+
 <!-- 内容 -->
 <view wx:elif="{{r}}" class="page receipt-page">
   <view class="rc-card card">
@@ -32,18 +37,20 @@
 
     <view class="rc-divider"></view>
 
+    <view class="rc-row"><text class="rc-item">收据编号</text><text class="rc-val">{{r.receiptNo}}</text></view>
     <view class="rc-row"><text class="rc-item">缴费房屋</text><text class="rc-val">{{r.houseName}}</text></view>
     <view class="rc-row"><text class="rc-item">订单编号</text><text class="rc-val">{{r.orderNo}}</text></view>
     <view class="rc-row"><text class="rc-item">支付时间</text><text class="rc-val">{{r.paidAt}}</text></view>
-    <view class="rc-row"><text class="rc-item">支付方式</text><text class="rc-val">微信支付</text></view>
 
     <view class="rc-stamp" wx:if="{{r.success}}">收讫</view>
+    <view class="rc-stamp rc-stamp-void" wx:if="{{r.void}}">已作废</view>
   </view>
 
-  <button class="rc-save gold-button" bindtap="saveReceipt" loading="{{saving}}" disabled="{{saving}}">
+  <view wx:if="{{r.void}}" class="rc-tip">该笔已退款，收据作废</view>
+  <button wx:else class="rc-save gold-button" bindtap="saveReceipt" loading="{{saving}}" disabled="{{saving}}">
     {{saving ? '生成中…' : '保存收据到相册'}}
   </button>
-  <view class="rc-tip">保存后可发送给他人或用于报销</view>
+  <view wx:if="{{!r.void}}" class="rc-tip">保存后可发送给他人或用于报销</view>
 </view>
 
 <!-- 离屏画布：生成收据图片用 -->
