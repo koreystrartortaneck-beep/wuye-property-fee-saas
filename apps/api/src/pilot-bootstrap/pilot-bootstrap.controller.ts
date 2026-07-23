@@ -51,19 +51,22 @@ export class PilotBootstrapController {
     });
     const payments = await p.payment.findMany({
       select: {
-        id: true, orderNo: true, status: true, amount: true, channel: true,
-        transactionId: true, prepayId: true, paidAt: true, createdAt: true,
+        id: true, orderNo: true, status: true, totalAmount: true, channel: true,
+        transactionId: true, wxpayNotifiedAt: true, paidAt: true, createdAt: true,
+        expiresAt: true, failureCode: true, failureMessage: true,
         receiptSnapshot: true, tenantId: true, communityId: true, wxUserId: true,
-        bills: { select: { billId: true } },
+        paymentBills: { select: { billId: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
     const paymentView = payments.map((x: Record<string, unknown>) => ({
-      id: x.id, orderNo: x.orderNo, status: x.status, amount: x.amount, channel: x.channel,
-      hasTransactionId: !!x.transactionId, hasPrepayId: !!x.prepayId,
-      paidAt: x.paidAt, createdAt: x.createdAt, hasReceipt: !!x.receiptSnapshot,
-      billIds: (x.bills as { billId: string }[]).map((b) => b.billId),
+      id: x.id, orderNo: x.orderNo, status: x.status, totalAmount: x.totalAmount, channel: x.channel,
+      hasTransactionId: !!x.transactionId, wxpayNotifiedAt: x.wxpayNotifiedAt,
+      paidAt: x.paidAt, createdAt: x.createdAt, expiresAt: x.expiresAt,
+      failureCode: x.failureCode, failureMessage: x.failureMessage,
+      hasReceipt: !!x.receiptSnapshot,
+      billIds: (x.paymentBills as { billId: string }[]).map((b) => b.billId),
     }));
     const scope = {
       WX_PAY_ALLOWED_TENANT_ID: process.env.WX_PAY_ALLOWED_TENANT_ID || null,
