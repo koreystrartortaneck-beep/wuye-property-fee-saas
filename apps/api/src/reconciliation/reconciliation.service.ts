@@ -297,7 +297,8 @@ export class ReconciliationService {
     localTotals: { count: number; cents: number },
     workerId: string,
   ): Promise<void> {
-    const openCount = drafts.filter((d) => d.status !== 'AUTO_RESOLVED').length;
+    // 与 reconcile() 返回口径一致：未决差异 = OPEN + ESCALATED（AUTO_RESOLVED 不计）
+    const openCount = drafts.filter((d) => d.status === 'OPEN' || d.status === 'ESCALATED').length;
     const diffCents = drafts.reduce((s, d) => s + Math.abs(toCents(d.channelAmount ?? '0') - toCents(d.localAmount ?? '0')), 0);
     await this.prisma.raw.$transaction(async (tx) => {
       for (const d of drafts) {
@@ -333,7 +334,11 @@ export class ReconciliationService {
           channelAmount: (bill.totalAmountCents / 100).toFixed(2),
           localRecordCount: localTotals.count,
           localAmount: (localTotals.cents / 100).toFixed(2),
-          matchedRecordCount: Math.max(0, bill.recordCount - drafts.length),
+          // 匹配数只减「对应渠道记录」的差异；CHANNEL_MISSING 为本地独有、不在渠道对账单内，不参与扣减
+          matchedRecordCount: Math.max(
+            0,
+            bill.recordCount - drafts.filter((d) => d.differenceType !== 'CHANNEL_MISSING').length,
+          ),
           differenceRecordCount: openCount,
           differenceAmount: (diffCents / 100).toFixed(2),
           leaseOwner: null,

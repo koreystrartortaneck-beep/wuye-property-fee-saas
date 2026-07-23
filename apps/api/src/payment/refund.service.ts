@@ -417,9 +417,14 @@ export class RefundService {
     });
   }
 
-  async getRefund(orderNo: string) {
+  /** 按订单号查退款。actingTenantId 非空（租户管理员）时强制限定本租户，防跨租户越权读取；
+   *  null 表示平台超管，可跨租户查看。 */
+  async getRefund(orderNo: string, actingTenantId?: string | null) {
     const refund = await this.prisma.raw.refund.findFirst({
-      where: { paymentOrderNo: orderNo },
+      where: {
+        paymentOrderNo: orderNo,
+        ...(actingTenantId ? { tenantId: actingTenantId } : {}),
+      },
       include: { attempts: { orderBy: { attemptNo: 'asc' } } },
     });
     if (!refund) throw new BizException(ErrorCode.NOT_FOUND);

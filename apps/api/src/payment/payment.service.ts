@@ -584,6 +584,12 @@ export class PaymentService {
     });
     if (!binding) throw new BizException(ErrorCode.NO_BINDING);
     const collection = await this.collectionPolicy.resolveEffectiveStatus(bill.tenantId, bill.communityId);
+    // 占用校验：被进行中订单（CREATED/PREPAY_UNKNOWN）占用的账单，虽仍 UNPAID 但此刻不可再发起支付，
+    // 否则确认页显示"可付"、点击却被 createPayment 以"存在进行中的支付"拒绝。
+    const occupied = await this.prisma.raw.paymentBill.findFirst({
+      where: { billId: bill.id, payment: { status: { in: [...ACTIVE_PAYMENT_STATUSES] } } },
+      select: { billId: true },
+    });
     return {
       billId: bill.id,
       title: bill.title,
@@ -592,7 +598,8 @@ export class PaymentService {
       period: bill.period,
       house: { displayName: bill.house.displayName, communityName: bill.house.community.name },
       collection,
-      payable: bill.status === 'UNPAID' && collection.status === 'OPEN',
+      pendingOrder: !!occupied,
+      payable: bill.status === 'UNPAID' && collection.status === 'OPEN' && !occupied,
     };
   }
 
@@ -638,6 +645,14 @@ export class PaymentService {
     if (!p || p.wxUserId !== ownerId) throw new BizException(ErrorCode.NOT_FOUND);
     // 收据房屋以「订单本身对应的房屋」为准（取首张账单的房屋），而非当前选中房屋
     const firstHouse = p.paymentBills[0]?.bill?.house ?? null;
+    // 收据：优先不可变快照；发布前已支付的历史订单无快照 → 按订单当前数据回退生成，保证老收据不消失
+    let receiptNo = p.receiptNo ?? null;
+    let receipt: unknown = p.receiptSnapshot ?? null;
+    if (!receipt && (p.status === 'SUCCESS' || p.status === 'REFUNDED')) {
+      const fb = this.buildReceipt(p, p.paidAt ?? p.createdAt, null);
+      receiptNo = fb.receiptNo;
+      receipt = fb.snapshot;
+    }
     return {
       orderNo: p.orderNo,
       totalAmount: p.totalAmount,
@@ -652,9 +667,9 @@ export class PaymentService {
         const { house: _h, ...bill } = pb.bill as Record<string, unknown>;
         return bill;
       }),
-      // 收据仅渲染后端不可变快照；退款订单标记作废
-      receiptNo: p.receiptNo ?? null,
-      receipt: p.receiptSnapshot ?? null,
+      // 收据：不可变快照优先，历史订单回退生成；退款订单标记作废
+      receiptNo,
+      receipt,
       receiptVoid: p.status === 'REFUNDED',
     };
   }

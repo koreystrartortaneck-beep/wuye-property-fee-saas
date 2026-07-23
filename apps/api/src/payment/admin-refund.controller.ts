@@ -37,7 +37,7 @@ export class AdminRefundController {
   }
 
   @Get(':orderNo')
-  get(@Param('orderNo') orderNo: string) {
-    return this.service.getRefund(orderNo);
+  get(@Current() cur: CurrentAdmin, @Param('orderNo') orderNo: string) {
+    return this.service.getRefund(orderNo, cur.tenantId);
   }
 }

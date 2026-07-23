@@ -89,7 +89,9 @@ function redactString(value: string): string {
       return `${scheme} ${REDACTED_VALUE}`;
     })
     .replace(/\b[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, REDACTED_VALUE)
-    .replace(/(^|\D)1[3-9]\d{9}(?=\D|$)/g, (_match, prefix: string) => `${prefix}${REDACTED_VALUE}`);
+    // 仅脱敏「独立」的 11 位手机号（前后非字母数字），避免误伤 nonceStr/prepay_id/base64 等
+    // 不透明串里恰好出现的 11 位数字段（否则会污染微信支付 payParams 导致重放签名失败）。
+    .replace(/(^|[^0-9A-Za-z])1[3-9]\d{9}(?![0-9A-Za-z])/g, (_match, prefix: string) => `${prefix}${REDACTED_VALUE}`);
 }
 
 function invalidJsonSummary(): never {
