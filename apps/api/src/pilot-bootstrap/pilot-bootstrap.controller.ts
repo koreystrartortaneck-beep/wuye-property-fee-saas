@@ -75,6 +75,9 @@ export class PilotBootstrapController {
       });
     }
 
+    const scopeTenant = process.env.WX_PAY_ALLOWED_TENANT_ID || null;
+    const scopeCommunity = process.env.WX_PAY_ALLOWED_COMMUNITY_ID || null;
+
     return {
       tenantId: tenant.id,
       communityId: community.id,
@@ -82,6 +85,14 @@ export class PilotBootstrapController {
       adminPassword: ADMIN_PW,
       billId: bill.id,
       ownerPhone: PHONE,
+      // 支付商户范围自检：两项都为 true 才能付款
+      payScope: {
+        tenantEnvSet: scopeTenant !== null,
+        communityEnvSet: scopeCommunity !== null,
+        tenantMatches: scopeTenant === tenant.id,
+        communityMatches: scopeCommunity === community.id,
+        ready: scopeTenant === tenant.id && scopeCommunity === community.id,
+      },
     };
   }
 }
