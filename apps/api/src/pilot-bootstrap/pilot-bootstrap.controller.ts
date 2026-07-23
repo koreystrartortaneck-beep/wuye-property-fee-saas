@@ -41,7 +41,7 @@ export class PilotBootstrapController {
       },
     });
     const bills = await p.bill.findMany({
-      where: { status: { in: ['UNPAID', 'PARTIAL'] } },
+      where: { status: 'UNPAID' },
       select: {
         id: true, title: true, period: true, amount: true, status: true,
         tenantId: true, communityId: true, houseId: true,
