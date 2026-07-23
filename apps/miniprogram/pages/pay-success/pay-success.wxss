@@ -97,3 +97,10 @@
 .page.success-page {
   padding-top: 32rpx;
 }
+
+.invoice-tip {
+  margin: 24rpx 32rpx 0;
+  text-align: center;
+  font-size: 26rpx;
+  color: #9b743a;
+}

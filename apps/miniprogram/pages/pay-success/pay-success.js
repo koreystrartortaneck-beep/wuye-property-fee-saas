@@ -1,4 +1,5 @@
 const { request } = require('../../utils/request');
+const { canApplyInvoice } = require('../../utils/invoice');
 
 Page({
   data: {
@@ -6,6 +7,7 @@ Page({
     orderNo: '',
     payTime: '',
     house: '',
+    canInvoice: false,
   },
 
   async onLoad(options) {
@@ -26,10 +28,17 @@ Page({
         house: order.house
           ? `${order.house.communityName || ''} ${order.house.displayName || ''}`.trim()
           : this.data.house,
+        // 开票资格由后端订单状态派生
+        canInvoice: canApplyInvoice(order),
       });
     } catch (e) {
       // 拉单失败不影响"缴费成功"结论，凭证字段留空即可
     }
+  },
+
+  goInvoice() {
+    if (!this.data.orderNo || !this.data.canInvoice) return;
+    wx.navigateTo({ url: `/pages/invoice-apply/invoice-apply?orderNo=${this.data.orderNo}` });
   },
 
   backHome() {

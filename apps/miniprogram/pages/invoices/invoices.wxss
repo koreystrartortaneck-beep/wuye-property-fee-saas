@@ -1,0 +1,49 @@
+.invoices-page {
+  padding: 32rpx;
+}
+
+.inv-item {
+  padding: 28rpx 32rpx;
+  margin-bottom: 20rpx;
+}
+
+.inv-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.inv-amount {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #2e1a47;
+}
+
+.inv-status {
+  font-size: 26rpx;
+  color: #9a9288;
+}
+
+.inv-status.ok {
+  color: #4c9a72;
+}
+
+.inv-title {
+  margin-top: 14rpx;
+  font-size: 28rpx;
+  color: #55496b;
+}
+
+.inv-meta {
+  margin-top: 14rpx;
+  display: flex;
+  justify-content: space-between;
+  font-size: 22rpx;
+  color: #9a9288;
+}
+
+.inv-no {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #9b743a;
+}

@@ -46,3 +46,20 @@
 .page.payments-page {
   padding-top: 32rpx;
 }
+
+.nav-link {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #9b743a;
+}
+
+.pay-item-status.refunded {
+  color: #b46a6a;
+}
+
+.pay-item-invoice {
+  margin-top: 16rpx;
+  text-align: right;
+  font-size: 24rpx;
+  color: #9b743a;
+}

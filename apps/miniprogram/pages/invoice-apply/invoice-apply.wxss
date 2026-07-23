@@ -1,0 +1,82 @@
+.invoice-apply-page {
+  padding: 32rpx;
+}
+
+.head-card {
+  padding: 40rpx;
+  text-align: center;
+}
+
+.head-label {
+  font-size: 24rpx;
+  color: #9a9288;
+}
+
+.head-amount {
+  margin-top: 12rpx;
+  font-size: 64rpx;
+  font-weight: 700;
+  color: #2e1a47;
+}
+
+.head-order {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #9a9288;
+}
+
+.form-card {
+  margin-top: 24rpx;
+  padding: 24rpx 32rpx;
+}
+
+.field {
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #f0e9dd;
+}
+
+.field:last-of-type {
+  border-bottom: none;
+}
+
+.field-label {
+  font-size: 26rpx;
+  color: #55496b;
+  margin-bottom: 14rpx;
+}
+
+.field-input {
+  font-size: 30rpx;
+  color: #2e1a47;
+}
+
+.seg {
+  display: flex;
+  gap: 16rpx;
+}
+
+.seg-item {
+  flex: 1;
+  text-align: center;
+  padding: 18rpx 0;
+  border-radius: 12rpx;
+  background: #f3eee4;
+  color: #7a7264;
+  font-size: 28rpx;
+}
+
+.seg-item.active {
+  background: #9b743a;
+  color: #fff;
+}
+
+.tip {
+  margin-top: 20rpx;
+  font-size: 22rpx;
+  color: #9a9288;
+  line-height: 1.6;
+}
+
+.submit-btn {
+  margin-top: 40rpx;
+}

@@ -1,4 +1,5 @@
 const { request } = require('../../utils/request');
+const { canApplyInvoice } = require('../../utils/invoice');
 
 const STATUS_LABEL = {
   CREATED: '待支付',
@@ -6,6 +7,7 @@ const STATUS_LABEL = {
   FAILED: '支付失败',
   CLOSED: '已关闭',
   REFUNDED: '已退款',
+  PREPAY_UNKNOWN: '结果待确认',
 };
 
 Page({
@@ -48,6 +50,9 @@ Page({
       totalAmount: Number(p.totalAmount).toFixed(2),
       statusLabel: STATUS_LABEL[p.status] || p.status,
       success: p.status === 'SUCCESS',
+      refunded: p.status === 'REFUNDED',
+      // 开票资格完全由订单状态派生：仅成功且未退款订单可开票
+      canInvoice: canApplyInvoice(p),
       time: (p.paidAt || p.createdAt || '').replace('T', ' ').slice(0, 16),
       billTitles: (p.bills || []).map((b) => b.title).join(' · '),
     }));
@@ -81,5 +86,17 @@ Page({
     const item = this.data.list[Number(e.currentTarget.dataset.index)];
     if (!item || !item.success) return;
     wx.navigateTo({ url: `/pages/receipt/receipt?orderNo=${item.orderNo}` });
+  },
+
+  /** 成功且未退款订单 → 申请开票 */
+  goInvoice(e) {
+    const item = this.data.list[Number(e.currentTarget.dataset.index)];
+    if (!item || !item.canInvoice) return;
+    wx.navigateTo({ url: `/pages/invoice-apply/invoice-apply?orderNo=${item.orderNo}` });
+  },
+
+  /** 我的开票记录 */
+  goInvoices() {
+    wx.navigateTo({ url: '/pages/invoices/invoices' });
   },
 });

@@ -28,6 +28,8 @@
     </view>
   </view>
 
+  <view wx:if="{{canInvoice}}" class="invoice-tip" bindtap="goInvoice">需要发票？点此申请开票 ›</view>
+
   <view class="action-row">
     <button class="gold-button ghost-btn" bindtap="viewReceipt">电子收据</button>
     <button class="dark-button action-btn" bindtap="backHome">返回首页</button>

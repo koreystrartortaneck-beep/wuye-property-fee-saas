@@ -43,6 +43,8 @@ Page({
     unpaidTotal: '0.00',
     unpaidCount: 0,
     paidUp: false, // 本期已缴清
+    collectionPaused: false, // 物业是否暂停线上收款（由后端分层策略派生）
+    pausedReason: '',
     feed: [], // 社区动态：公告 + 物业公示混排
   },
 
@@ -98,6 +100,28 @@ Page({
       paidUp: summary.unpaidCount === 0,
       feed: buildFeed(anns, works.list).slice(0, 3),
     });
+    // 有待缴账单时，向后端复核分层收款状态，暂停则给出提示（收款状态完全由后端派生）
+    await this.refreshCollectionState();
+  },
+
+  /** 借用首张待缴账单的报价复核该小区收款是否暂停，不新增专用接口。 */
+  async refreshCollectionState() {
+    const first = (this._unpaidBills || [])[0];
+    if (!first) {
+      this.setData({ collectionPaused: false, pausedReason: '' });
+      return;
+    }
+    try {
+      const quote = await request(`/owner/payments/quote/${first.id}`, { silent: true });
+      const paused = !!(quote.collection && quote.collection.status === 'PAUSED');
+      this.setData({
+        collectionPaused: paused,
+        pausedReason: (quote.collection && quote.collection.reason) || '',
+      });
+    } catch (e) {
+      // 复核失败不影响首页展示
+      this.setData({ collectionPaused: false, pausedReason: '' });
+    }
   },
 
   async onPullDownRefresh() {

@@ -8,6 +8,8 @@
     "pages/mine/mine",
     "pages/bind-house/bind-house",
     "pages/payments/payments",
+    "pages/invoice-apply/invoice-apply",
+    "pages/invoices/invoices",
     "pages/bill-detail/bill-detail",
     "pages/tickets/tickets",
     "pages/ticket-create/ticket-create",

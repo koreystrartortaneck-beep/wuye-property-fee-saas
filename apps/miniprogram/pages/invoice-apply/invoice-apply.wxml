@@ -1,0 +1,43 @@
+<view class="page invoice-apply-page">
+  <view wx:if="{{!loaded}}" class="state">
+    <view class="state-spinner"></view>
+    <view class="state-text">加载中…</view>
+  </view>
+
+  <block wx:elif="{{eligible}}">
+    <view class="card head-card">
+      <view class="head-label">本次开票金额（元）</view>
+      <view class="head-amount amount">¥ {{amount}}</view>
+      <view class="head-order">订单号 {{orderNo}}</view>
+    </view>
+
+    <view class="card form-card">
+      <view class="field">
+        <view class="field-label">抬头类型</view>
+        <view class="seg">
+          <view class="seg-item {{titleType === 'PERSONAL' ? 'active' : ''}}" data-type="PERSONAL" bindtap="setTitleType">个人</view>
+          <view class="seg-item {{titleType === 'ENTERPRISE' ? 'active' : ''}}" data-type="ENTERPRISE" bindtap="setTitleType">企业</view>
+        </view>
+      </view>
+
+      <view class="field">
+        <view class="field-label">发票抬头</view>
+        <input class="field-input" data-field="title" value="{{title}}" bindinput="onInput" placeholder="{{titleType === 'ENTERPRISE' ? '公司全称' : '个人姓名'}}" />
+      </view>
+
+      <view wx:if="{{titleType === 'ENTERPRISE'}}" class="field">
+        <view class="field-label">纳税人识别号</view>
+        <input class="field-input" data-field="taxNo" value="{{taxNo}}" bindinput="onInput" placeholder="统一社会信用代码" />
+      </view>
+
+      <view class="field">
+        <view class="field-label">接收邮箱</view>
+        <input class="field-input" data-field="email" value="{{email}}" bindinput="onInput" placeholder="用于接收电子发票（可选）" />
+      </view>
+
+      <view class="tip">本系统仅登记开票申请，实际发票由物业开具后通过邮箱送达。</view>
+    </view>
+
+    <button class="dark-button submit-btn" loading="{{submitting}}" bindtap="submit">提交开票申请</button>
+  </block>
+</view>

@@ -1,0 +1,31 @@
+<view class="page invoices-page">
+  <view wx:if="{{loading && list.length === 0}}" class="state">
+    <view class="state-spinner"></view>
+    <view class="state-text">加载中…</view>
+  </view>
+  <view wx:elif="{{error && list.length === 0}}" class="state">
+    <view class="state-icon">⚠️</view>
+    <view class="state-text">加载失败，请检查网络</view>
+    <button class="state-retry" bindtap="retry">点击重试</button>
+  </view>
+
+  <view class="inv-list">
+    <block wx:for="{{list}}" wx:key="id">
+      <view class="inv-item card">
+        <view class="inv-top">
+          <view class="inv-amount amount">¥{{item.amount}}</view>
+          <view class="inv-status {{item.issued ? 'ok' : ''}}">{{item.statusLabel}}</view>
+        </view>
+        <view class="inv-title">{{item.titleTypeLabel}} · {{item.title}}</view>
+        <view class="inv-meta">
+          <text>{{item.applicationNo}}</text>
+          <text>{{item.time}}</text>
+        </view>
+        <view wx:if="{{item.invoiceNo}}" class="inv-no">发票号 {{item.invoiceNo}}</view>
+      </view>
+    </block>
+    <view wx:if="{{!loading && !error && list.length === 0}}" class="inv-item card">
+      <view class="inv-title">暂无开票记录</view>
+    </view>
+  </view>
+</view>

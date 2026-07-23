@@ -1,6 +1,7 @@
 <view class="page payments-page">
   <view class="nav-title">缴费记录</view>
   <view class="nav-subtitle">每一笔付款均可追溯</view>
+  <view class="nav-link" bindtap="goInvoices">我的开票记录 ›</view>
 
   <view wx:if="{{loading && list.length === 0}}" class="state">
     <view class="state-spinner"></view>
@@ -17,13 +18,14 @@
       <view class="pay-item card" data-index="{{index}}" bindtap="goReceipt">
         <view class="pay-item-top">
           <view class="pay-item-amount amount">¥{{item.totalAmount}}</view>
-          <view class="pay-item-status {{item.success ? 'ok' : ''}}">{{item.statusLabel}}{{item.success ? ' · 收据 ›' : ''}}</view>
+          <view class="pay-item-status {{item.success ? 'ok' : ''}} {{item.refunded ? 'refunded' : ''}}">{{item.statusLabel}}{{item.success ? ' · 收据 ›' : ''}}</view>
         </view>
         <view class="pay-item-bills">{{item.billTitles}}</view>
         <view class="pay-item-meta">
           <text>{{item.orderNo}}</text>
           <text>{{item.time}}</text>
         </view>
+        <view wx:if="{{item.canInvoice}}" class="pay-item-invoice" catchtap="goInvoice" data-index="{{index}}">申请开票 ›</view>
       </view>
     </block>
     <view wx:if="{{!loading && !error && list.length === 0}}" class="pay-item card">

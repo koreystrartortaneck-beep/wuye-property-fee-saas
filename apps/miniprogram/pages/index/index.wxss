@@ -446,3 +446,13 @@
   font-size: 21rpx;
   color: #a79eb5;
 }
+
+.pause-hint {
+  margin-top: 20rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 12rpx;
+  background: rgba(180, 106, 106, 0.16);
+  color: #f3d9d9;
+  font-size: 22rpx;
+  line-height: 1.5;
+}

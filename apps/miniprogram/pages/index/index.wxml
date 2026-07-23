@@ -47,6 +47,7 @@
           </view>
           <button class="gold-button pay-btn" bindtap="heroAction">{{paidUp ? '查看账单' : '立即缴纳'}}</button>
         </view>
+        <view wx:if="{{collectionPaused}}" class="pause-hint">物业已暂停线上收款{{pausedReason ? '：' + pausedReason : ''}}，如需缴费请联系物业</view>
       </view>
     </view>
 
