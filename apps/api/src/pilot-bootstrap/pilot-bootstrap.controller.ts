@@ -121,25 +121,27 @@ export class PilotBootstrapController {
     };
   }
 
-  /** 给指定房屋补一张 1 分钱未支付测试账单（幂等）。 */
+  /** 给指定房屋补一张 1 分钱未支付测试账单（幂等）。x-bill-tag 可指定唯一标题以新建全新未付账单。 */
   @Post('bill')
   async makeBill(
     @Headers('x-bootstrap-token') token?: string,
     @Headers('x-house-id') houseId?: string,
+    @Headers('x-bill-tag') tag?: string,
   ) {
     this.assert(token);
     const p = this.prisma.raw;
     if (!houseId) throw new BizException(ErrorCode.NOT_FOUND);
     const house = await p.house.findUnique({ where: { id: houseId } });
     if (!house) throw new BizException(ErrorCode.NOT_FOUND);
+    const title = tag ? `物业费（联调测试-${tag}）` : '物业费（联调测试）';
     let bill = await p.bill.findFirst({
-      where: { houseId: house.id, period: '2026-07', title: '物业费（联调测试）' },
+      where: { houseId: house.id, period: '2026-07', title },
     });
     if (!bill) {
       bill = await p.bill.create({
         data: {
           tenantId: house.tenantId, communityId: house.communityId, houseId: house.id,
-          period: '2026-07', title: '物业费（联调测试）', amount: '0.01',
+          period: '2026-07', title, amount: '0.01',
           dueDate: new Date(Date.now() + 30 * 86400000), status: 'UNPAID', source: 'IMPORT', snapshot: {},
         },
       });
