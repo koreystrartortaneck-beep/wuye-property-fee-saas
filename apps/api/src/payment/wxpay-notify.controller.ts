@@ -16,7 +16,7 @@ export class WxPayNotifyController {
   ) {}
 
   @Post('notify')
-  async notify(req: RawBodyRequest<Request>, @Res() res: Response): Promise<void> {
+  async notify(@Req() req: RawBodyRequest<Request>, @Res() res: Response): Promise<void> {
     try {
       if (!req.rawBody) throw new Error('支付回调缺少原始请求体');
       const transaction = this.wxPay.parseNotification(req.headers, req.rawBody);

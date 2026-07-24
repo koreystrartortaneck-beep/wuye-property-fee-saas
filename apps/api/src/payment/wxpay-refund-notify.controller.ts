@@ -16,7 +16,7 @@ export class WxPayRefundNotifyController {
   ) {}
 
   @Post('refund-notify')
-  async notify(req: RawBodyRequest<Request>, @Res() res: Response): Promise<void> {
+  async notify(@Req() req: RawBodyRequest<Request>, @Res() res: Response): Promise<void> {
     try {
       if (!req.rawBody) throw new Error('退款回调缺少原始请求体');
       const refund = this.wxPay.parseRefundNotification(req.headers, req.rawBody);
