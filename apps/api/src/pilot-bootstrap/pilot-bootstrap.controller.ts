@@ -239,6 +239,38 @@ export class PilotBootstrapController {
     return { disabledAdmins: report };
   }
 
+  /**
+   * 造/重置后台管理员（联调用，弱口令允许——绕过强口令校验，raw 插入）。
+   * x-username / x-password / x-admin-tenant-id（可空=SUPER_ADMIN 平台超管）/ x-role。
+   */
+  @Post('mkadmin')
+  async mkadmin(
+    @Headers('x-bootstrap-token') token?: string,
+    @Headers('x-username') username?: string,
+    @Headers('x-password') password?: string,
+    @Headers('x-admin-tenant-id') tenantId?: string,
+    @Headers('x-role') role?: string,
+  ) {
+    this.assert(token);
+    const p = this.prisma.raw;
+    if (!username || !password) throw new BizException(ErrorCode.VALIDATION, '缺少用户名/密码');
+    const r = (role as string) || 'TENANT_ADMIN';
+    const tid = tenantId || null;
+    const hash = await bcrypt.hash(password, 10);
+    const existing = await p.adminUser.findUnique({ where: { username } });
+    if (existing) {
+      await p.adminUser.update({
+        where: { username },
+        data: { passwordHash: hash, status: 'ACTIVE', role: r as never, tenantId: tid, mustChangePassword: false, tokenVersion: { increment: 1 } },
+      });
+    } else {
+      await p.adminUser.create({
+        data: { username, passwordHash: hash, name: username, role: r as never, tenantId: tid, mustChangePassword: false },
+      });
+    }
+    return { username, role: r, tenantId: tid, action: existing ? 'reset' : 'created' };
+  }
+
   @Post()
   async run(@Headers('x-bootstrap-token') token?: string) {
     this.assert(token);
