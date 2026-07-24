@@ -23,8 +23,11 @@ export class PilotBootstrapController {
   ) {}
 
   private assert(token?: string) {
+    // 默认关闭：仅当显式设置 ENABLE_PILOT_BOOTSTRAP=true 时端点才可用（收尾后默认失效，
+    // 即使聊天里泄露过的 JWT_SECRET 也打不进来）。需要时在控制台临时打开、用完关掉。
+    const enabled = process.env.ENABLE_PILOT_BOOTSTRAP === 'true';
     const expected = process.env.JWT_SECRET || '';
-    if (!expected || !token || token !== expected) {
+    if (!enabled || !expected || !token || token !== expected) {
       throw new BizException(ErrorCode.NOT_FOUND); // 不暴露端点存在
     }
   }
