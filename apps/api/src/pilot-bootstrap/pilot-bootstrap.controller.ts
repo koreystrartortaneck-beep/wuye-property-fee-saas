@@ -35,6 +35,9 @@ export class PilotBootstrapController {
     this.assert(token);
     const p = this.prisma.raw;
     const tenants = await p.tenant.findMany({ select: { id: true, name: true, code: true } });
+    const adminUsers = await p.adminUser.findMany({
+      select: { username: true, status: true, role: true, tenantId: true },
+    });
     const communities = await p.community.findMany({
       select: { id: true, name: true, tenantId: true },
     });
@@ -116,7 +119,7 @@ export class PilotBootstrapController {
       PAY_MODE: process.env.PAY_MODE || null,
     };
     return {
-      tenants, communities, houses, unpaidBills: bills, recentBills,
+      tenants, adminUsers, communities, houses, unpaidBills: bills, recentBills,
       payments: paymentView, refunds, paymentEvents: events, callbackAlerts: alerts, scope,
     };
   }
@@ -208,6 +211,29 @@ export class PilotBootstrapController {
     if (!refundNo) throw new BizException(ErrorCode.VALIDATION, '缺少 x-refund-no');
     const result = await this.refundService.recoverRefund(refundNo);
     return { refundNo, result };
+  }
+
+  /**
+   * 收尾清理：禁用联调期临时管理员（密码在聊天/提交里出现过，属弱口令暴露），置 DISABLED 并吊销令牌。
+   * 不删除任何租户/账单/支付数据（真伪待你上线时定夺，且删除有 FK/审计触发器风险）。
+   */
+  @Post('cleanup')
+  async cleanup(@Headers('x-bootstrap-token') token?: string) {
+    this.assert(token);
+    const p = this.prisma.raw;
+    const report: Record<string, string> = {};
+    for (const username of ['gangcheng', 'pilotops']) {
+      try {
+        const r = await p.adminUser.updateMany({
+          where: { username },
+          data: { status: 'DISABLED', tokenVersion: { increment: 1 } },
+        });
+        report[username] = r.count > 0 ? 'DISABLED' : 'not found';
+      } catch (e) {
+        report[username] = `ERR ${(e as Error).message}`;
+      }
+    }
+    return { disabledAdmins: report };
   }
 
   @Post()
