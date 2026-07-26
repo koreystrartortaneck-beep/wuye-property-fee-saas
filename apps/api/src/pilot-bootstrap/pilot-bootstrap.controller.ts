@@ -47,7 +47,7 @@ export class PilotBootstrapController {
       take: 20,
     });
     const bindings = await p.houseBinding.findMany({
-      select: { id: true, wxUserId: true, houseId: true, status: true, role: true, source: true },
+      select: { id: true, wxUserId: true, houseId: true, status: true, relation: true, source: true, tenantId: true },
       take: 20,
     });
     const communities = await p.community.findMany({
