@@ -29,6 +29,11 @@ export class OwnerHousesService {
 
   /** 断言业主对房屋有 ACTIVE 绑定，否则 41001（账单/支付复用） */
   async assertOwnerHouse(ownerId: string, houseId: string): Promise<void> {
+    // 缺 houseId 时必须显式报参数错误：否则 Prisma 复合唯一键收到 undefined 会抛出，
+    // 被兜底成 500「服务器内部错误」，掩盖真实原因（缺参）。
+    if (typeof houseId !== 'string' || !houseId) {
+      throw new BizException(ErrorCode.VALIDATION, '缺少房屋参数');
+    }
     const binding = await this.prisma.raw.houseBinding.findUnique({
       where: { wxUserId_houseId: { wxUserId: ownerId, houseId } },
     });
