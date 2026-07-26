@@ -41,6 +41,15 @@ export class PilotBootstrapController {
     const adminUsers = await p.adminUser.findMany({
       select: { username: true, status: true, role: true, tenantId: true },
     });
+    // 业主账号与绑定（联调自测：据此自签 owner 令牌跑业主端接口）
+    const wxUsers = await p.wxUser.findMany({
+      select: { id: true, tokenVersion: true, deletedAt: true, phone: true, nickname: true },
+      take: 20,
+    });
+    const bindings = await p.houseBinding.findMany({
+      select: { id: true, wxUserId: true, houseId: true, status: true, role: true, source: true },
+      take: 20,
+    });
     const communities = await p.community.findMany({
       select: { id: true, name: true, tenantId: true },
     });
@@ -122,7 +131,7 @@ export class PilotBootstrapController {
       PAY_MODE: process.env.PAY_MODE || null,
     };
     return {
-      tenants, adminUsers, communities, houses, unpaidBills: bills, recentBills,
+      tenants, adminUsers, wxUsers, bindings, communities, houses, unpaidBills: bills, recentBills,
       payments: paymentView, refunds, paymentEvents: events, callbackAlerts: alerts, scope,
     };
   }
