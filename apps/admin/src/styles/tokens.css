@@ -1,0 +1,258 @@
+/**
+ * 设计系统 —— 单一真源。
+ * 原则：中性浅色为主体（内容是主角），香槟金仅作品牌点缀，
+ * 交互色用对比达标的蓝，语义色只用于状态。
+ * 任何页面都不应再出现硬编码色值 / 字号 / 间距。
+ */
+
+:root {
+  /* ---------- 中性色阶 ---------- */
+  --c-white: #ffffff;
+  --c-gray-50: #fbfbfd;
+  --c-gray-100: #f5f5f7;
+  --c-gray-200: #ebebef;
+  --c-gray-300: #e0e0e5;
+  --c-gray-400: #c7c7cc;
+  --c-gray-500: #a1a1a6;
+  --c-gray-600: #6e6e73;
+  --c-gray-800: #3a3a3c;
+  --c-gray-900: #1d1d1f;
+
+  /* ---------- 语义化背景 / 文字 / 描边 ---------- */
+  --bg-page: var(--c-gray-100);
+  --bg-card: var(--c-white);
+  --bg-sidebar: var(--c-gray-50);
+  --bg-hover: rgba(0, 0, 0, 0.035);
+  --bg-active: rgba(0, 113, 227, 0.08);
+
+  --text-primary: var(--c-gray-900);
+  --text-secondary: var(--c-gray-600);
+  --text-tertiary: var(--c-gray-500);
+  --text-inverse: var(--c-white);
+
+  --border: var(--c-gray-200);
+  --border-strong: var(--c-gray-300);
+
+  /* ---------- 品牌（仅点缀：标识、选中态暖调） ---------- */
+  --brand-gold: #b08d57; /* 深香槟金，在浅底上对比达标 */
+  --brand-gold-soft: #f3ead9;
+  --brand-ink: #1f3352; /* 墨蓝，用于标识与图表 */
+
+  /* ---------- 交互主色 ---------- */
+  --primary: #0071e3;
+  --primary-hover: #0077ed;
+  --primary-active: #006adb;
+  --primary-soft: rgba(0, 113, 227, 0.1);
+
+  /* ---------- 语义状态（-text 为浅底上的可读文字色） ---------- */
+  --success: #34c759;
+  --success-text: #1c7c33;
+  --success-soft: #e8f8ec;
+  --warning: #ff9500;
+  --warning-text: #a85b00;
+  --warning-soft: #fff4e5;
+  --danger: #ff3b30;
+  --danger-text: #c9271e;
+  --danger-soft: #ffecea;
+  --info-soft: var(--c-gray-100);
+
+  /* ---------- 字阶（只用这 8 档） ---------- */
+  --fs-11: 11px;
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-15: 15px;
+  --fs-17: 17px;
+  --fs-20: 20px;
+  --fs-28: 28px;
+  --fs-34: 34px;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  --lh-tight: 1.25;
+  --lh-normal: 1.5;
+
+  /* ---------- 间距（8 的倍数体系） ---------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-12: 48px;
+
+  /* ---------- 圆角 ---------- */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-full: 999px;
+
+  /* ---------- 层次（补上阴影，摆脱平面廉价感） ---------- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.1);
+
+  /* ---------- 动效 ---------- */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 0.15s;
+  --dur: 0.22s;
+
+  /* ---------- 布局尺寸 ---------- */
+  --sidebar-w: 232px;
+  --sidebar-w-collapsed: 68px;
+  --header-h: 56px;
+}
+
+/* ---------- Element Plus 变量对齐，避免默认样式的廉价感 ---------- */
+:root {
+  --el-color-primary: var(--primary);
+  --el-color-primary-light-3: #3392e8;
+  --el-color-primary-light-5: #66adee;
+  --el-color-primary-light-7: #99c8f4;
+  --el-color-primary-light-8: #b3d6f7;
+  --el-color-primary-light-9: var(--primary-soft);
+  --el-color-primary-dark-2: var(--primary-active);
+
+  --el-color-success: var(--success);
+  --el-color-warning: var(--warning);
+  --el-color-danger: var(--danger);
+  --el-color-error: var(--danger);
+
+  --el-text-color-primary: var(--text-primary);
+  --el-text-color-regular: var(--text-secondary);
+  --el-text-color-secondary: var(--text-tertiary);
+  --el-text-color-placeholder: var(--c-gray-400);
+
+  --el-border-color: var(--border);
+  --el-border-color-light: var(--border);
+  --el-border-color-lighter: var(--border);
+  --el-fill-color-blank: var(--bg-card);
+  --el-fill-color-light: var(--c-gray-100);
+
+  --el-border-radius-base: var(--r-sm);
+  --el-border-radius-small: var(--r-sm);
+  --el-font-size-base: var(--fs-13);
+
+  --el-box-shadow-light: var(--shadow-sm);
+  --el-box-shadow: var(--shadow-md);
+}
+
+/* ---------- 基础排版 ---------- */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro SC', 'SF Pro Text', 'PingFang SC',
+    'Helvetica Neue', 'Microsoft YaHei', sans-serif;
+  font-size: var(--fs-13);
+  line-height: var(--lh-normal);
+  color: var(--text-primary);
+  background: var(--bg-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 金额、计数等数字统一等宽，列对齐才专业 */
+.num,
+.amount {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ---------- 通用工具类（供各页复用，逐步替换硬编码样式） ---------- */
+.u-muted {
+  color: var(--text-secondary);
+}
+.u-dim {
+  color: var(--text-tertiary);
+  font-size: var(--fs-12);
+}
+.u-mono-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-semibold);
+  text-align: right;
+}
+
+/* ---------- Element Plus 细节打磨 ---------- */
+.el-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm) !important;
+  overflow: hidden;
+}
+.el-card__header {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-13);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  background: var(--bg-card);
+}
+.el-card__body {
+  padding: var(--sp-4);
+}
+
+/* 表头更轻，让数据成为主角 */
+.el-table th.el-table__cell {
+  background: var(--c-gray-50) !important;
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+  font-size: var(--fs-12);
+}
+.el-table {
+  font-size: var(--fs-13);
+}
+.el-table td.el-table__cell {
+  padding: var(--sp-2) 0;
+}
+
+.el-button {
+  font-weight: var(--fw-medium);
+}
+/* 危险动作与普通动作视觉分离，降低误点 */
+.el-button--danger.is-plain,
+.el-button--danger {
+  --el-button-hover-bg-color: var(--danger);
+}
+
+.el-tag {
+  border-radius: var(--r-full);
+  border: none;
+  font-weight: var(--fw-medium);
+}
+
+.el-dialog {
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+}
+.el-dialog__header {
+  margin-right: 0;
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+.el-dialog__title {
+  font-size: var(--fs-15);
+  font-weight: var(--fw-semibold);
+}
+
+.el-pagination {
+  --el-pagination-font-size: var(--fs-12);
+  justify-content: flex-end;
+  padding-top: var(--sp-3);
+}
+
+/* 空状态：不留白板，给出下一步 */
+.el-table__empty-text {
+  color: var(--text-tertiary);
+  font-size: var(--fs-13);
+}
