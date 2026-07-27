@@ -1,7 +1,8 @@
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
+const labels = require('../../utils/labels');
+const STATUS_LABEL = labels.PASS_STATUS;
 
-const STATUS_LABEL = { ACTIVE: '有效', USED: '已使用', EXPIRED: '已过期', CANCELED: '已取消' };
 
 function todayStr(offset = 0) {
   const d = new Date();

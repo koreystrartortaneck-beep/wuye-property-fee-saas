@@ -1,8 +1,9 @@
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
+const labels = require('../../utils/labels');
+const STATUS_LABEL = labels.USER_COUPON_STATUS;
+const TYPE_LABEL = labels.COUPON_TYPE;
 
-const TYPE_LABEL = { DISCOUNT: '满减', SERVICE: '服务券', GIFT: '礼品券' };
-const STATUS_LABEL = { UNUSED: '未使用', USED: '已核销', EXPIRED: '已过期' };
 
 function fmtValue(c) {
   if (c.type === 'DISCOUNT') {

@@ -1,8 +1,9 @@
 const { request } = require('../../utils/request');
 const { imageUrl } = require('../../utils/upload');
+const labels = require('../../utils/labels');
+const STATUS_LABEL = labels.TICKET_STATUS;
+const TYPE_LABEL = labels.TICKET_TYPE;
 
-const TYPE_LABEL = { REPAIR: '报修', COMPLAINT: '投诉', SUGGESTION: '建议' };
-const STATUS_LABEL = { PENDING: '待受理', PROCESSING: '处理中', DONE: '已办结', CLOSED: '已关闭' };
 
 Page({
   data: {

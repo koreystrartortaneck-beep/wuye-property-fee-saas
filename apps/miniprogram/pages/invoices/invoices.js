@@ -1,16 +1,9 @@
 const { request } = require('../../utils/request');
+const labels = require('../../utils/labels');
+const STATUS_LABEL = labels.INVOICE_STATUS;
+const TITLE_TYPE_LABEL = labels.INVOICE_TITLE_TYPE;
 
-const STATUS_LABEL = {
-  SUBMITTED: '已提交',
-  PROCESSING: '处理中',
-  ISSUED: '已开具',
-  REJECTED: '已驳回',
-  CANCELED: '已取消',
-  REVERSAL_REQUIRED: '待红冲',
-  REVERSED: '已红冲',
-};
 
-const TITLE_TYPE_LABEL = { PERSONAL: '个人', ENTERPRISE: '企业' };
 
 Page({
   data: {

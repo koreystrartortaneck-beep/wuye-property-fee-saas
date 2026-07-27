@@ -1,14 +1,8 @@
 const { request } = require('../../utils/request');
 const { canApplyInvoice } = require('../../utils/invoice');
+const labels = require('../../utils/labels');
+const STATUS_LABEL = labels.PAYMENT_STATUS;
 
-const STATUS_LABEL = {
-  CREATED: '待支付',
-  SUCCESS: '支付成功',
-  FAILED: '支付失败',
-  CLOSED: '已关闭',
-  REFUNDED: '已退款',
-  PREPAY_UNKNOWN: '结果待确认',
-};
 
 Page({
   data: {

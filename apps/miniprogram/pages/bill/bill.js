@@ -1,15 +1,10 @@
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
+const labels = require('../../utils/labels');
+const STATUS_LABEL = labels.BILL_STATUS;
 
 const THEMES = ['sapphire', 'emerald', 'amber'];
 const STATUS_BY_TAB = [undefined, 'UNPAID', 'PAID']; // 全部 / 待缴 / 已缴
-const STATUS_LABEL = {
-  UNPAID: '待缴',
-  PAID: '已缴',
-  CANCELED: '已作废',
-  REFUNDING: '退款中',
-  REFUNDED: '已退款',
-};
 
 Page({
   data: {

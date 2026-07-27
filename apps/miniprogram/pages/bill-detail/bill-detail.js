@@ -1,8 +1,9 @@
 const { request } = require('../../utils/request');
+const labels = require('../../utils/labels');
+const STATUS_LABEL = labels.BILL_STATUS;
+const METER_LABEL = labels.METER_TYPE;
+const SHARE_LABEL = labels.SHARE_BY;
 
-const STATUS_LABEL = { UNPAID: '待缴', PAID: '已缴', CANCELED: '已作废' };
-const METER_LABEL = { WATER: '水表', ELEC: '电表', GAS: '燃气表' };
-const SHARE_LABEL = { AREA: '按面积分摊', HOUSE: '按户均分' };
 
 Page({
   data: {
