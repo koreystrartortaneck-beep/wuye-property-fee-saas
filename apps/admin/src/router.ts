@@ -14,6 +14,11 @@ export const router = createRouter({
         { path: 'dashboard', component: () => import('./views/Dashboard.vue'), meta: { title: '收缴看板' } },
         { path: 'communities', component: () => import('./views/Communities.vue'), meta: { title: '小区管理' } },
         { path: 'houses', component: () => import('./views/Houses.vue'), meta: { title: '房产管理' } },
+        {
+          path: 'houses/:houseId',
+          component: () => import('./views/HouseProfile.vue'),
+          meta: { title: '住户档案' },
+        },
         { path: 'bindings', component: () => import('./views/Bindings.vue'), meta: { title: '绑定审核' } },
         { path: 'tickets', component: () => import('./views/Tickets.vue'), meta: { title: '报事报修' } },
         { path: 'announcements', component: () => import('./views/Announcements.vue'), meta: { title: '社区公告' } },

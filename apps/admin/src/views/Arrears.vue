@@ -92,7 +92,7 @@
 
       <el-table-column label="操作" width="110" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" text type="primary" @click="viewBills(row)">查账单</el-button>
+          <el-button size="small" text type="primary" @click="viewBills(row)">查档案</el-button>
         </template>
       </el-table-column>
 
@@ -162,7 +162,8 @@ async function load() {
 }
 
 function viewBills(row: Row) {
-  void router.push({ path: '/bills', query: { houseId: row.houseId, status: 'UNPAID' } });
+  // 进住户档案而非账单列表：催缴时要同时看到欠费、缴费历史与联系方式
+  void router.push(`/houses/${row.houseId}`);
 }
 
 /** 批量催缴：走后端幂等接口，逐笔触发逾期提醒 */

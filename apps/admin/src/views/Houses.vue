@@ -28,8 +28,9 @@
           <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'">{{ row.status === 'ACTIVE' ? '正常' : '停用' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="90">
+      <el-table-column label="操作" width="140" fixed="right">
         <template #default="{ row }">
+          <el-button size="small" text type="primary" @click="$router.push(`/houses/${row.id}`)">档案</el-button>
           <el-button size="small" @click="openEdit(row)">编辑</el-button>
         </template>
       </el-table-column>

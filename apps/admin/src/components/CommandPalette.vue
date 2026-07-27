@@ -158,8 +158,9 @@ function go(path: string) {
 
 function goHouse(h: House) {
   visible.value = false;
-  // 住户档案页为下一阶段交付；当前先带房号进房屋列表，保证不落空。
-  void router.push({ path: '/houses', query: { keyword: h.code } });
+  // 直达住户档案：该户的账单/缴费/绑定/报修/开票一次看全，
+  // 这是「业主来电问费用」场景的落点。
+  void router.push(`/houses/${h.id}`);
 }
 
 function open() {
