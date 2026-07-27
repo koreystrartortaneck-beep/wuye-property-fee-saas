@@ -27,12 +27,27 @@
         <el-button type="primary" @click="openRuleDialog">设置收费标准</el-button>
       </div>
       <div v-else class="rule-list">
-        <div v-for="r in rules" :key="r.id" class="rule-card">
-          <div class="rule-name">{{ r.name }}</div>
+        <button
+          v-for="r in rules"
+          :key="r.id"
+          class="rule-card"
+          :class="{ picked: chosen.ruleId === r.id }"
+          @click="chosen.ruleId = r.id"
+        >
+          <div class="rule-name">
+            {{ r.name }}
+            <span v-if="chosen.ruleId === r.id" class="rule-pick-tag">本次使用</span>
+          </div>
           <div class="rule-meta">{{ houseTypeText(r.houseType) }} · {{ ruleAmountText(r) }}</div>
-        </div>
+          <div class="rule-usage" :class="{ unused: ruleUsage(r.id) === 0 }">
+            {{ ruleUsage(r.id) === 0 ? '还没用它出过账单' : `已出账 ${ruleUsage(r.id)} 次` }}
+          </div>
+        </button>
         <button class="rule-add" @click="openRuleDialog">＋ 新增收费标准</button>
       </div>
+      <p class="rule-tip">
+        新建的收费标准不会自动产生费用，需要在下面第 2、3 步选中它并生成账单，业主才会看到。
+      </p>
     </div>
   </section>
 
@@ -170,7 +185,7 @@
   <el-dialog v-model="ruleDialog" title="设置收费标准" width="480px">
     <el-form label-width="96px">
       <el-form-item label="名称">
-        <el-input v-model="ruleForm.name" placeholder="如 住宅物业费" />
+        <el-input v-model="ruleForm.name" placeholder="自己起名，如 住宅物业费 / 车位管理费" />
       </el-form-item>
       <el-form-item label="适用房屋">
         <el-select v-model="ruleForm.houseType" style="width: 100%">
@@ -322,6 +337,22 @@ function skipText(run: Run): string {
     .join('；');
 }
 
+/** 每个收费标准被用来出过几次账：让"建完了但没用"一眼可见 */
+const runCountByRule = ref<Record<string, number>>({});
+function ruleUsage(ruleId: string): number {
+  return runCountByRule.value[ruleId] ?? 0;
+}
+async function loadRunStats() {
+  try {
+    const data = await api<Page<{ ruleId: string }>>(`/admin/bill-runs${qs({ pageSize: 200 })}`);
+    const map: Record<string, number> = {};
+    for (const r of data.list ?? []) map[r.ruleId] = (map[r.ruleId] ?? 0) + 1;
+    runCountByRule.value = map;
+  } catch {
+    runCountByRule.value = {};
+  }
+}
+
 async function loadRules() {
   const data = await api<Page<Rule>>(`/admin/fee-rules${qs({ pageSize: 200 })}`);
   rules.value = data.list ?? [];
@@ -364,7 +395,7 @@ async function generate() {
       { method: 'POST', body: { ruleId: chosen.value.ruleId, period: chosen.value.period } },
     );
     lastRun.value = { generated: res.generated, skipped: res.skipped, skippedDetail: res.skippedDetail ?? null };
-    await loadBatchForPeriod();
+    await Promise.all([loadBatchForPeriod(), loadRunStats()]);
     ElMessage.success(`已生成 ${res.generated} 户账单，请核对后发布`);
   } finally {
     running.value = false;
@@ -390,7 +421,7 @@ async function publish() {
 const ruleDialog = ref(false);
 const savingRule = ref(false);
 const ruleForm = ref({
-  name: '住宅物业费',
+  name: '',
   houseType: 'RESIDENCE',
   mode: 'AREA_PRICE' as 'AREA_PRICE' | 'FIXED',
   value: 2.5,
@@ -398,7 +429,7 @@ const ruleForm = ref({
 });
 
 function openRuleDialog() {
-  ruleForm.value = { name: '住宅物业费', houseType: 'RESIDENCE', mode: 'AREA_PRICE', value: 2.5, dueDays: 30 };
+  ruleForm.value = { name: '', houseType: 'RESIDENCE', mode: 'AREA_PRICE', value: 2.5, dueDays: 30 };
   ruleDialog.value = true;
 }
 
@@ -425,9 +456,16 @@ async function saveRule() {
         dueDays: ruleForm.value.dueDays,
       },
     });
-    ElMessage.success('收费标准已保存');
+    ElMessage.success({
+      message: '收费标准已保存。接着在第 2 步选中它、第 3 步生成账单，业主才会看到费用。',
+      duration: 5000,
+    });
     ruleDialog.value = false;
+    const before = new Set(rules.value.map((r) => r.id));
     await loadRules();
+    // 自动选中刚建的那个，省去用户再找一次
+    const fresh = rules.value.find((r) => !before.has(r.id));
+    if (fresh) chosen.value.ruleId = fresh.id;
   } finally {
     savingRule.value = false;
   }
@@ -435,7 +473,7 @@ async function saveRule() {
 
 onMounted(async () => {
   await loadRules();
-  await loadBatchForPeriod();
+  await Promise.all([loadBatchForPeriod(), loadRunStats()]);
 });
 </script>
 
@@ -602,6 +640,38 @@ onMounted(async () => {
   font-size: var(--fs-12);
   color: var(--text-secondary);
   margin-top: 2px;
+}
+.rule-card {
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.rule-card:hover {
+  border-color: var(--border-strong);
+}
+.rule-card.picked {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+  background: var(--bg-card);
+}
+.rule-pick-tag {
+  margin-left: 6px;
+  font-size: var(--fs-11);
+  font-weight: var(--fw-regular);
+  color: var(--primary);
+}
+.rule-usage {
+  font-size: var(--fs-11);
+  color: var(--text-tertiary);
+  margin-top: 3px;
+}
+.rule-usage.unused {
+  color: var(--warning-text);
+}
+.rule-tip {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--fs-12);
+  color: var(--text-secondary);
 }
 .rule-add {
   padding: var(--sp-2) var(--sp-3);
