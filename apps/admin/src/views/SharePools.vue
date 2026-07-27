@@ -21,7 +21,7 @@
       <el-table-column prop="period" label="账期" width="120" />
       <el-table-column prop="totalAmount" label="总额（元）" width="140" />
       <el-table-column prop="createdAt" label="录入时间" min-width="170">
-        <template #default="{ row }">{{ String(row.createdAt).replace('T', ' ').slice(0, 16) }}</template>
+        <template #default="{ row }">{{ dt(row.createdAt) }}</template>
       </el-table-column>
     </el-table>
   </el-card>
@@ -32,6 +32,7 @@ import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { currentMonth, useCommunities } from '../composables';
+import { dt } from '../finance';
 
 interface Rule {
   id: string;

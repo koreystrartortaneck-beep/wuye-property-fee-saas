@@ -11,6 +11,18 @@
     </div>
   </div>
 
+  <!-- 同一账期可能按多个收费标准分成多批，漏发会导致部分业主收不到账单 -->
+  <el-alert
+    v-if="otherPending > 0"
+    type="warning"
+    :closable="false"
+    show-icon
+    class="pending-alert"
+    :title="`本账期还有 ${otherPending} 批账单未发布（按其它收费标准生成）`"
+  >
+    在上方第 2 步切换到对应的收费标准，即可核对并发布那一批。否则这部分业主收不到账单。
+  </el-alert>
+
   <!-- 第 1 步：收费标准 -->
   <section class="step" :class="{ done: rules.length > 0, active: rules.length === 0 }">
     <div class="step-head">
@@ -69,6 +81,7 @@
           value-format="YYYY-MM"
           format="YYYY 年 M 月"
           :clearable="false"
+          :disabled-date="disableFarFuture"
           style="width: 160px"
           @change="onPeriodChange"
         />
@@ -97,7 +110,7 @@
         :loading="running"
         :disabled="!chosen.ruleId || !chosen.period"
         @click="generate"
-      >{{ batch ? '重新生成（只补缺失的户）' : '生成账单' }}</el-button>
+      >{{ published ? '本账期已发布' : batch ? '重新生成（只补缺失的户）' : '生成账单' }}</el-button>
 
       <div v-if="lastRun" class="run-result">
         <p class="ok-line">✓ 本次生成 <b>{{ lastRun.generated }}</b> 户</p>
@@ -192,7 +205,6 @@
           <el-option label="住宅" value="RESIDENCE" />
           <el-option label="商铺" value="SHOP" />
           <el-option label="车位" value="PARKING" />
-          <el-option label="其他" value="OTHER" />
         </el-select>
       </el-form-item>
       <el-form-item label="怎么收">
@@ -206,8 +218,8 @@
         <span class="unit">{{ ruleForm.mode === 'AREA_PRICE' ? '元/㎡/月' : '元/月' }}</span>
       </el-form-item>
       <el-form-item label="缴费期限">
-        <el-input-number v-model="ruleForm.dueDays" :min="1" :max="365" style="width: 120px" />
-        <span class="unit">天内缴清</span>
+        <el-input-number v-model="ruleForm.dueDays" :min="1" :max="90" style="width: 120px" />
+        <span class="unit">天内缴清（最多 90 天）</span>
       </el-form-item>
       <el-alert
         v-if="ruleForm.mode === 'AREA_PRICE'"
@@ -225,9 +237,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { currentMonth, useCommunities } from '../composables';
 import { day, genRequestId, yuan } from '../finance';
@@ -271,6 +283,8 @@ const running = ref(false);
 const publishing = ref(false);
 /** 同一批次的发布重试复用同一幂等键，避免超时重试被当成新一次发布 */
 const publishRequestId = ref('');
+/** 同账期其它尚未发布的批次数量（如车位费与住宅费分属两批） */
+const otherPending = ref(0);
 const lastRun = ref<Run | null>(null);
 const batch = ref<Batch | null>(null);
 const batchBills = ref<Bill[]>([]);
@@ -362,20 +376,33 @@ async function loadRules() {
 }
 
 /** 找出该账期已存在的批次，让用户能接着上次继续，而不是重复生成 */
+/**
+ * 按「账期 + 当前所选收费标准」精确定位批次。
+ * 此前只按账期取第一个，若同一账期先出住宅费再出车位费（后端 batchNo 为
+ * RULE-<period>-<ruleId>，是两个批次），核对区会显示错的那一批，
+ * 发布也只发这一批 —— 另一批的业主永远收不到账单，页面却显示「已发布」。
+ */
 async function loadBatchForPeriod() {
   batch.value = null;
   batchBills.value = [];
   lastRun.value = null;
   publishRequestId.value = '';
+  otherPending.value = 0;
   try {
-    const data = await api<Page<Batch>>(`/admin/bill-batches${qs({ pageSize: 200 })}`);
-    const hit = (data.list ?? [])
-      .filter((b) => b.period === chosen.value.period && b.status !== 'CANCELED')
-      .sort((a, b) => (a.status === 'DRAFT' ? -1 : 1))[0];
+    const data = await api<Page<Batch>>(`/admin/bill-batches${qs({ period: chosen.value.period, pageSize: 200 })}`);
+    const inPeriod = (data.list ?? []).filter(
+      (b) => b.period === chosen.value.period && b.status !== 'CANCELED',
+    );
+    const wanted = chosen.value.ruleId ? `RULE-${chosen.value.period}-${chosen.value.ruleId}` : '';
+    const hit = wanted ? inPeriod.find((b) => b.batchNo === wanted) : undefined;
     if (hit) {
       batch.value = hit;
       await loadBatchBills(hit.id);
     }
+    // 同账期还有别的未发布批次时明确提示，避免漏发
+    otherPending.value = inPeriod.filter(
+      (b) => b.id !== hit?.id && b.status !== 'PUBLISHED',
+    ).length;
   } catch {
     /* 静默：不影响生成流程 */
   }
@@ -386,19 +413,47 @@ async function loadBatchBills(batchId: string) {
   batchBills.value = (data.list ?? []).filter((b) => b.status !== 'CANCELED');
 }
 
+/** 账期最多允许提前一个月，避免误给 2030 年出账 */
+function disableFarFuture(d: Date): boolean {
+  const limit = new Date();
+  limit.setMonth(limit.getMonth() + 1);
+  return d.getTime() > limit.getTime();
+}
+
 function onPeriodChange() {
   void loadBatchForPeriod();
 }
 
+// 换收费标准同样要重载：否则核对的是另一标准生成的账单
+watch(() => chosen.value.ruleId, () => void loadBatchForPeriod());
+
 async function generate() {
   running.value = true;
   try {
-    const res = await api<{ batchId: string; generated: number; skipped: number; skippedDetail?: Run['skippedDetail'] }>(
-      '/admin/bill-runs',
-      { method: 'POST', body: { ruleId: chosen.value.ruleId, period: chosen.value.period } },
-    );
-    lastRun.value = { generated: res.generated, skipped: res.skipped, skippedDetail: res.skippedDetail ?? null };
+    const res = await api<{
+      batchId: string;
+      generated: number;
+      skipped: number;
+      skippedDetail?: Run['skippedDetail'];
+      alreadyPublished?: boolean;
+    }>('/admin/bill-runs', {
+      method: 'POST',
+      body: { ruleId: chosen.value.ruleId, period: chosen.value.period },
+    });
     await Promise.all([loadBatchForPeriod(), loadRunStats()]);
+    if (res.alreadyPublished) {
+      // 后端对已发布批次直接早返回 generated:0，此前前端仍报喜「已生成 0 户」，
+      // 用户以为补账成功，实际新增房屋永远收不到账单。
+      lastRun.value = null;
+      ElMessageBox.alert(
+        '本账期的账单已经发布，无法再往这一批里追加。\n' +
+          '如需为新增房屋补账，请用「导入账单」单独出一批，或改用下一个账期。',
+        '已发布，无法追加',
+        { confirmButtonText: '知道了', type: 'warning' },
+      );
+      return;
+    }
+    lastRun.value = { generated: res.generated, skipped: res.skipped, skippedDetail: res.skippedDetail ?? null };
     ElMessage.success(`已生成 ${res.generated} 户账单，请核对后发布`);
   } finally {
     running.value = false;
@@ -495,6 +550,9 @@ onMounted(async () => {
   box-shadow: var(--shadow-sm);
   margin-bottom: var(--sp-4);
   flex-wrap: wrap;
+}
+.pending-alert {
+  margin-bottom: var(--sp-3);
 }
 .status-bar.is-todo {
   border-left: 3px solid var(--warning);

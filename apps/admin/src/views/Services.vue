@@ -48,7 +48,7 @@
       <el-table-column prop="contactName" label="联系人" width="90" />
       <el-table-column prop="contactPhone" label="电话" width="130" />
       <el-table-column label="期望上门" width="120">
-        <template #default="{ row }">{{ String(row.expectDate).slice(0, 10) }}</template>
+        <template #default="{ row }">{{ day(row.expectDate) }}</template>
       </el-table-column>
       <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
       <el-table-column label="状态" width="90">
@@ -95,6 +95,7 @@ import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { SERVICE_ORDER_STATUS_LABEL, useCommunities } from '../composables';
+import { day } from '../finance';
 
 interface Item { id: string; name: string; category: string | null; price: string; unit: string; communityId: string | null; description: string | null; enabled: boolean; }
 interface Order { id: string; serviceName: string; price: string; unit: string; contactName: string; contactPhone: string; expectDate: string; remark: string | null; status: string; house?: { displayName: string }; }

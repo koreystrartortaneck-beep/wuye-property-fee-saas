@@ -273,6 +273,24 @@ export class BillWorkflowService {
         dueDate.setDate(dueDate.getDate() + 15);
         dueDate.setHours(23, 59, 59, 0);
         const created = await this.prisma.raw.$transaction(async (tx) => {
+          // 重复守卫：一张账单只允许有一张存活的替代账单。
+          // 因新账单 ruleId 置空、MySQL 唯一键对 NULL 不去重，
+          // 若仅依赖幂等键（前端曾每次点击都换键）就会复制出第二张同期待缴账单，
+          // 业主两张都能支付，形成真实重复收款。
+          const alive = await tx.bill.findFirst({
+            where: {
+              tenantId,
+              replacesBillId: bill.id,
+              status: { notIn: ['CANCELED'] },
+            },
+            select: { id: true },
+          });
+          if (alive) {
+            throw new BizException(
+              ErrorCode.VALIDATION,
+              '该账单已重开过，请先作废已重开的账单再操作，避免业主重复缴费',
+            );
+          }
           // ruleId 置空以规避 (ruleId, houseId, period) 唯一键与原账单冲突；规则信息进快照。
           const c = await tx.bill.create({
             data: {

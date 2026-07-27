@@ -28,7 +28,8 @@ export class RefundRecoveryService {
     const stale = await this.prisma.raw.refund.findMany({
       where: {
         channel: 'WXPAY',
-        status: { in: ['CREATED', 'PROCESSING'] },
+        // 含 FAILED/ABNORMAL：本地失败但微信侧可能已成功，需持续查单对齐
+        status: { in: ['CREATED', 'PROCESSING', 'FAILED', 'ABNORMAL'] },
         OR: [{ lastQueriedAt: null }, { lastQueriedAt: { lt: leaseCutoff } }],
       },
       select: { id: true, refundNo: true, lastQueriedAt: true, requestedAt: true, status: true, tenantId: true, communityId: true },

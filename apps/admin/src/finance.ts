@@ -146,15 +146,63 @@ export function yuan(v: unknown): string {
   return (Number.isFinite(n) ? n : 0).toFixed(2);
 }
 
-/** 日期时间截断显示 YYYY-MM-DD HH:mm。 */
-export function dt(v: unknown): string {
-  if (!v) return '—';
-  return String(v).replace('T', ' ').slice(0, 16);
+/**
+ * 时间统一按 Asia/Shanghai 呈现。
+ *
+ * 后端返回的是原生 Date，JSON 序列化为 UTC ISO（`...Z`）。此前直接截断字符串，
+ * 等于把 UTC 当北京时间显示：09:30 缴费显示成 01:30，凌晨 0–8 点的记录还会
+ * 少一天（07-25 02:00 显示成 07-24）。对账、审计、开票时间全部错位。
+ * 因此一律走 Intl 显式指定时区，不依赖浏览器或服务器所在时区。
+ */
+const TZ = 'Asia/Shanghai';
+
+function parse(v: unknown): Date | null {
+  if (v === null || v === undefined || v === '') return null;
+  const d = v instanceof Date ? v : new Date(String(v));
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/** YYYY-MM-DD HH:mm（北京时间） */
+export function dt(v: unknown): string {
+  const d = parse(v);
+  if (!d) return '—';
+  const p = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const g = (t: string) => p.find((x) => x.type === t)?.value ?? '';
+  return `${g('year')}-${g('month')}-${g('day')} ${g('hour')}:${g('minute')}`;
+}
+
+/** YYYY-MM-DD（北京时间） */
 export function day(v: unknown): string {
-  if (!v) return '—';
-  return String(v).slice(0, 10);
+  const d = parse(v);
+  if (!d) return '—';
+  const p = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const g = (t: string) => p.find((x) => x.type === t)?.value ?? '';
+  return `${g('year')}-${g('month')}-${g('day')}`;
+}
+
+/** 北京时间的「今天」起点，用于逾期判断——避免用 UTC 比较导致到期当天就算逾期 */
+export function shanghaiToday(): Date {
+  const now = new Date();
+  const s = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now); // YYYY-MM-DD
+  return new Date(`${s}T00:00:00+08:00`);
 }
 
 export interface RefundPayload {

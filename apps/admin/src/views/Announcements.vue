@@ -19,7 +19,7 @@
         </template>
       </el-table-column>
       <el-table-column label="发布时间" width="150">
-        <template #default="{ row }">{{ String(row.publishedAt).replace('T', ' ').slice(0, 16) }}</template>
+        <template #default="{ row }">{{ dt(row.publishedAt) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="220">
         <template #default="{ row }">
@@ -68,6 +68,7 @@ import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, type Page } from '../api';
 import { useCommunities } from '../composables';
+import { dt } from '../finance';
 
 interface Announcement {
   id: string;

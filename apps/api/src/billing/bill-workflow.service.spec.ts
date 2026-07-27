@@ -37,6 +37,8 @@ describe('BillWorkflowService 草稿发布 / 作废 / 重开', () => {
       billBatch: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       bill: {
         findMany: jest.fn().mockResolvedValue([draftBill]),
+        // 重开守卫：默认无存活的替代账单
+        findFirst: jest.fn().mockResolvedValue(null),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn().mockResolvedValue({ id: 'bill-new', status: 'UNPAID' }),
       },
@@ -193,5 +195,25 @@ describe('BillWorkflowService 草稿发布 / 作废 / 重开', () => {
     await expect(
       service.reissueBill({ billId: 'bill-1', adminId: 'admin-1', actingTenantId: 'tenant-1', reason: 'x', requestId: 'req-7' }),
     ).rejects.toMatchObject({ code: 40000 });
+  });
+
+  it('重开守卫：已存在存活的替代账单时拒绝再次重开，避免业主重复缴费', async () => {
+    const tx = makeTx();
+    // 模拟该账单已重开过一张仍待缴的新账单
+    tx.bill.findFirst = jest.fn().mockResolvedValue({ id: 'bill-already-reissued' });
+    const prisma = makePrisma(tx);
+    prisma.raw.bill.findUnique = jest.fn().mockResolvedValue({ ...draftBill, status: 'CANCELED' });
+    const service = makeService(prisma);
+
+    await expect(
+      service.reissueBill({
+        billId: 'bill-1',
+        adminId: 'admin-1',
+        actingTenantId: 'tenant-1',
+        reason: '重新出账',
+        requestId: 'req-dup',
+      }),
+    ).rejects.toThrow(/已重开过/);
+    expect(tx.bill.create).not.toHaveBeenCalled();
   });
 });

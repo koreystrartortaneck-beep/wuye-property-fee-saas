@@ -12,6 +12,13 @@ import { PAYMENT_PROVIDER, PaymentProvider, PaymentProviderError, WxPayRefund } 
 
 /** 进行中的退款聚合状态（可继续查单/恢复） */
 const OPEN_REFUND_STATUSES = ['CREATED', 'PROCESSING'] as const;
+/**
+ * 可查单/可推进终态的状态集合。
+ * 必须包含 FAILED/ABNORMAL：本地失败但微信侧可能已成功退款，
+ * 若守卫只认 CREATED/PROCESSING，这类退款会永远停在失败态、
+ * 账单仍显示已缴，形成「钱出了账目没动」的窟窿。
+ */
+const QUERYABLE_REFUND_STATUSES = ['CREATED', 'PROCESSING', 'FAILED', 'ABNORMAL'] as const;
 
 export interface CreateRefundInput {
   orderNo: string;
@@ -152,7 +159,32 @@ export class RefundService {
     const existing = (await this.prisma.raw.refund.findUnique({
       where: { paymentId: payment.id },
     })) as RefundAggregate | null;
-    if (existing) return { ...existing, transactionId: payment.transactionId };
+    if (existing) {
+      // FAILED 聚合必须先「复活」为 PROCESSING 再外呼。
+      // 否则：管理员在失败（如商户余额不足）后重试 → 微信这次受理并成功 →
+      // finalizeSuccess/finalizeFailure 的守卫只认 CREATED/PROCESSING，
+      // count=0 静默返回 → 钱已退给业主，而库里仍是 Payment=SUCCESS、
+      // Bill=PAID、Refund=FAILED，收据不作废、还能继续开票。
+      if (existing.status === 'FAILED' || existing.status === 'ABNORMAL') {
+        const revived = await this.prisma.raw.$transaction(async (tx) => {
+          const r = await tx.refund.updateMany({
+            where: { id: existing.id, status: { in: ['FAILED', 'ABNORMAL'] } },
+            data: { status: 'PROCESSING', failureCode: null, failureMessage: null, failedAt: null },
+          });
+          if (r.count === 0) return false;
+          // 重新锁定账单，保持与首次发起一致的对外状态
+          await tx.bill.updateMany({
+            where: { paymentId: payment.id, status: 'PAID' },
+            data: { status: 'REFUNDING' },
+          });
+          return true;
+        });
+        if (revived) {
+          return { ...existing, status: 'PROCESSING', transactionId: payment.transactionId };
+        }
+      }
+      return { ...existing, transactionId: payment.transactionId };
+    }
 
     const refundNo = this.refundNoFor(payment.orderNo);
     const created = await this.prisma.raw.$transaction(async (tx) => {
@@ -280,7 +312,7 @@ export class RefundService {
   private async finalizeSuccess(refund: RefundAggregate, result?: WxPayRefund): Promise<void> {
     await this.prisma.raw.$transaction(async (tx) => {
       const updated = await tx.refund.updateMany({
-        where: { id: refund.id, status: { in: [...OPEN_REFUND_STATUSES] } },
+        where: { id: refund.id, status: { in: [...QUERYABLE_REFUND_STATUSES] } },
         data: {
           status: 'SUCCESS',
           refundedAt: result?.success_time ? new Date(result.success_time) : new Date(),
@@ -364,10 +396,14 @@ export class RefundService {
     });
   }
 
-  /** 恢复任务：以稳定 refundNo 查单并推进终态。 */
+  /**
+   * 恢复任务：以稳定 refundNo 查单并推进终态。
+   * 允许对 FAILED/ABNORMAL 也查单——微信侧可能已实际退款成功
+   * （商户平台人工重发、或受理后异步转成功），若不查就永远对不上账。
+   */
   async recoverRefund(refundNo: string): Promise<{ refundNo: string; status: string } | null> {
     const refund = (await this.prisma.raw.refund.findUnique({ where: { refundNo } })) as RefundAggregate | null;
-    if (!refund || !OPEN_REFUND_STATUSES.includes(refund.status as (typeof OPEN_REFUND_STATUSES)[number])) {
+    if (!refund || !QUERYABLE_REFUND_STATUSES.includes(refund.status as never)) {
       return refund ? { refundNo, status: refund.status } : null;
     }
     if (!this.provider.queryRefund) throw new Error('当前支付渠道不支持退款查询');

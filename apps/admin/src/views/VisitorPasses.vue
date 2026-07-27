@@ -6,7 +6,7 @@
       <el-button type="primary" @click="findByCode">查验</el-button>
       <template v-if="found">
         <span class="found-info">
-          {{ found.visitorName }} · {{ found.house?.displayName }} · {{ String(found.visitDate).slice(0, 10) }}
+          {{ found.visitorName }} · {{ found.house?.displayName }} · {{ day(found.visitDate) }}
           <el-tag :type="TAG[found.status]" class="ml">{{ STATUS[found.status] }}</el-tag>
         </span>
         <el-button v-if="found.status === 'ACTIVE'" type="success" @click="verify(found)">放行核销</el-button>
@@ -31,7 +31,7 @@
         <template #default="{ row }">{{ row.house?.displayName }}</template>
       </el-table-column>
       <el-table-column label="到访日期" width="110">
-        <template #default="{ row }">{{ String(row.visitDate).slice(0, 10) }}</template>
+        <template #default="{ row }">{{ day(row.visitDate) }}</template>
       </el-table-column>
       <el-table-column label="状态" width="90">
         <template #default="{ row }">
@@ -41,7 +41,7 @@
       <el-table-column label="操作" width="110">
         <template #default="{ row }">
           <el-button v-if="row.status === 'ACTIVE'" size="small" type="success" @click="verify(row)">放行核销</el-button>
-          <span v-else-if="row.usedAt" class="used-at">{{ String(row.usedAt).replace('T', ' ').slice(5, 16) }}</span>
+          <span v-else-if="row.usedAt" class="used-at">{{ dt(row.usedAt) }}</span>
         </template>
       </el-table-column>
     </el-table>
@@ -61,6 +61,7 @@ import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { useCommunities } from '../composables';
+import { day, dt } from '../finance';
 
 interface Pass {
   id: string;

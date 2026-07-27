@@ -18,6 +18,9 @@ export interface GenerateResult {
   status: string;
   generated: number;
   skipped: number;
+  skippedDetail?: SkipDetail[];
+  /** 该账期批次已发布，无法再追加账单——调用方须据此给出正确提示 */
+  alreadyPublished?: boolean;
 }
 
 /**
@@ -48,7 +51,15 @@ export class BillRunService {
     const batchNo = `RULE-${period}-${ruleId}`;
     const existingBatch = await this.prisma.t.billBatch.findFirst({ where: { batchNo } });
     if (existingBatch && existingBatch.status === 'PUBLISHED') {
-      return { batchId: existingBatch.id, status: 'PUBLISHED', generated: 0, skipped: 0 };
+      // 已发布批次不可再追加：调用方需据 alreadyPublished 给出正确提示，
+      // 否则会把「无法补账」显示成「已生成 0 户，请核对后发布」。
+      return {
+        batchId: existingBatch.id,
+        status: 'PUBLISHED' as const,
+        generated: 0,
+        skipped: 0,
+        alreadyPublished: true,
+      };
     }
     const batch =
       existingBatch ??
@@ -187,18 +198,29 @@ export class BillRunService {
         finishedAt: new Date(),
       },
     });
-    const draftCount = await this.prisma.t.bill.count({ where: { batchId: batch.id, status: 'DRAFT' } });
-    await this.prisma.t.billBatch.update({
-      where: { id: batch.id },
+    // 汇总必须按「批次内全部有效账单」重算，不能用本次运行的增量：
+    // 重跑补漏时已存在的户会撞唯一键跳过，increment 为 0，
+    // 若直接写回就会把批次合计覆盖成 0.00，发布页显示「N 户 · ¥0.00」，
+    // 收费员失去唯一的核对依据。
+    const aggregate = await this.prisma.t.bill.aggregate({
+      where: { batchId: batch.id, status: { not: 'CANCELED' } },
+      _sum: { amount: true },
+      _count: { _all: true },
+    });
+    const batchTotal = aggregate._sum.amount ? aggregate._sum.amount.toString() : '0.00';
+    // 状态只在批次仍为草稿态时回写，避免与「生成过程中被发布」竞态导致
+    // 已 PUBLISHED 的批次被退回 DRAFT。
+    await this.prisma.t.billBatch.updateMany({
+      where: { id: batch.id, status: { in: ['DRAFT', 'GENERATING'] } },
       data: {
         status: 'DRAFT',
         totalRows: houses.length,
-        validRows: draftCount,
+        validRows: aggregate._count._all,
         invalidRows: skipped,
-        totalAmount: centsToStr(generatedCents),
+        totalAmount: batchTotal,
       },
     });
     this.logger.log(`草稿出账 rule=${rule.name} period=${period} batch=${batch.id} generated=${generated} skipped=${skipped}`);
-    return { batchId: batch.id, status: 'DRAFT', generated, skipped };
+    return { batchId: batch.id, status: 'DRAFT', generated, skipped, skippedDetail };
   }
 }

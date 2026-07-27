@@ -49,7 +49,7 @@
         <template #default="{ row }">{{ row.rating ? '★'.repeat(row.rating) : '—' }}</template>
       </el-table-column>
       <el-table-column label="提交时间" width="150">
-        <template #default="{ row }">{{ String(row.createdAt).replace('T', ' ').slice(0, 16) }}</template>
+        <template #default="{ row }">{{ dt(row.createdAt) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="200">
         <template #default="{ row }">
@@ -95,6 +95,7 @@ import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { useCommunities } from '../composables';
+import { dt } from '../finance';
 
 interface Ticket {
   id: string;

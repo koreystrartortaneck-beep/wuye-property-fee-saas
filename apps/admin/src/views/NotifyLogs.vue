@@ -23,7 +23,7 @@
       <el-table-column prop="billId" label="账单 ID" min-width="200" />
       <el-table-column prop="error" label="失败原因" min-width="160" />
       <el-table-column label="时间" width="160">
-        <template #default="{ row }">{{ String(row.sentAt).replace('T', ' ').slice(0, 19) }}</template>
+        <template #default="{ row }">{{ dt(row.sentAt) }}</template>
       </el-table-column>
     </el-table>
     <el-pagination
@@ -40,6 +40,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { api, qs, type Page } from '../api';
+import { dt } from '../finance';
 
 interface Log {
   id: string;

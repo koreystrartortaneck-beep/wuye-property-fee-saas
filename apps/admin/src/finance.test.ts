@@ -1,27 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  BILL_STATUS_LABEL,
-  BILL_BATCH_STATUS_LABEL,
-  PAYMENT_STATUS_LABEL,
-  PAYMENT_CHANNEL_LABEL,
-  REFUND_STATUS_LABEL,
-  RECON_RUN_STATUS_LABEL,
-  RECON_DIFF_LABEL,
-  RECON_ITEM_STATUS_LABEL,
-  INVOICE_STATUS_LABEL,
-  COLLECTION_STATUS_LABEL,
-  AUDIT_ACTION_LABEL,
-  billStatusTag,
-  paymentStatusTag,
-  refundStatusTag,
-  reconItemStatusTag,
-  invoiceStatusTag,
-  genRequestId,
-  yuan,
-  buildRefundPayload,
-  buildOfflinePayload,
-  buildReasonPayload,
-} from './finance';
+import { AUDIT_ACTION_LABEL, BILL_BATCH_STATUS_LABEL, BILL_STATUS_LABEL, COLLECTION_STATUS_LABEL, INVOICE_STATUS_LABEL, PAYMENT_CHANNEL_LABEL, PAYMENT_STATUS_LABEL, RECON_DIFF_LABEL, RECON_ITEM_STATUS_LABEL, RECON_RUN_STATUS_LABEL, REFUND_STATUS_LABEL, billStatusTag, buildOfflinePayload, buildReasonPayload, buildRefundPayload, day, dt, genRequestId, invoiceStatusTag, paymentStatusTag, reconItemStatusTag, refundStatusTag, shanghaiToday, yuan } from './finance';
 
 describe('finance label maps', () => {
   it('covers every bill status including new draft/refund states', () => {
@@ -111,5 +89,31 @@ describe('payload builders', () => {
     expect(() => buildOfflinePayload({ billId: '', voucherNo: 'V1', paidAt: '2026-07-01T10:00' })).toThrow();
     expect(() => buildOfflinePayload({ billId: 'B1', voucherNo: '', paidAt: '2026-07-01T10:00' })).toThrow();
     expect(() => buildOfflinePayload({ billId: 'B1', voucherNo: 'V1', paidAt: '' })).toThrow();
+  });
+});
+
+
+describe('时间按 Asia/Shanghai 呈现（后端返回 UTC ISO）', () => {
+  it('dt 把 UTC 转北京时间，而非直接截断字符串', () => {
+    // 01:30Z = 北京 09:30；此前会显示成 01:30
+    expect(dt('2026-07-25T01:30:00.000Z')).toBe('2026-07-25 09:30');
+  });
+
+  it('跨日：UTC 前一天傍晚 = 北京次日凌晨', () => {
+    // 07-24T18:00Z = 北京 07-25 02:00；此前会少显示一天
+    expect(day('2026-07-24T18:00:00.000Z')).toBe('2026-07-25');
+    expect(dt('2026-07-24T18:00:00.000Z')).toBe('2026-07-25 02:00');
+  });
+
+  it('空值与非法值返回占位符，不出现 Invalid Date', () => {
+    expect(dt(null)).toBe('—');
+    expect(dt('')).toBe('—');
+    expect(dt('not-a-date')).toBe('—');
+    expect(day(undefined)).toBe('—');
+    expect(day('not-a-date')).toBe('—');
+  });
+
+  it('shanghaiToday 与北京当日日期一致', () => {
+    expect(day(shanghaiToday())).toBe(day(new Date()));
   });
 });

@@ -4,7 +4,7 @@ describe('RefundRecoveryService', () => {
   const originalMode = process.env.PAY_MODE;
   afterEach(() => { process.env.PAY_MODE = originalMode; });
 
-  it('扫描 CREATED/PROCESSING 退款并以租约认领后逐笔查单，单笔失败不阻断', async () => {
+  it('扫描未终结（含失败态）退款并以租约认领后逐笔查单，单笔失败不阻断', async () => {
     process.env.PAY_MODE = 'wxpay';
     const prisma = {
       raw: {
@@ -27,7 +27,13 @@ describe('RefundRecoveryService', () => {
     await service.recoverStaleRefunds(new Date('2026-07-22T10:00:00Z'));
 
     expect(prisma.raw.refund.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ channel: 'WXPAY', status: { in: ['CREATED', 'PROCESSING'] } }),
+      // 含 FAILED/ABNORMAL：本地失败但微信侧可能已成功退款（商户平台人工重发或
+      // 受理后异步转成功）。若不扫这两个状态，会出现「钱已退给业主而账单仍显示
+      // 已缴、还能继续开票」的资金窟窿。
+      where: expect.objectContaining({
+        channel: 'WXPAY',
+        status: { in: ['CREATED', 'PROCESSING', 'FAILED', 'ABNORMAL'] },
+      }),
     }));
     expect(prisma.raw.refund.updateMany).toHaveBeenCalledTimes(2);
     expect(refunds.recoverRefund).toHaveBeenCalledTimes(2);

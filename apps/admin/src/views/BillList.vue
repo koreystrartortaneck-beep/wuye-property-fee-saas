@@ -21,6 +21,8 @@
           <el-option label="已缴" value="PAID" />
           <el-option label="已退款" value="REFUNDED" />
           <el-option label="已作废" value="CANCELED" />
+          <el-option label="退款中" value="REFUNDING" />
+          <el-option label="未发布" value="DRAFT" />
         </el-select>
       </div>
       <div v-if="communities.length > 1" class="field">
@@ -55,7 +57,11 @@
 
       <el-table-column label="状态" width="110">
         <template #default="{ row }">
-          <el-tag :type="billStatusTag(row.status)" size="small" effect="light">
+          <el-tag
+            :type="row.status === 'UNPAID' && isOverdue(row) ? 'danger' : billStatusTag(row.status)"
+            size="small"
+            effect="light"
+          >
             {{ statusText(row) }}
           </el-tag>
         </template>
@@ -150,7 +156,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { useCommunities } from '../composables';
-import { billStatusTag, buildReasonPayload, day, genRequestId, yuan } from '../finance';
+import { billStatusTag, buildReasonPayload, day, genRequestId, shanghaiToday, yuan } from '../finance';
 
 interface Bill {
   id: string;
@@ -178,7 +184,14 @@ const total = ref(0);
 const page = ref(1);
 const loading = ref(false);
 
-const pageAmount = computed(() => yuan(bills.value.reduce((s, b) => s + Number(b.amount || 0), 0)));
+/**
+ * 本页合计只算「待缴 + 已缴」。此前把已作废/已退款/未发布也加进来，
+ * 收费员拿这个数对账必错。
+ */
+const COUNTED = ['UNPAID', 'PAID'];
+const pageAmount = computed(() =>
+  yuan(bills.value.filter((b) => COUNTED.includes(b.status)).reduce((s, b) => s + Number(b.amount || 0), 0)),
+);
 
 const STATUS_TEXT: Record<string, string> = {
   UNPAID: '待缴',
@@ -192,11 +205,25 @@ function statusText(row: Bill): string {
   if (row.status === 'UNPAID' && isOverdue(row)) return '已逾期';
   return STATUS_TEXT[row.status] ?? row.status;
 }
+/**
+ * 逾期按北京时间的「日」比较：到期日当天不算逾期。
+ * 此前用 dueDate < Date.now()，而后端 dueDate 是当日 23:59:59 转 UTC，
+ * 叠加 Math.max(1,…) 会让到期当天/次日凌晨就显示「已逾期 1 天」。
+ */
+function dueDay(row: Bill): Date | null {
+  if (!row.dueDate) return null;
+  const d = new Date(day(row.dueDate) + 'T00:00:00+08:00');
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 function isOverdue(row: Bill): boolean {
-  return row.status === 'UNPAID' && !!row.dueDate && new Date(row.dueDate).getTime() < Date.now();
+  if (row.status !== 'UNPAID') return false;
+  const d = dueDay(row);
+  return !!d && d.getTime() < shanghaiToday().getTime();
 }
 function overdueDays(row: Bill): number {
-  return Math.max(1, Math.floor((Date.now() - new Date(row.dueDate).getTime()) / 86400000));
+  const d = dueDay(row);
+  if (!d) return 0;
+  return Math.max(1, Math.round((shanghaiToday().getTime() - d.getTime()) / 86400000));
 }
 
 /** 金额可解释：业主质疑时一眼看出算式 */

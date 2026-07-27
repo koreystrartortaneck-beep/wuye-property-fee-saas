@@ -579,6 +579,9 @@ export class PaymentService {
       include: { house: { include: { community: { select: { name: true } } } } },
     });
     if (!bill) throw new BizException(ErrorCode.NOT_FOUND);
+    // 草稿账单对业主不可见：列表/详情/汇总/筛选均已过滤，此处若漏判，
+    // 业主凭 billId 就能看到未发布账单的标题与金额。
+    if (bill.status === 'DRAFT') throw new BizException(ErrorCode.NOT_FOUND);
     const binding = await this.prisma.raw.houseBinding.findFirst({
       where: { wxUserId: ownerId, houseId: bill.houseId, status: 'ACTIVE' },
     });

@@ -33,7 +33,7 @@
       </el-table-column>
       <el-table-column prop="staffName" label="人员" width="90" />
       <el-table-column label="时间" width="150">
-        <template #default="{ row }">{{ String(row.createdAt).replace('T', ' ').slice(0, 16) }}</template>
+        <template #default="{ row }">{{ dt(row.createdAt) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="80">
         <template #default="{ row }">
@@ -83,6 +83,7 @@ import { ElMessage } from 'element-plus';
 import { Plus } from '@element-plus/icons-vue';
 import { api, qs, uploadImage, type Page } from '../api';
 import { WORK_CATEGORY_LABEL, useCloudImages, useCommunities } from '../composables';
+import { dt } from '../finance';
 
 const { cloudImgUrl, resolveCloud } = useCloudImages();
 

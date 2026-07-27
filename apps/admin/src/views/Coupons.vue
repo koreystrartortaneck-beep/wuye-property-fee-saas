@@ -34,7 +34,7 @@
         <template #default="{ row }">{{ row.claimedQty }} / {{ row.totalQty }}</template>
       </el-table-column>
       <el-table-column label="有效期" width="200">
-        <template #default="{ row }">{{ String(row.validFrom).slice(0, 10) }} ~ {{ String(row.validTo).slice(0, 10) }}</template>
+        <template #default="{ row }">{{ day(row.validFrom) }} ~ {{ day(row.validTo) }}</template>
       </el-table-column>
       <el-table-column label="状态" width="90">
         <template #default="{ row }">
@@ -83,6 +83,7 @@ import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, type Page } from '../api';
 import { COUPON_TYPE_LABEL, today, useCommunities } from '../composables';
+import { day } from '../finance';
 
 interface Coupon { id: string; name: string; type: string; faceValue: string | null; threshold: string | null; totalQty: number; claimedQty: number; validFrom: string; validTo: string; enabled: boolean; }
 
