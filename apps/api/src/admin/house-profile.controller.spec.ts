@@ -21,19 +21,28 @@ describe('HouseProfileService 住户档案', () => {
     return { toString: () => v };
   }
 
+  /** prisma.t 拿不到的非租户模型（无 tenantId，不在 TENANT_MODELS 内） */
+  const RAW_ONLY = ['paymentBill'];
+
+  /**
+   * mock 刻意让 PaymentBill 只出现在 raw 上：若实现改回 prisma.t.paymentBill，
+   * 这里会立刻 TypeError，而不是等线上返回「禁止访问非租户模型」。
+   */
   function makePrisma(over: Record<string, unknown> = {}) {
-    return {
-      t: {
-        house: { findUnique: jest.fn().mockResolvedValue(house) },
-        bill: { findMany: jest.fn().mockResolvedValue([]) },
-        houseBinding: { findMany: jest.fn().mockResolvedValue([]) },
-        ticket: { findMany: jest.fn().mockResolvedValue([]) },
-        paymentBill: { findMany: jest.fn().mockResolvedValue([]) },
-        payment: { findMany: jest.fn().mockResolvedValue([]) },
-        invoiceApplication: { findMany: jest.fn().mockResolvedValue([]) },
-        ...(over as object),
-      },
+    const models: Record<string, unknown> = {
+      house: { findUnique: jest.fn().mockResolvedValue(house) },
+      bill: { findMany: jest.fn().mockResolvedValue([]) },
+      houseBinding: { findMany: jest.fn().mockResolvedValue([]) },
+      ticket: { findMany: jest.fn().mockResolvedValue([]) },
+      paymentBill: { findMany: jest.fn().mockResolvedValue([]) },
+      payment: { findMany: jest.fn().mockResolvedValue([]) },
+      invoiceApplication: { findMany: jest.fn().mockResolvedValue([]) },
+      ...(over as object),
     };
+    const t = Object.fromEntries(
+      Object.entries(models).filter(([name]) => !RAW_ONLY.includes(name)),
+    ) as Record<string, { findUnique: jest.Mock; findMany: jest.Mock }>;
+    return { t, raw: models as Record<string, { findMany: jest.Mock }> };
   }
 
   it('房屋不存在时报 404 而非返回空档案', async () => {

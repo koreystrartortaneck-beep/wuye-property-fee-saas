@@ -64,8 +64,9 @@ export class HouseProfileService {
       }),
     ]);
 
-    // 该房屋的支付流水：经 PaymentBill 关联，避免依赖 Payment 上可能为空的 billId
-    const paymentLinks = await this.prisma.t.paymentBill.findMany({
+    // PaymentBill 是无 tenantId 的关联表，不在租户模型清单内，必须用 raw；
+    // 安全性由上游保证：billId 已限定为「本租户该房屋」的账单集合。
+    const paymentLinks = await this.prisma.raw.paymentBill.findMany({
       where: { billId: { in: bills.map((b) => b.id) } },
       select: { paymentId: true },
     });
