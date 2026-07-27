@@ -66,6 +66,7 @@
 import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
+import { refreshBadges } from '../badges';
 
 interface Binding {
   id: string;

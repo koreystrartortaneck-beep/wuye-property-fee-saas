@@ -30,7 +30,7 @@ function exportedConsts(file: string): string[] {
   return [...src.matchAll(/export\s+const\s+([A-Za-z0-9_]+)/g)].map((m) => m[1]);
 }
 
-const SHARED = ['finance.ts', 'composables.ts', 'api.ts'];
+const SHARED = ['finance.ts', 'composables.ts', 'api.ts', 'badges.ts', 'export.ts', 'nav.ts'];
 const SHARED_SYMBOLS = new Set<string>();
 for (const f of SHARED) {
   for (const n of exportedFunctions(f)) SHARED_SYMBOLS.add(n);
@@ -106,8 +106,15 @@ describe('后台页面：共享模块符号必须导入后再使用', () => {
 
       const missing: string[] = [];
       for (const sym of SHARED_SYMBOLS) {
-        // 仅当作为「调用」或「下标取值」出现时才要求导入，避免匹配到同名字符串
-        const used = new RegExp(`\\b${sym}\\s*[(\\[]`).test(script);
+        /*
+         * 用法形态有三种，早期只认前两种，导致 ElMessageBox.confirm(...) 这类
+         * 成员访问在 4 个页面漏检（点「删除」直接 ReferenceError）：
+         *   1) 调用     sym(...)
+         *   2) 下标取值 sym[...]
+         *   3) 成员访问 sym.foo
+         * 加 `.` 后即被拦住。仍要求后面跟符号，避免匹配到同名字符串字面量。
+         */
+        const used = new RegExp(`\\b${sym}\\s*[(\\[.]`).test(script);
         if (used && !imported.has(sym) && !localDefs.has(sym)) missing.push(sym);
       }
 

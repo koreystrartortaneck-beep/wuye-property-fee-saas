@@ -45,7 +45,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs, type Page } from '../api';
 
 interface Community {

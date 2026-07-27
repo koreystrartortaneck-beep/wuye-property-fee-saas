@@ -14,8 +14,22 @@
       <el-button type="success" :disabled="!filter.communityId" @click="importDialog = true">CSV 批量导入</el-button>
     </div>
 
-    <el-table :data="rows" v-loading="loading">
-      <el-table-column prop="code" label="编号" width="120" />
+    <!--
+      接电话查户是这个页面最高频的用途，档案却曾只藏在最右侧一个小文字按钮里，
+      用户反馈「找了半天找不到档案在哪」。改为整行可点 + 首列显示成链接，
+      并在此明说一句，让入口自解释。
+    -->
+    <p class="row-tip">点任意一行查看该房屋的<b>完整档案</b>：账单、缴费记录、实名绑定、报修、开票</p>
+
+    <el-table
+      :data="rows"
+      v-loading="loading"
+      class="clickable-rows"
+      @row-click="(row: House) => $router.push(`/houses/${row.id}`)"
+    >
+      <el-table-column prop="code" label="编号" width="120">
+        <template #default="{ row }"><span class="link-cell">{{ row.code }}</span></template>
+      </el-table-column>
       <el-table-column prop="displayName" label="名称" min-width="160" />
       <el-table-column label="类型" width="90">
         <template #default="{ row }">{{ HOUSE_TYPE_LABEL[row.type] }}</template>
@@ -28,10 +42,11 @@
           <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'">{{ row.status === 'ACTIVE' ? '正常' : '停用' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="140" fixed="right">
+      <!-- 行已可点，操作列只留「编辑」；必须 .stop，否则点编辑会同时跳去档案页 -->
+      <el-table-column label="操作" width="150" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" text type="primary" @click="$router.push(`/houses/${row.id}`)">档案</el-button>
-          <el-button size="small" @click="openEdit(row)">编辑</el-button>
+          <el-button size="small" type="primary" plain @click.stop="$router.push(`/houses/${row.id}`)">查档案</el-button>
+          <el-button size="small" @click.stop="openEdit(row)">编辑</el-button>
         </template>
       </el-table-column>
       <template #empty>
@@ -258,6 +273,23 @@ async function doImport() {
   margin: var(--sp-1) 0 var(--sp-2);
   font-size: var(--fs-12);
   color: var(--text-tertiary);
+}
+.row-tip {
+  margin: 0 0 var(--sp-1);
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+}
+.row-tip b {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+/* 整行可点：给出光标与悬停反馈，否则用户不知道能点 */
+.clickable-rows :deep(.el-table__row) {
+  cursor: pointer;
+}
+.link-cell {
+  color: var(--primary);
+  font-weight: 600;
 }
 .toolbar {
   display: flex;

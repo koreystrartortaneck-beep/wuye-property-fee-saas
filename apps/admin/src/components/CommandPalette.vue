@@ -41,7 +41,7 @@
         </template>
 
         <template v-if="houseHits.length">
-          <div class="palette-section">房屋</div>
+          <div class="palette-section">房屋 · 回车打开住户档案</div>
           <button
             v-for="(h, i) in houseHits"
             :key="h.id"

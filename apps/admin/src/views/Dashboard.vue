@@ -11,6 +11,30 @@
       </el-button>
     </div>
 
+    <!--
+      查户：业主来电问「我这个月交了没」是日常最高频动作，之前只能先进「住户」页
+      再搜，用户反馈找不到档案入口。这里直接给一个首屏搜索框，唯一命中直接进档案。
+    -->
+    <el-card class="block lookup">
+      <div class="lk-row">
+        <div class="lk-text">
+          <b class="lk-title">查住户档案</b>
+          <span class="lk-desc">输入房号、业主姓名或手机号，直接看这户的账单、缴费、绑定、报修、开票</span>
+        </div>
+        <el-input
+          v-model="lookupKeyword"
+          class="lk-input"
+          placeholder="如 1-101 / 张三 / 13800138000"
+          clearable
+          :disabled="lookingUp"
+          @keyup.enter="doLookup"
+        />
+        <el-button type="primary" :loading="lookingUp" :disabled="!lookupKeyword.trim()" @click="doLookup">
+          查询
+        </el-button>
+      </div>
+    </el-card>
+
     <!-- 待我处理：别人在等我做的事 -->
     <el-card v-if="today" class="block">
       <template #header>
@@ -125,7 +149,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { api, qs } from '../api';
+import { ElMessage } from 'element-plus';
+import { api, qs, type Page } from '../api';
 import { yuan } from '../finance';
 
 interface Todo {
@@ -157,6 +182,28 @@ const today = ref<Today | null>(null);
 const rowsData = ref<CommunityRow[]>([]);
 const period = ref('');
 const loading = ref(false);
+
+/** 查户：唯一命中直接进档案，多条则落到住户列表（已带关键词），零条给明确提示 */
+const lookupKeyword = ref('');
+const lookingUp = ref(false);
+
+async function doLookup() {
+  const keyword = lookupKeyword.value.trim();
+  if (!keyword || lookingUp.value) return;
+  lookingUp.value = true;
+  try {
+    const data = await api<Page<{ id: string }>>(`/admin/houses${qs({ keyword, page: 1, pageSize: 2 })}`);
+    if (data.total === 0) {
+      ElMessage.warning('没有匹配的房屋，检查一下房号或手机号');
+    } else if (data.total === 1) {
+      router.push(`/houses/${data.list[0].id}`);
+    } else {
+      router.push({ path: '/houses', query: { keyword } });
+    }
+  } finally {
+    lookingUp.value = false;
+  }
+}
 
 const periodLabel = computed(() => {
   if (!today.value) return '本月';
@@ -237,6 +284,42 @@ onMounted(load);
 </script>
 
 <style scoped>
+/* ---------- 查户搜索条 ---------- */
+.lookup {
+  margin-bottom: var(--sp-2);
+}
+.lk-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.lk-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.lk-title {
+  font-size: var(--fs-15);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.lk-desc {
+  margin-top: 2px;
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+}
+.lk-input {
+  width: 260px;
+}
+@media (max-width: 700px) {
+  /* 窄屏下搜索框占满一行，避免被挤成不可用的窄条 */
+  .lk-input {
+    width: 100%;
+  }
+}
+
 .phase {
   display: flex;
   align-items: center;

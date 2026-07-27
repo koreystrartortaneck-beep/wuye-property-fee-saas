@@ -49,7 +49,7 @@ export const NAV: NavGroup[] = [
     label: '住户',
     icon: 'HomeFilled',
     pages: [
-      { path: '/houses', label: '房屋与业主', hint: '房号、面积、业主联系方式；支持批量导入' },
+      { path: '/houses', label: '房屋与业主', hint: '点任意一行查住户档案（账单/缴费/绑定/报修/开票）；支持批量导入' },
       {
         path: '/bindings',
         label: '实名审核',
