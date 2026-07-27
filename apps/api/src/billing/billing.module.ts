@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PaymentModule } from '../payment/payment.module';
 import { PaymentService } from '../payment/payment.service';
+import { ArrearsController, ArrearsService } from './arrears.controller';
 import { BillImportController } from './bill-import.controller';
 import { BillImportService } from './bill-import.service';
 import { BillRunController, BillsAdminService } from './bill-run.controller';
@@ -13,8 +14,9 @@ import { SharePoolController, SharePoolService } from './share-pool.controller';
 
 @Module({
   imports: [PaymentModule],
-  controllers: [FeeRulesController, MeterController, SharePoolController, BillRunController, BillImportController],
+  controllers: [FeeRulesController, MeterController, SharePoolController, BillRunController, BillImportController, ArrearsController],
   providers: [
+    ArrearsService,
     FeeRulesService,
     MeterService,
     SharePoolService,

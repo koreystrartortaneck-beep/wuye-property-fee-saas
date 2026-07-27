@@ -70,6 +70,12 @@ export const NAV: NavGroup[] = [
         title: '出账（每月一次）',
         hint: '按 4 步完成：设收费标准 → 选账期 → 生成账单 → 核对后发布给业主',
       },
+      {
+        path: '/arrears',
+        label: '欠费与催缴',
+        title: '欠费与催缴',
+        hint: '按住户看谁欠费、欠多久，可批量推送催缴提醒或导出清单',
+      },
       { path: '/bills', label: '账单查询', hint: '查看每户的账单、缴费与逾期情况' },
       { path: '/bill-import', label: '导入账单', hint: '每户金额不同时，用表格批量导入' },
       { path: '/meters', label: '抄表', title: '水电气抄表', hint: '录入本期读数，用于按量计费' },

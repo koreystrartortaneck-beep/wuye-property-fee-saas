@@ -25,6 +25,7 @@ export const router = createRouter({
         { path: 'meters', component: () => import('./views/MeterReadings.vue'), meta: { title: '抄表录入' } },
         { path: 'share-pools', component: () => import('./views/SharePools.vue'), meta: { title: '公摊录入' } },
         { path: 'bill-run', component: () => import('./views/BillRun.vue'), meta: { title: '出账' } },
+        { path: 'arrears', component: () => import('./views/Arrears.vue'), meta: { title: '欠费与催缴' } },
         { path: 'bills', component: () => import('./views/BillList.vue'), meta: { title: '账单查询' } },
         { path: 'bill-import', component: () => import('./views/BillImport.vue'), meta: { title: '导入账单' } },
         { path: 'payments', component: () => import('./views/Payments.vue'), meta: { title: '支付与退款' } },
