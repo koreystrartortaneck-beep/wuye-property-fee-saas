@@ -7,9 +7,11 @@ import { StatsController } from './stats.controller';
 import { TenantsController, TenantsService } from './tenants.controller';
 import { CloudFilesController } from './cloud-files.controller';
 import { HouseProfileController, HouseProfileService } from './house-profile.controller';
+import { TodayController, TodayService } from './today.controller';
 
 @Module({
   controllers: [
+    TodayController,
     HouseProfileController,
     AdminAuthController,
     TenantsController,
@@ -19,6 +21,6 @@ import { HouseProfileController, HouseProfileService } from './house-profile.con
     StatsController,
     CloudFilesController,
   ],
-  providers: [HouseProfileService, AdminAuthService, TenantsService, CommunitiesService, HousesService, BindingsService],
+  providers: [TodayService, HouseProfileService, AdminAuthService, TenantsService, CommunitiesService, HousesService, BindingsService],
 })
 export class AdminModule {}

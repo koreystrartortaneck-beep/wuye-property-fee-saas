@@ -1,102 +1,233 @@
 <template>
-  <div class="toolbar">
-    <el-date-picker
-      v-model="period"
-      type="month"
-      value-format="YYYY-MM"
-      format="YYYY 年 M 月"
-      placeholder="全部账期"
-      clearable
-      style="width: 170px"
-      @change="load"
-    />
-    <el-button :loading="loading" @click="load">查询</el-button>
-  </div>
-
-  <el-row v-loading="loading" :gutter="16" class="cards">
-    <el-col :xs="24" :sm="12" :md="6">
-      <el-card><div class="stat-label">应收（元）</div><div class="stat-value">{{ summary.billAmount }}</div></el-card>
-    </el-col>
-    <el-col :xs="24" :sm="12" :md="6">
-      <el-card><div class="stat-label">实收（元）</div><div class="stat-value ok">{{ summary.paidAmount }}</div></el-card>
-    </el-col>
-    <el-col :xs="24" :sm="12" :md="6">
-      <el-card><div class="stat-label">收缴率</div><div class="stat-value">{{ summary.rate }}%</div></el-card>
-    </el-col>
-    <el-col :xs="24" :sm="12" :md="6">
-      <el-card>
-        <div class="stat-label">账单（笔）</div>
-        <div class="stat-value">{{ summary.paidCount }} / {{ summary.billCount }}</div>
-      </el-card>
-    </el-col>
-  </el-row>
-
-  <el-card v-if="rowsData.length > 1">
-    <template #header>各小区收缴情况</template>
-    <el-table v-loading="loading" :data="rowsData">
-      <el-table-column prop="name" label="小区" min-width="150" />
-      <el-table-column prop="billAmount" label="应收（元）" width="130" />
-      <el-table-column prop="paidAmount" label="实收（元）" width="130" />
-      <el-table-column label="账单（笔）" width="110">
-        <template #default="{ row }">{{ row.paidCount }} / {{ row.billCount }}</template>
-      </el-table-column>
-      <el-table-column label="收缴率" min-width="200">
-        <template #default="{ row }">
-          <el-progress :percentage="clampRate(row.rate)" :stroke-width="14" :color="row.rate >= 80 ? 'var(--success)' : row.rate >= 50 ? 'var(--warning)' : 'var(--danger-text)'" />
-        </template>
-      </el-table-column>
-    </el-table>
-  </el-card>
-
-  <el-card v-if="rowsData.length <= 1">
-    <div class="single-hint">
-      <p class="sh-title">本月收缴情况</p>
-      <p class="sh-desc">
-        当前只有一个小区，各小区对比表已隐藏。可到
-        <el-button text type="primary" size="small" @click="$router.push('/bills')">账单查询</el-button>
-        查看每户的缴费与逾期明细。
-      </p>
+  <div v-loading="loading">
+    <!-- 阶段向导：物业工作是强周期的，首屏直接说明现在该干什么 -->
+    <div v-if="today" class="phase" :class="phaseClass">
+      <div class="phase-text">
+        <h2 class="phase-title">{{ phaseTitle }}</h2>
+        <p class="phase-desc">{{ phaseDesc }}</p>
+      </div>
+      <el-button v-if="phaseAction" type="primary" size="large" @click="router.push(phaseAction.to)">
+        {{ phaseAction.label }}
+      </el-button>
     </div>
-  </el-card>
+
+    <!-- 待我处理：别人在等我做的事 -->
+    <el-card v-if="today" class="block">
+      <template #header>
+        待我处理
+        <span v-if="today.todoTotal > 0" class="hd-count">{{ today.todoTotal }}</span>
+      </template>
+      <div v-if="today.todos.length" class="todos">
+        <button v-for="t in today.todos" :key="t.key" class="todo" @click="router.push(t.to)">
+          <span class="todo-count">{{ t.count }}</span>
+          <span class="todo-label">{{ t.label }}</span>
+          <span class="todo-go">›</span>
+        </button>
+      </div>
+      <div v-else class="clear-note">没有待处理事项，一切都跟上了。</div>
+    </el-card>
+
+    <!-- 本月收缴 + 欠费 -->
+    <div v-if="today" class="grid">
+      <el-card class="block">
+        <template #header>{{ periodLabel }}收缴进度</template>
+        <div class="figs">
+          <div class="fig">
+            <span class="fig-label">应收</span>
+            <b class="fig-value num">¥{{ yuan(today.collection.billAmount) }}</b>
+          </div>
+          <div class="fig">
+            <span class="fig-label">实收</span>
+            <b class="fig-value num ok">¥{{ yuan(today.collection.paidAmount) }}</b>
+          </div>
+          <div class="fig">
+            <span class="fig-label">笔数</span>
+            <b class="fig-value num">{{ today.collection.paidCount }} / {{ today.collection.billCount }}</b>
+          </div>
+        </div>
+        <div class="rate-row">
+          <span class="rate-label">收缴率</span>
+          <el-progress
+            :percentage="clampRate(today.collection.rate)"
+            :stroke-width="14"
+            :color="rateColor(today.collection.rate)"
+            class="rate-bar"
+          />
+        </div>
+      </el-card>
+
+      <el-card class="block">
+        <template #header>欠费情况（全部账期）</template>
+        <div class="figs">
+          <div class="fig">
+            <span class="fig-label">欠费合计</span>
+            <b class="fig-value num" :class="{ bad: Number(today.arrears.amount) > 0 }">
+              ¥{{ yuan(today.arrears.amount) }}
+            </b>
+            <span class="fig-sub">{{ today.arrears.houses }} 户</span>
+          </div>
+          <div class="fig">
+            <span class="fig-label">其中已逾期</span>
+            <b class="fig-value num" :class="{ bad: Number(today.arrears.overdueAmount) > 0 }">
+              ¥{{ yuan(today.arrears.overdueAmount) }}
+            </b>
+            <span class="fig-sub">{{ today.arrears.overdueHouses }} 户</span>
+          </div>
+        </div>
+        <el-button
+          v-if="today.arrears.houses > 0"
+          type="primary"
+          text
+          @click="router.push('/arrears')"
+        >去催缴 →</el-button>
+      </el-card>
+    </div>
+
+    <!-- 各小区对比：仅多小区时有意义（单小区只有一行，纯噪音） -->
+    <el-card v-if="rowsData.length > 1" class="block">
+      <template #header>
+        各小区收缴情况
+        <el-date-picker
+          v-model="period"
+          type="month"
+          value-format="YYYY-MM"
+          format="YYYY 年 M 月"
+          placeholder="全部账期"
+          clearable
+          size="small"
+          class="hd-period"
+          @change="loadByCommunity"
+        />
+      </template>
+      <el-table :data="rowsData" size="small">
+        <el-table-column prop="name" label="小区" min-width="150" />
+        <el-table-column label="应收（元）" width="130" align="right">
+          <template #default="{ row }"><span class="num">{{ yuan(row.billAmount) }}</span></template>
+        </el-table-column>
+        <el-table-column label="实收（元）" width="130" align="right">
+          <template #default="{ row }"><span class="num">{{ yuan(row.paidAmount) }}</span></template>
+        </el-table-column>
+        <el-table-column label="笔数" width="100" align="right">
+          <template #default="{ row }">
+            <span class="num">{{ row.paidCount }} / {{ row.billCount }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="收缴率" min-width="200">
+          <template #default="{ row }">
+            <el-progress :percentage="clampRate(row.rate)" :stroke-width="14" :color="rateColor(row.rate)" />
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { api, qs } from '../api';
-import { currentMonth } from '../composables';
+import { yuan } from '../finance';
 
-interface Summary {
+interface Todo {
+  key: string;
+  label: string;
+  count: number;
+  to: string;
+}
+interface Today {
+  period: string;
+  phase: 'NEED_BILLING' | 'NEED_PUBLISH' | 'DUNNING' | 'RECONCILE' | 'CLEAR';
+  todos: Todo[];
+  todoTotal: number;
+  collection: { billAmount: string; paidAmount: string; billCount: number; paidCount: number; rate: number };
+  arrears: { amount: string; houses: number; overdueAmount: string; overdueHouses: number };
+}
+interface CommunityRow {
+  communityId: string;
+  name: string;
   billAmount: string;
-  billCount: number;
   paidAmount: string;
+  billCount: number;
   paidCount: number;
   rate: number;
 }
 
-const period = ref(currentMonth());
-const summary = ref<Summary>({ billAmount: '0.00', billCount: 0, paidAmount: '0.00', paidCount: 0, rate: 0 });
-const rowsData = ref<(Summary & { communityId: string; name: string })[]>([]);
-
+const router = useRouter();
+const today = ref<Today | null>(null);
+const rowsData = ref<CommunityRow[]>([]);
+const period = ref('');
 const loading = ref(false);
 
-/** 收缴率可能因退款/多缴超出 0~100，Element 的 el-progress 会直接报错 */
+const periodLabel = computed(() => {
+  if (!today.value) return '本月';
+  const [y, m] = today.value.period.split('-');
+  return `${y} 年 ${Number(m)} 月`;
+});
+
+/** 阶段文案：把「系统等你操作」说成人话，并给出唯一的下一步动作 */
+const PHASE: Record<Today['phase'], { title: string; desc: string; action?: Todo }> = {
+  NEED_BILLING: {
+    title: '该出本月账单了',
+    desc: '本月还没有生成任何账单，业主也就看不到费用。按 4 步走完即可发布。',
+    action: { key: 'go', label: '开始出账', count: 0, to: '/bill-run' },
+  },
+  NEED_PUBLISH: {
+    title: '账单已生成，还没发布',
+    desc: '业主目前看不到这些账单，核对金额后发布才能开始收费。',
+    action: { key: 'go', label: '去核对并发布', count: 0, to: '/bill-run' },
+  },
+  DUNNING: {
+    title: '本月进入催缴阶段',
+    desc: '账单已发布，接下来盯欠费：可按逾期天数筛选并批量推送催缴提醒。',
+    action: { key: 'go', label: '查看欠费清单', count: 0, to: '/arrears' },
+  },
+  RECONCILE: {
+    title: '有对账差异待处置',
+    desc: '本地流水与微信支付的对账结果存在差异，需要人工核对后处置。',
+    action: { key: 'go', label: '去处理差异', count: 0, to: '/reconciliations' },
+  },
+  CLEAR: {
+    title: '本月工作都跟上了',
+    desc: '账单已发布、没有欠费、也没有对账差异。可以看看报事报修与公告。',
+  },
+};
+
+const phaseTitle = computed(() => (today.value ? PHASE[today.value.phase].title : ''));
+const phaseDesc = computed(() => (today.value ? PHASE[today.value.phase].desc : ''));
+const phaseAction = computed(() => (today.value ? PHASE[today.value.phase].action : undefined));
+const phaseClass = computed(() => {
+  const p = today.value?.phase;
+  if (p === 'CLEAR') return 'is-clear';
+  if (p === 'RECONCILE') return 'is-alert';
+  return 'is-todo';
+});
+
+/** 收缴率可能因退款/多缴越界，越界会让 el-progress 直接报错 */
 function clampRate(v: unknown): number {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
   return Math.min(100, Math.max(0, Math.round(n)));
+}
+function rateColor(v: unknown): string {
+  const n = clampRate(v);
+  if (n >= 80) return '#34c759';
+  if (n >= 50) return '#ff9500';
+  return '#ff3b30';
+}
+
+async function loadToday() {
+  today.value = await api<Today>('/admin/today');
+}
+
+async function loadByCommunity() {
+  rowsData.value = await api<CommunityRow[]>(`/admin/stats/by-community${qs({ period: period.value })}`);
 }
 
 async function load() {
   if (loading.value) return;
   loading.value = true;
   try {
-    const q = qs({ period: period.value });
-    const [s, rows] = await Promise.all([
-      api<Summary>(`/admin/stats/summary${q}`),
-      api<(Summary & { communityId: string; name: string })[]>(`/admin/stats/by-community${q}`),
-    ]);
-    summary.value = s;
-    rowsData.value = rows;
+    await Promise.all([loadToday(), loadByCommunity()]);
   } finally {
     loading.value = false;
   }
@@ -106,39 +237,168 @@ onMounted(load);
 </script>
 
 <style scoped>
-.single-hint {
-  padding: var(--sp-4) 0;
-}
-.sh-title {
-  margin: 0 0 var(--sp-1);
-  font-size: var(--fs-13);
-  font-weight: var(--fw-semibold);
-}
-.sh-desc {
-  margin: 0;
-  font-size: var(--fs-12);
-  color: var(--text-secondary);
-}
-.toolbar {
+.phase {
   display: flex;
-  gap: 10px;
-  margin-bottom: 16px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-6);
+  padding: var(--sp-6);
+  border-radius: var(--r-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
   flex-wrap: wrap;
 }
-.cards {
-  margin-bottom: 16px;
+.phase.is-todo {
+  border-left: 3px solid var(--primary);
 }
-.stat-label {
-  color: var(--text-secondary);
-  font-size: var(--fs-13);
+.phase.is-alert {
+  border-left: 3px solid var(--danger);
 }
-.stat-value {
-  font-size: var(--fs-28);
-  font-weight: 800;
+.phase.is-clear {
+  border-left: 3px solid var(--success);
+}
+.phase-title {
+  margin: 0;
+  font-size: var(--fs-20);
+  font-weight: var(--fw-semibold);
   color: var(--text-primary);
-  margin-top: 6px;
 }
-.stat-value.ok {
+.phase-desc {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-13);
+  color: var(--text-secondary);
+  line-height: var(--lh-normal);
+}
+
+.block {
+  margin-top: var(--sp-3);
+}
+.hd-count {
+  margin-left: var(--sp-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-full);
+  background: var(--danger);
+  color: var(--text-inverse);
+  font-size: var(--fs-11);
+  font-variant-numeric: tabular-nums;
+}
+.hd-period {
+  float: right;
+  width: 150px;
+}
+
+.todos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--sp-2);
+}
+.todo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--c-gray-50);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.todo:hover {
+  border-color: var(--primary);
+  background: var(--bg-card);
+}
+.todo-count {
+  font-size: var(--fs-20);
+  font-weight: var(--fw-semibold);
+  color: var(--danger-text);
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+}
+.todo-label {
+  flex: 1;
+  font-size: var(--fs-13);
+  color: var(--text-primary);
+}
+.todo-go {
+  color: var(--text-tertiary);
+  font-size: var(--fs-17);
+}
+.clear-note {
+  padding: var(--sp-4) 0;
+  text-align: center;
+  font-size: var(--fs-13);
+  color: var(--text-secondary);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+.grid .block {
+  margin-top: 0;
+}
+.figs {
+  display: flex;
+  gap: var(--sp-8);
+  flex-wrap: wrap;
+}
+.fig {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.fig-label {
+  font-size: var(--fs-11);
+  color: var(--text-tertiary);
+}
+.fig-value {
+  font-size: var(--fs-20);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.fig-value.ok {
   color: var(--success-text);
+}
+.fig-value.bad {
+  color: var(--danger-text);
+}
+.fig-sub {
+  font-size: var(--fs-11);
+  color: var(--text-tertiary);
+}
+.rate-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+.rate-label {
+  font-size: var(--fs-12);
+  color: var(--text-secondary);
+  flex: 0 0 auto;
+}
+.rate-bar {
+  flex: 1;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .phase {
+    padding: var(--sp-4);
+  }
+  .figs {
+    gap: var(--sp-6);
+  }
 }
 </style>
