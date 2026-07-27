@@ -37,6 +37,7 @@ export const router = createRouter({
         { path: 'reconciliations', component: () => import('./views/Reconciliations.vue'), meta: { title: '对账管理' } },
         { path: 'invoices', component: () => import('./views/InvoiceApplications.vue'), meta: { title: '开票申请' } },
         { path: 'billing-settings', component: () => import('./views/BillingSettings.vue'), meta: { title: '收款策略' } },
+        { path: 'operations', component: () => import('./views/Operations.vue'), meta: { title: '运行状况' } },
         { path: 'audit-logs', component: () => import('./views/AuditLogs.vue'), meta: { title: '审计日志' } },
         { path: 'notify-logs', component: () => import('./views/NotifyLogs.vue'), meta: { title: '通知记录' } },
         { path: 'tenants', component: () => import('./views/Tenants.vue'), meta: { title: '租户管理', superOnly: true } },

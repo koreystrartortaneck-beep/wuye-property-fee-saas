@@ -114,6 +114,12 @@ export const NAV: NavGroup[] = [
       { path: '/services', label: '生活服务', hint: '可选的增值服务项目' },
       { path: '/coupons', label: '优惠券', hint: '可选的营销活动' },
       { path: '/notify-logs', label: '通知记录', hint: '发给业主的提醒记录' },
+      {
+        path: '/operations',
+        label: '运行状况',
+        title: '运行状况与异常处置',
+        hint: '收款成功率、对账差异、资金异常等关键指标，以及异常事件的处置',
+      },
       { path: '/audit-logs', label: '操作留痕', hint: '谁在什么时候改了什么' },
       { path: '/tenants', label: '物业公司', hint: '平台级：管理各物业公司', superOnly: true },
     ],
