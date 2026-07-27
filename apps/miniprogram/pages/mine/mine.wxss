@@ -191,3 +191,11 @@
 .tag-rejected {
   color: #c45656;
 }
+
+/* ---------- 注销账号（危险操作，视觉与普通菜单区分）---------- */
+.danger-row {
+  border-top: none;
+}
+.danger-name {
+  color: #c45656;
+}

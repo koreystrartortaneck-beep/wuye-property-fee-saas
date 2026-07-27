@@ -12,6 +12,7 @@ Page({
     currentHouse: null, // {communityName, displayName, tag}
     houseCount: 0,
     pendingBindings: [],
+    deleting: false,
     menus: [
       { key: 'tickets', title: '我的工单', desc: '报修与投诉建议进度' },
       { key: 'orders', title: '我的预约', desc: '生活服务预约记录' },
@@ -118,5 +119,89 @@ Page({
     if (key === 'announcements') wx.navigateTo({ url: '/pages/announcements/announcements' });
     if (key === 'coupons') wx.navigateTo({ url: '/pages/coupons/coupons' });
     if (key === 'workwall') wx.navigateTo({ url: '/pages/work-wall/work-wall' });
+  },
+
+  /**
+   * 注销账号。小程序上架要求必须提供该入口。
+   * 后端行为：解除全部绑定 + 匿名化个人信息 + 吊销令牌，
+   * 但保留财务与审计留痕（已缴费记录不会消失，符合会计要求）。
+   */
+  async confirmDeleteAccount() {
+    if (this.data.deleting) return;
+
+    // 先提示未缴清账单，避免业主以为注销就不用交了
+    let unpaidHint = '';
+    try {
+      const house = getApp().globalData.currentHouse;
+      if (house) {
+        const sum = await request(`/owner/bills/summary?houseId=${house.houseId}`, { silent: true });
+        if (Number(sum.unpaidTotal) > 0) {
+          unpaidHint = `\n\n注意：名下仍有 ${sum.unpaidCount} 笔待缴费用（¥${sum.unpaidTotal}），注销不会免除欠费。`;
+        }
+      }
+    } catch (e) {
+      /* 查询失败不阻断注销 */
+    }
+
+    const first = await new Promise((resolve) =>
+      wx.showModal({
+        title: '注销账号',
+        content:
+          '注销后将解除你名下全部房屋绑定，并清除昵称、手机号等个人信息，且无法恢复。' +
+          '已产生的缴费记录会按法规保留。' +
+          unpaidHint,
+        confirmText: '继续注销',
+        confirmColor: '#c45656',
+        cancelText: '取消',
+        success: (r) => resolve(r.confirm),
+        fail: () => resolve(false),
+      }),
+    );
+    if (!first) return;
+
+    // 二次确认：不可恢复的操作值得再拦一次
+    const second = await new Promise((resolve) =>
+      wx.showModal({
+        title: '再次确认',
+        content: '确定要永久注销该账号吗？此操作无法撤销。',
+        confirmText: '确认注销',
+        confirmColor: '#c45656',
+        cancelText: '我再想想',
+        success: (r) => resolve(r.confirm),
+        fail: () => resolve(false),
+      }),
+    );
+    if (!second) return;
+
+    this.setData({ deleting: true });
+    wx.showLoading({ title: '正在注销' });
+    try {
+      await request('/owner/account', { method: 'DELETE' });
+      wx.hideLoading();
+      const app = getApp();
+      app.globalData.houses = [];
+      app.globalData.currentHouse = null;
+      app.globalData.token = '';
+      try {
+        wx.removeStorageSync('token');
+        wx.removeStorageSync('mockOpenid');
+      } catch (e) {
+        /* 忽略 */
+      }
+      await new Promise((resolve) =>
+        wx.showModal({
+          title: '已注销',
+          content: '你的账号已注销。如需继续使用，可重新授权登录并绑定房屋。',
+          showCancel: false,
+          complete: resolve,
+        }),
+      );
+      wx.reLaunch({ url: '/pages/index/index' });
+    } catch (e) {
+      wx.hideLoading();
+      // 错误已由 request 统一提示
+    } finally {
+      this.setData({ deleting: false });
+    }
   },
 });
