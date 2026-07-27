@@ -35,7 +35,14 @@
       </div>
       <div class="field">
         <label>选择文件</label>
-        <el-upload :auto-upload="false" :limit="1" :on-change="onFilePick" :on-remove="() => (file = null)">
+        <el-upload
+          :auto-upload="false"
+          :limit="1"
+          accept=".csv,.xlsx"
+          :on-change="onFilePick"
+          :on-exceed="onExceed"
+          :on-remove="() => (file = null)"
+        >
           <el-button>选择表格文件</el-button>
         </el-upload>
       </div>
@@ -44,6 +51,7 @@
         <el-button type="primary" :loading="previewing" :disabled="!canPreview" @click="doPreview">
           检查表格
         </el-button>
+        <span v-if="blockedReason" class="blocked">{{ blockedReason }}</span>
       </div>
     </div>
 
@@ -93,7 +101,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, type UploadFile } from 'element-plus';
 import { uploadForm } from '../api';
 import { currentMonth, useCommunities } from '../composables';
@@ -117,7 +125,8 @@ interface Preview {
 }
 
 const router = useRouter();
-const { communities } = useCommunities();
+const route = useRoute();
+const { communities, loadCommunities } = useCommunities(false);
 const form = ref({ communityId: '', period: currentMonth() });
 const file = ref<File | null>(null);
 const preview = ref<Preview | null>(null);
@@ -127,20 +136,55 @@ const requestId = ref('');
 
 const canPreview = computed(() => !!file.value && !!form.value.communityId && !!form.value.period);
 
-onMounted(() => {
-  // 单小区场景自动选定，少一次点击
-  const stop = setInterval(() => {
-    if (communities.value.length > 0) {
-      if (!form.value.communityId) form.value.communityId = communities.value[0].id;
-      clearInterval(stop);
-    }
-  }, 120);
-  setTimeout(() => clearInterval(stop), 5000);
+onMounted(async () => {
+  // 直接 await 加载，替代此前的 setInterval 轮询：
+  // 原写法 5 秒内没加载完就永久放弃，而单小区时选择框是隐藏的，
+  // canPreview 恒为 false，「检查表格」按钮灰着且不给任何原因；
+  // 组件卸载也不清 timer。
+  try {
+    await loadCommunities();
+  } catch {
+    /* 错误已由全局提示 */
+  }
+  // 账期可由「导入后跳转」带入，避免落地默认当月导致以为导入失败
+  const q = route.query.period as string | undefined;
+  if (q && /^\d{4}-\d{2}$/.test(q)) form.value.period = q;
+  if (!form.value.communityId && communities.value.length > 0) {
+    form.value.communityId = communities.value[0].id;
+  }
 });
 
+/** 按钮不可用时说明原因，别让用户对着灰按钮猜 */
+const blockedReason = computed(() => {
+  if (!communities.value.length) return '还没有小区，请先到「设置 → 小区信息」创建';
+  if (!form.value.communityId) return '请选择小区';
+  if (!form.value.period) return '请选择账期';
+  if (!file.value) return '请先选择表格文件';
+  return '';
+});
+
+const MAX_MB = 5;
 function onFilePick(f: UploadFile) {
-  file.value = (f.raw as File) || null;
+  const raw = (f.raw as File) || null;
   preview.value = null;
+  if (!raw) {
+    file.value = null;
+    return;
+  }
+  if (!/\.(csv|xlsx)$/i.test(raw.name)) {
+    file.value = null;
+    return ElMessage.warning('只支持 .csv 与 .xlsx 文件');
+  }
+  if (raw.size > MAX_MB * 1024 * 1024) {
+    file.value = null;
+    return ElMessage.warning(`文件不能超过 ${MAX_MB} MB`);
+  }
+  file.value = raw;
+}
+
+/** 只允许一个文件：不加提示的话选第二个会静默无反应 */
+function onExceed() {
+  ElMessage.warning('一次只能导入一个文件，请先移除已选文件');
 }
 
 async function doPreview() {
@@ -169,7 +213,7 @@ async function doConfirm() {
     ElMessage.success('已导入，请到「出账」页核对并发布');
     preview.value = null;
     file.value = null;
-    void router.push('/bill-run');
+    void router.push({ path: '/bill-run', query: { period: form.value.period } });
   } finally {
     confirming.value = false;
   }
@@ -182,11 +226,17 @@ function downloadTemplate() {
   a.href = URL.createObjectURL(blob);
   a.download = '账单导入模板.csv';
   a.click();
-  URL.revokeObjectURL(a.href);
+  // 延后回收：立即 revoke 在部分浏览器会导致下载被取消
+  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
 }
 </script>
 
 <style scoped>
+.blocked {
+  margin-left: var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--warning-text);
+}
 .mb {
   margin-bottom: var(--sp-4);
 }

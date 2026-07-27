@@ -89,7 +89,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '../api';
 import { store } from '../store';
 import { useCommunities } from '../composables';
@@ -158,6 +158,18 @@ function openEdit(s: 'platform' | 'tenant' | 'community', communityId = '') {
 }
 
 async function submit() {
+  // 暂停后该范围内业主立即无法在线缴费，属高影响开关
+  if (form.value.status === 'PAUSED') {
+    try {
+      await ElMessageBox.confirm(
+        '暂停后，该范围内的业主将立即无法在小程序缴费（已发起的支付不受影响）。\n确定暂停收款吗？',
+        '确认暂停收款',
+        { type: 'warning', confirmButtonText: '暂停收款', cancelButtonText: '取消' },
+      );
+    } catch {
+      return;
+    }
+  }
   if (!form.value.reason.trim()) return ElMessage.warning('请填写调整原因');
   const body: Record<string, unknown> = { status: form.value.status, reason: form.value.reason.trim() };
   if (form.value.status === 'PAUSED' && form.value.resumeAt) {

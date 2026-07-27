@@ -238,7 +238,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { currentMonth, useCommunities } from '../composables';
@@ -278,7 +278,14 @@ interface Bill {
 const router = useRouter();
 const { communities } = useCommunities();
 const rules = ref<Rule[]>([]);
-const chosen = ref({ period: currentMonth(), ruleId: '' });
+// 账期可由「导入账单」跳转带入：否则导 6 月账单却落地 7 月，
+// 显示「尚未生成账单」，用户以为导入失败。
+const route = useRoute();
+const initialPeriod = (route.query.period as string) || '';
+const chosen = ref({
+  period: /^\d{4}-\d{2}$/.test(initialPeriod) ? initialPeriod : currentMonth(),
+  ruleId: '',
+});
 const running = ref(false);
 const publishing = ref(false);
 /** 同一批次的发布重试复用同一幂等键，避免超时重试被当成新一次发布 */
@@ -462,6 +469,17 @@ async function generate() {
 
 async function publish() {
   if (!batch.value) return;
+  // 发布不可撤销，且立刻对全体业主生效——这是本页唯一真正不可逆的动作
+  try {
+    await ElMessageBox.confirm(
+      `即将向 ${batchCount.value} 户发布账单，合计 ¥${batchTotal.value}。\n` +
+        '发布后业主立即可在小程序看到并缴费，且无法撤销。请确认金额无误。',
+      '确认发布给业主',
+      { type: 'warning', confirmButtonText: '确认发布', cancelButtonText: '再核对一下' },
+    );
+  } catch {
+    return;
+  }
   if (!publishRequestId.value) publishRequestId.value = genRequestId(`publish-${batch.value.id}`);
   publishing.value = true;
   try {

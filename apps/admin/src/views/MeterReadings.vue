@@ -108,6 +108,17 @@ async function load() {
 }
 
 async function submit(row: HouseLite) {
+  // 读数直接决定账单金额，且已生成的账单不会自动重算
+  try {
+    await ElMessageBox.confirm(
+      `将为「${row.displayName || row.code}」录入本期读数。读数决定账单金额，` +
+        `若该账期已出过账单，改读数不会自动重算，需要作废后重新出账。确定录入吗？`,
+      '确认录入读数',
+      { type: 'warning', confirmButtonText: '录入', cancelButtonText: '取消' },
+    );
+  } catch {
+    return;
+  }
   const value = inputs.value[row.id];
   if (value === undefined) return ElMessage.warning('请输入读数');
   await api('/admin/meter-readings', {

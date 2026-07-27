@@ -108,6 +108,18 @@ async function save() {
 }
 
 async function toggle(row: Community) {
+  // 停用小区会连带影响该小区的出账与业主缴费，误点代价高
+  if (row.status === 'ACTIVE') {
+    try {
+      await ElMessageBox.confirm(
+        `停用后「${row.name}」将不再参与出账，业主端也看不到该小区。确定停用吗？`,
+        '停用小区',
+        { type: 'warning', confirmButtonText: '停用', cancelButtonText: '取消' },
+      );
+    } catch {
+      return;
+    }
+  }
   await api(`/admin/communities/${row.id}`, {
     method: 'PATCH',
     body: { status: row.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE' },

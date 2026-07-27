@@ -89,6 +89,18 @@ async function save() {
 }
 
 async function toggle(row: Tenant) {
+  // 停用物业公司 = 该公司下所有小区、账单、缴费全部停摆
+  if (row.status === 'ACTIVE') {
+    try {
+      await ElMessageBox.confirm(
+        `停用后「${row.name}」下的所有小区将无法出账、业主无法缴费。确定停用吗？`,
+        '停用物业公司',
+        { type: 'warning', confirmButtonText: '停用', cancelButtonText: '取消' },
+      );
+    } catch {
+      return;
+    }
+  }
   await api(`/admin/tenants/${row.id}`, {
     method: 'PATCH',
     body: { status: row.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE' },

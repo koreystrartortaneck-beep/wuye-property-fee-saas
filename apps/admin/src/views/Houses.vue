@@ -101,7 +101,16 @@ interface House {
 }
 
 const { communities } = useCommunities();
-const filter = ref({ communityId: '', type: '', keyword: '' });
+/**
+ * 支持从 URL 带入筛选：⌘K 命令面板搜到房号后跳 /houses?keyword=xxx，
+ * 若此处不读 route.query，落地就是未过滤的全量列表，等于没搜。
+ */
+const route = useRoute();
+const filter = ref({
+  communityId: '',
+  type: '',
+  keyword: (route.query.keyword as string) || '',
+});
 /** 提交中：防止连点造成重复创建（如双击保存会生成两条同名收费标准 → 业主看到两张一样的账单） */
 const saving = ref(false);
 const rows = ref<House[]>([]);

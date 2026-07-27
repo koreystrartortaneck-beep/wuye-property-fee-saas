@@ -75,6 +75,17 @@ async function load() {
 
 async function save() {
   if (saving.value) return;
+  // 公摊总额是分摊计费的依据，覆盖后已出账单不会重算
+  try {
+    await ElMessageBox.confirm(
+      '公摊总额决定各户的分摊金额。若该账期已出过账单，覆盖后不会自动重算，' +
+        '需要作废后重新出账。确定保存吗？',
+      '确认覆盖公摊总额',
+      { type: 'warning', confirmButtonText: '保存', cancelButtonText: '取消' },
+    );
+  } catch {
+    return;
+  }
   saving.value = true;
   try {
     if (!/^\d{4}(-\d{2}|-Q[1-4])?$/.test(period.value)) return ElMessage.warning('账期格式：YYYY-MM / YYYY-Qn / YYYY');
