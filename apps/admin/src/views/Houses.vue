@@ -91,6 +91,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { HOUSE_TYPE_LABEL, useCommunities } from '../composables';

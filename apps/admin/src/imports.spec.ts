@@ -37,6 +37,27 @@ for (const f of SHARED) {
   for (const n of exportedConsts(f)) SHARED_SYMBOLS.add(n);
 }
 
+/**
+ * 三方库里最常被漏导入的组合式 API 与全局提示。
+ * 实际踩过：Houses.vue 使用了 useRoute 却未 import，运行时整页（含侧栏）
+ * 直接白屏——而首版守卫只检查自有共享模块，没能拦住。
+ */
+for (const n of [
+  'useRoute',
+  'useRouter',
+  'ref',
+  'reactive',
+  'computed',
+  'watch',
+  'onMounted',
+  'onUnmounted',
+  'nextTick',
+  'ElMessage',
+  'ElMessageBox',
+]) {
+  SHARED_SYMBOLS.add(n);
+}
+
 /** 取出该 .vue 文件所有 import 进来的标识符 */
 function importedNames(src: string): Set<string> {
   const names = new Set<string>();
