@@ -41,7 +41,7 @@
         </el-select>
       </div>
       <div class="toolbar-right">
-        <el-button :disabled="!rows.length" @click="exportCsv">导出表格</el-button>
+        <el-button :disabled="!rows.length" @click="doExport">导出表格</el-button>
         <el-button
           type="primary"
           :disabled="!selected.length"
@@ -113,6 +113,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs } from '../api';
 import { useCommunities } from '../composables';
 import { day, genRequestId, yuan } from '../finance';
+import { exportCsv } from '../export';
 
 interface Row {
   houseId: string;
@@ -196,33 +197,19 @@ async function dun() {
   }
 }
 
-/** 导出当前清单为 CSV，供线下催缴与交报表用 */
-function exportCsv() {
-  const header = ['房号', '房屋', '业主', '手机号', '欠费金额(元)', '笔数', '欠费账期', '逾期天数', '最早到期日'];
-  const lines = rows.value.map((r) =>
-    [
-      r.code,
-      r.displayName,
-      r.ownerName ?? '',
-      r.ownerPhone ?? '',
-      yuan(r.unpaidAmount),
-      String(r.unpaidCount),
-      r.periods.join(' '),
-      String(r.overdueDays),
-      r.earliestDueDate ? day(r.earliestDueDate) : '',
-    ]
-      // 字段内的逗号/引号需转义，否则表格会错列
-      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-      .join(','),
-  );
-  const csv = [header.join(','), ...lines].join('\r\n');
-  // BOM 让 Excel 正确识别 UTF-8 中文
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `欠费清单-${day(new Date())}.csv`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+/** 导出当前清单，供线下催缴与交报表用 */
+function doExport() {
+  exportCsv(`欠费清单-${day(new Date())}`, rows.value, [
+    { header: '房号', value: (r) => r.code },
+    { header: '房屋', value: (r) => r.displayName },
+    { header: '业主', value: (r) => r.ownerName },
+    { header: '手机号', value: (r) => r.ownerPhone },
+    { header: '欠费金额(元)', value: (r) => yuan(r.unpaidAmount) },
+    { header: '笔数', value: (r) => r.unpaidCount },
+    { header: '欠费账期', value: (r) => r.periods.join(' ') },
+    { header: '逾期天数', value: (r) => r.overdueDays },
+    { header: '最早到期日', value: (r) => (r.earliestDueDate ? day(r.earliestDueDate) : '') },
+  ]);
   ElMessage.success(`已导出 ${rows.value.length} 条`);
 }
 

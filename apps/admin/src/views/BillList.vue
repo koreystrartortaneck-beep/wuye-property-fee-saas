@@ -32,6 +32,7 @@
         </el-select>
       </div>
       <div class="toolbar-right">
+        <el-button :disabled="!bills.length" size="small" @click="doExport">导出本页</el-button>
         <span class="summary">
           共 <b class="num">{{ total }}</b> 笔
           <template v-if="pageAmount !== '0.00'"> · 本页合计 <b class="num">¥{{ pageAmount }}</b></template>
@@ -157,6 +158,7 @@ import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { useCommunities } from '../composables';
 import { billStatusTag, buildReasonPayload, day, genRequestId, shanghaiToday, yuan } from '../finance';
+import { exportCsv } from '../export';
 
 interface Bill {
   id: string;
@@ -235,6 +237,20 @@ function calcText(row: Bill): string {
   if (s.amount != null) return `每户固定 ${s.amount} 元`;
   if (s.readingDiff != null) return `用量 ${s.readingDiff} × ${s.unitPrice} 元`;
   return '—';
+}
+
+/** 导出当前页账单，供核对与留档 */
+function doExport() {
+  exportCsv(`账单-${day(new Date())}`, bills.value, [
+    { header: '房屋', value: (b) => b.house?.displayName ?? '' },
+    { header: '费用', value: (b) => b.title },
+    { header: '怎么算的', value: (b) => calcText(b) },
+    { header: '金额(元)', value: (b) => yuan(b.amount) },
+    { header: '状态', value: (b) => statusText(b) },
+    { header: '到期日', value: (b) => day(b.dueDate) },
+    { header: '缴费时间', value: (b) => (b.paidAt ? day(b.paidAt) : '') },
+  ]);
+  ElMessage.success(`已导出 ${bills.value.length} 条`);
 }
 
 function reload() {

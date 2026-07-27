@@ -36,6 +36,7 @@
         <el-option v-for="(label, val) in PAYMENT_STATUS_LABEL" :key="val" :label="label" :value="val" />
       </el-select>
       <el-button @click="reload">查询</el-button>
+      <el-button :disabled="!rows.length" size="small" @click="doExport">导出本页</el-button>
     </div>
     <el-table :data="rows" v-loading="loading" size="small">
       <el-table-column prop="orderNo" label="订单号" min-width="180" />
@@ -156,12 +157,14 @@ import {
   buildOfflinePayload,
   buildReasonPayload,
   buildRefundPayload,
+  day,
   dt,
   genRequestId,
   paymentStatusTag,
   refundStatusTag,
   yuan,
 } from '../finance';
+import { exportCsv } from '../export';
 
 interface Payment {
   /** 优惠券抵扣额；totalAmount 为业主实付，二者之和为账单原额 */
@@ -218,6 +221,21 @@ onMounted(load);
 function reload() {
   page.value = 1;
   load();
+}
+
+/** 导出当前页收款流水，供财务核对 */
+function doExport() {
+  exportCsv(`收款流水-${day(new Date())}`, rows.value, [
+    { header: '订单号', value: (p) => p.orderNo },
+    { header: '实付金额(元)', value: (p) => yuan(p.totalAmount) },
+    { header: '券抵扣(元)', value: (p) => (Number(p.discountAmount) > 0 ? yuan(p.discountAmount) : '') },
+    { header: '渠道', value: (p) => PAYMENT_CHANNEL_LABEL[p.channel] || p.channel },
+    { header: '状态', value: (p) => PAYMENT_STATUS_LABEL[p.status] || p.status },
+    { header: '缴费时间', value: (p) => dt(p.paidAt) },
+    { header: '凭证号', value: (p) => p.offlineVoucherNo ?? '' },
+    { header: '收据号', value: (p) => p.receiptNo ?? '' },
+  ]);
+  ElMessage.success(`已导出 ${rows.value.length} 条`);
 }
 
 async function load() {
