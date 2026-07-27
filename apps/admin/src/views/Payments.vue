@@ -147,6 +147,7 @@ import {
   buildRefundPayload,
   buildReasonPayload,
   buildOfflinePayload,
+  genRequestId,
 } from '../finance';
 
 interface Payment {
