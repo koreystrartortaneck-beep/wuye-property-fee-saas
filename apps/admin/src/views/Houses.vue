@@ -44,7 +44,7 @@
     />
 
     <!-- 新增/编辑 -->
-    <el-dialog v-model="dialog" :title="editing ? '编辑房产' : '新增房产'" width="480px">
+    <el-dialog v-model="dialog" :title="editing ? '编辑房产' : '新增房产'" width="min(480px, 92vw)">
       <el-form label-width="90px">
         <el-form-item label="类型">
           <el-select v-model="form.type" :disabled="!!editing">
@@ -64,7 +64,7 @@
     </el-dialog>
 
     <!-- CSV 导入 -->
-    <el-dialog v-model="importDialog" title="CSV 批量导入房产" width="640px">
+    <el-dialog v-model="importDialog" title="CSV 批量导入房产" width="min(640px, 92vw)">
       <p class="hint">
         列顺序：<b>类型,编号,显示名称,面积,业主姓名,业主手机</b>（首行为表头会自动跳过；类型填 住宅/车位/商铺 或 RESIDENCE/PARKING/SHOP）
       </p>
@@ -242,6 +242,7 @@ async function doImport() {
   gap: 10px;
   margin-bottom: 14px;
   align-items: center;
+  flex-wrap: wrap;
 }
 .spacer {
   flex: 1;
@@ -251,15 +252,15 @@ async function doImport() {
   justify-content: flex-end;
 }
 .hint {
-  color: #8a7f73;
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--fs-13);
   margin-top: 0;
 }
 .import-result {
   margin-top: 10px;
-  font-size: 13px;
+  font-size: var(--fs-13);
 }
 .fail-line {
-  color: #c45656;
+  color: var(--danger-text);
 }
 </style>

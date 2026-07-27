@@ -111,7 +111,7 @@
   </el-card>
 
   <!-- 作废 / 重开 -->
-  <el-dialog v-model="reasonDialog" :title="reasonAction === 'cancel' ? '作废账单' : '重新开具账单'" width="440px">
+  <el-dialog v-model="reasonDialog" :title="reasonAction === 'cancel' ? '作废账单' : '重新开具账单'" width="min(440px, 92vw)">
     <div v-if="currentBill" class="confirm-target">
       <div class="confirm-line">
         <span class="confirm-k">房屋</span><span class="confirm-v">{{ currentBill.house?.displayName || '—' }}</span>

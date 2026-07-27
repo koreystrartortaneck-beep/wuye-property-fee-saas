@@ -46,7 +46,7 @@
     <el-pagination class="pager" layout="total, prev, pager, next" :total="total" :page-size="20" :current-page="page"
       @current-change="(p: number) => { page = p; load(); }" />
 
-    <el-dialog v-model="dialog" title="发布工作照片" width="560px">
+    <el-dialog v-model="dialog" title="发布工作照片" width="min(560px, 92vw)">
       <el-form label-width="80px">
         <el-form-item label="分类">
           <el-select v-model="form.category">

@@ -46,7 +46,7 @@
       @current-change="(p: number) => { page = p; load(); }"
     />
 
-    <el-dialog v-model="rejectDialog" title="驳回申请" width="420px">
+    <el-dialog v-model="rejectDialog" title="驳回申请" width="min(420px, 92vw)">
       <el-input v-model="rejectReason" placeholder="驳回原因（业主可见）" />
       <template #footer>
         <el-button @click="rejectDialog = false">取消</el-button>

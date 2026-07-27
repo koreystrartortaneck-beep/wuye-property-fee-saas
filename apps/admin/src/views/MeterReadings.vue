@@ -146,6 +146,7 @@ async function update(row: Reading) {
   display: flex;
   gap: 10px;
   margin-bottom: 14px;
+  flex-wrap: wrap;
 }
 .mb {
   margin-bottom: 16px;

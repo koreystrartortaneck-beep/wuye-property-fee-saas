@@ -91,7 +91,7 @@ async function doChange() {
   align-items: center;
   justify-content: center;
   background: radial-gradient(circle at 15% 10%, rgba(201, 166, 107, 0.25), transparent 30%),
-    linear-gradient(180deg, #fbf6ee 0%, #efe3d0 100%);
+    linear-gradient(180deg, var(--c-gray-50) 0%, var(--border) 100%);
 }
 .login-card {
   width: 380px;
@@ -100,17 +100,17 @@ async function doChange() {
 }
 .login-title {
   margin: 0 0 4px;
-  color: #102033;
+  color: var(--text-primary);
 }
 .login-sub {
   margin: 0 0 24px;
-  color: #8a7f73;
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--fs-13);
 }
 .login-tip {
   margin: 0 0 16px;
-  color: #8a7f73;
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--fs-13);
   line-height: 1.6;
 }
 .login-btn {

@@ -21,7 +21,7 @@
           <el-switch :model-value="row.enabled" @change="(v: boolean) => toggle(row, v)" />
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="80">
+      <el-table-column label="操作" width="80" fixed="right">
         <template #default="{ row }"><el-button size="small" @click="openEdit(row)">编辑</el-button></template>
       </el-table-column>
     </el-table>
@@ -56,7 +56,7 @@
           <el-tag :type="ORDER_TAG[row.status]">{{ SERVICE_ORDER_STATUS_LABEL[row.status] }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="150">
+      <el-table-column label="操作" width="150" fixed="right">
         <template #default="{ row }">
           <el-button v-if="row.status === 'PENDING'" size="small" type="primary" @click="act(row, 'accept')">接单</el-button>
           <el-button v-if="row.status === 'ACCEPTED'" size="small" type="success" @click="act(row, 'done')">完成</el-button>
@@ -70,7 +70,7 @@
       @current-change="(p: number) => { orderPage = p; loadOrders(); }" />
   </el-card>
 
-  <el-dialog v-model="dialog" :title="editing ? '编辑服务' : '新增服务'" width="480px">
+  <el-dialog v-model="dialog" :title="editing ? '编辑服务' : '新增服务'" width="min(480px, 92vw)">
     <el-form label-width="90px">
       <el-form-item label="适用范围">
         <el-select v-model="form.communityId" placeholder="全部小区" clearable :disabled="!!editing">

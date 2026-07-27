@@ -195,7 +195,7 @@
   </section>
 
   <!-- 新建收费标准 -->
-  <el-dialog v-model="ruleDialog" title="设置收费标准" width="480px">
+  <el-dialog v-model="ruleDialog" title="设置收费标准" width="min(480px, 92vw)">
     <el-form label-width="96px">
       <el-form-item label="名称">
         <el-input v-model="ruleForm.name" placeholder="自己起名，如 住宅物业费 / 车位管理费" />

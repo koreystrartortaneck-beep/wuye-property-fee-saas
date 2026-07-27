@@ -45,7 +45,7 @@
     <el-pagination class="pager" layout="total, prev, pager, next" :total="total" :page-size="20" :current-page="page"
       @current-change="(p: number) => { page = p; load(); }" />
 
-    <el-dialog v-model="dialog" title="发放优惠券" width="500px">
+    <el-dialog v-model="dialog" title="发放优惠券" width="min(500px, 92vw)">
       <el-form label-width="90px">
         <el-form-item label="适用范围">
           <el-select v-model="form.communityId" placeholder="全部小区" clearable>
@@ -165,9 +165,9 @@ onMounted(load);
 <style scoped>
 .mb { margin-bottom: 16px; }
 .verify-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.found { font-size: 14px; }
+.found { font-size: var(--fs-13); }
 .ml { margin-left: 6px; }
 .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-.hint { color: #8a7f73; font-size: 12px; }
+.hint { color: var(--text-secondary); font-size: var(--fs-12); }
 .pager { margin-top: 14px; justify-content: flex-end; }
 </style>

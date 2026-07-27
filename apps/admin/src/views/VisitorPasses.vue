@@ -141,8 +141,8 @@ onMounted(load);
   flex-wrap: wrap;
 }
 .found-info {
-  color: #102033;
-  font-size: 14px;
+  color: var(--text-primary);
+  font-size: var(--fs-13);
 }
 .ml {
   margin-left: 6px;
@@ -157,7 +157,7 @@ onMounted(load);
   justify-content: flex-end;
 }
 .used-at {
-  color: #999;
-  font-size: 12px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-12);
 }
 </style>

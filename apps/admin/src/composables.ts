@@ -66,7 +66,8 @@ export const PERIOD_LABEL: Record<string, string> = {
 
 export const METER_LABEL: Record<string, string> = { WATER: '水表', ELEC: '电表', GAS: '燃气表' };
 
-export const BILL_STATUS_LABEL: Record<string, string> = { UNPAID: '待缴', PAID: '已缴', CANCELED: '已作废' };
+// BILL_STATUS_LABEL 已移除：此前是 finance.ts 的陈旧副本（缺 DRAFT/REFUNDING/REFUNDED），
+// 谁误导入就会把状态显示成 undefined。请统一从 finance.ts 取。
 
 /** 当前自然月 'YYYY-MM' */
 export function currentMonth(): string {

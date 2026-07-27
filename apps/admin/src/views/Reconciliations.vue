@@ -61,7 +61,7 @@
       @current-change="(p: number) => { page = p; load(); }"
     />
 
-    <el-dialog v-model="itemsDialog" title="对账差异明细" width="720px">
+    <el-dialog v-model="itemsDialog" title="对账差异明细" width="min(720px, 92vw)">
       <el-table :data="items" v-loading="itemsLoading" size="small">
         <el-table-column prop="orderNo" label="订单号" min-width="160" />
         <el-table-column label="差异类型" width="110">
@@ -84,7 +84,7 @@
       </el-table>
     </el-dialog>
 
-    <el-dialog v-model="resolveDialog" title="处置对账差异" width="440px">
+    <el-dialog v-model="resolveDialog" title="处置对账差异" width="min(440px, 92vw)">
       <el-form label-width="90px">
         <el-form-item label="处置方式">
           <el-select v-model="resolve.status" style="width: 100%">
@@ -251,11 +251,11 @@ async function submitResolve() {
   justify-content: flex-end;
 }
 .warn {
-  color: #c45656;
+  color: var(--danger-text);
   font-weight: 600;
 }
 .sub {
-  color: #8a7f73;
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: var(--fs-12);
 }
 </style>

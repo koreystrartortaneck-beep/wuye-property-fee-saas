@@ -29,7 +29,7 @@
       @current-change="(p: number) => { page = p; load(); }"
     />
 
-    <el-dialog v-model="dialog" :title="editing ? '编辑小区' : '新建小区'" width="420px">
+    <el-dialog v-model="dialog" :title="editing ? '编辑小区' : '新建小区'" width="min(420px, 92vw)">
       <el-form label-width="70px">
         <el-form-item label="名称"><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="地址"><el-input v-model="form.address" /></el-form-item>

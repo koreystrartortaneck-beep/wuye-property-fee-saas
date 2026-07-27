@@ -50,7 +50,7 @@
       @current-change="(p: number) => { page = p; load(); }"
     />
 
-    <el-dialog v-model="detailDialog" title="审计详情" width="600px">
+    <el-dialog v-model="detailDialog" title="审计详情" width="min(600px, 92vw)">
       <el-descriptions :column="1" border size="small">
         <el-descriptions-item label="请求 ID">{{ detail?.requestId || '—' }}</el-descriptions-item>
         <el-descriptions-item label="IP">{{ detail?.ip || '—' }}</el-descriptions-item>
@@ -140,19 +140,19 @@ function pretty(v: unknown): string {
   justify-content: flex-end;
 }
 .sub {
-  color: #8a7f73;
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: var(--fs-12);
 }
 .json-title {
   margin: 10px 0 4px;
   font-weight: 600;
-  color: #102033;
+  color: var(--text-primary);
 }
 .json {
-  background: #f6f0e7;
+  background: var(--bg-page);
   padding: 10px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   max-height: 220px;
   overflow: auto;
   white-space: pre-wrap;

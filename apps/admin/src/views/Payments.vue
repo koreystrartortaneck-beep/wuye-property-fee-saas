@@ -85,7 +85,7 @@
   </el-card>
 
   <!-- 退款 / 冲正 原因对话框（一次确认，强制原因） -->
-  <el-dialog v-model="reasonDialog" :title="reasonTitle" width="440px">
+  <el-dialog v-model="reasonDialog" :title="reasonTitle" width="min(440px, 92vw)">
     <el-form label-width="80px">
       <el-form-item label="订单号"><span>{{ current?.orderNo }}</span></el-form-item>
       <el-form-item label="金额"><span>¥{{ yuan(current?.totalAmount) }}（全额）</span></el-form-item>
@@ -100,7 +100,7 @@
   </el-dialog>
 
   <!-- 退款详情 -->
-  <el-dialog v-model="refundDialog" title="退款详情" width="560px">
+  <el-dialog v-model="refundDialog" title="退款详情" width="min(560px, 92vw)">
     <template v-if="refundDetail">
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item label="退款单号">{{ refundDetail.refundNo }}</el-descriptions-item>
@@ -314,6 +314,6 @@ async function showRefund(row: Payment) {
 .json-title {
   margin: 12px 0 6px;
   font-weight: 600;
-  color: #102033;
+  color: var(--text-primary);
 }
 </style>

@@ -33,7 +33,7 @@
       </el-table-column>
       <el-table-column label="收缴率" min-width="200">
         <template #default="{ row }">
-          <el-progress :percentage="row.rate" :stroke-width="14" :color="row.rate >= 80 ? '#67c23a' : row.rate >= 50 ? '#e6a23c' : '#c45656'" />
+          <el-progress :percentage="row.rate" :stroke-width="14" :color="row.rate >= 80 ? 'var(--success)' : row.rate >= 50 ? 'var(--warning)' : 'var(--danger-text)'" />
         </template>
       </el-table-column>
     </el-table>
@@ -75,21 +75,22 @@ onMounted(load);
   display: flex;
   gap: 10px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 .cards {
   margin-bottom: 16px;
 }
 .stat-label {
-  color: #8a7f73;
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--fs-13);
 }
 .stat-value {
-  font-size: 26px;
+  font-size: var(--fs-28);
   font-weight: 800;
-  color: #102033;
+  color: var(--text-primary);
   margin-top: 6px;
 }
 .stat-value.ok {
-  color: #3f7d5d;
+  color: var(--success-text);
 }
 </style>

@@ -51,7 +51,7 @@
       <el-table-column label="提交时间" width="150">
         <template #default="{ row }">{{ dt(row.createdAt) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="200">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button v-if="row.status === 'PENDING'" size="small" type="primary" @click="openProcess(row)">受理</el-button>
           <el-button v-if="row.status === 'PROCESSING'" size="small" type="success" @click="openDone(row)">办结</el-button>
@@ -72,7 +72,7 @@
       @current-change="(p: number) => { page = p; load(); }"
     />
 
-    <el-dialog v-model="processDialog" title="受理派单" width="380px">
+    <el-dialog v-model="processDialog" title="受理派单" width="min(380px, 92vw)">
       <el-input v-model="assigneeName" placeholder="维修/处理负责人姓名" />
       <template #footer>
         <el-button @click="processDialog = false">取消</el-button>
@@ -80,7 +80,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="doneDialog" title="办结工单" width="440px">
+    <el-dialog v-model="doneDialog" title="办结工单" width="min(440px, 92vw)">
       <el-input v-model="replyContent" type="textarea" :rows="4" placeholder="处理结果说明（业主可见）" />
       <template #footer>
         <el-button @click="doneDialog = false">取消</el-button>

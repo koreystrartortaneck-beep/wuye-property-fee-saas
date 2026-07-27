@@ -36,7 +36,7 @@
       <el-table-column label="申请时间" width="150">
         <template #default="{ row }">{{ dt(row.appliedAt) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="200">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button
             v-if="row.status === 'SUBMITTED' || row.status === 'PROCESSING'"
@@ -66,7 +66,7 @@
       @current-change="(p: number) => { page = p; load(); }"
     />
 
-    <el-dialog v-model="dialog" title="处理开票申请" width="480px">
+    <el-dialog v-model="dialog" title="处理开票申请" width="min(480px, 92vw)">
       <el-form label-width="90px">
         <el-form-item label="处理结果">
           <el-select v-model="pform.status" style="width: 100%">
@@ -197,15 +197,15 @@ async function openReverse(row: Invoice) {
   justify-content: flex-end;
 }
 .sub {
-  color: #8a7f73;
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: var(--fs-12);
 }
 .hint {
-  color: #8a7f73;
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: var(--fs-12);
 }
 .warn {
-  color: #e6a23c;
-  font-size: 12px;
+  color: var(--warning);
+  font-size: var(--fs-12);
 }
 </style>

@@ -44,7 +44,7 @@
       @current-change="(p: number) => { page = p; load(); }"
     />
 
-    <el-dialog v-model="dialog" :title="editing ? '编辑公告' : '发布公告'" width="520px">
+    <el-dialog v-model="dialog" :title="editing ? '编辑公告' : '发布公告'" width="min(520px, 92vw)">
       <el-form label-width="80px">
         <el-form-item label="适用范围">
           <el-select v-model="form.communityId" placeholder="全部小区" clearable :disabled="!!editing">

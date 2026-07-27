@@ -64,7 +64,7 @@
       <el-button :disabled="!pickCommunity" @click="openEdit('community', pickCommunity)">设置该小区策略</el-button>
     </div>
 
-    <el-dialog v-model="dialog" :title="editTitle" width="460px">
+    <el-dialog v-model="dialog" :title="editTitle" width="min(460px, 92vw)">
       <el-form label-width="90px">
         <el-form-item label="收款状态">
           <el-radio-group v-model="form.status">
@@ -203,8 +203,8 @@ async function submit() {
   margin-top: 12px;
 }
 .sub {
-  color: #8a7f73;
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: var(--fs-12);
   margin-left: 8px;
 }
 </style>
