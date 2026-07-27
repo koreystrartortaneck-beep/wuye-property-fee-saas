@@ -13,7 +13,7 @@
       <el-form-item label="本期总额">
         <el-input-number v-model="totalAmount" :min="0.01" :precision="2" style="width: 180px" /> 元
       </el-form-item>
-      <el-button type="primary" :disabled="!ruleId" @click="save">保存（可覆盖）</el-button>
+      <el-button type="primary" :disabled="!ruleId" :loading="saving" @click="save">保存（可覆盖）</el-button>
     </el-form>
 
     <h4>历史录入</h4>
@@ -49,6 +49,8 @@ interface Pool {
 const { communities } = useCommunities();
 const shareRules = ref<Rule[]>([]);
 const ruleId = ref('');
+/** 提交中：防止连点造成重复创建（如双击保存会生成两条同名收费标准 → 业主看到两张一样的账单） */
+const saving = ref(false);
 const period = ref(currentMonth());
 const totalAmount = ref(0);
 const pools = ref<Pool[]>([]);
@@ -72,14 +74,20 @@ async function load() {
 }
 
 async function save() {
-  if (!/^\d{4}(-\d{2}|-Q[1-4])?$/.test(period.value)) return ElMessage.warning('账期格式：YYYY-MM / YYYY-Qn / YYYY');
-  if (!totalAmount.value) return ElMessage.warning('请填写总额');
-  await api('/admin/share-pools', {
-    method: 'PUT',
-    body: { ruleId: ruleId.value, period: period.value, totalAmount: totalAmount.value },
-  });
-  ElMessage.success('已保存，出账时按此总额分摊');
-  await load();
+  if (saving.value) return;
+  saving.value = true;
+  try {
+    if (!/^\d{4}(-\d{2}|-Q[1-4])?$/.test(period.value)) return ElMessage.warning('账期格式：YYYY-MM / YYYY-Qn / YYYY');
+    if (!totalAmount.value) return ElMessage.warning('请填写总额');
+    await api('/admin/share-pools', {
+      method: 'PUT',
+      body: { ruleId: ruleId.value, period: period.value, totalAmount: totalAmount.value },
+    });
+    ElMessage.success('已保存，出账时按此总额分摊');
+    await load();
+  } finally {
+    saving.value = false;
+  }
 }
 </script>
 

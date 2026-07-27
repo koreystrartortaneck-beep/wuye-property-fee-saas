@@ -109,9 +109,19 @@ export class ReconciliationService {
       if (existing.leaseExpiresAt && existing.leaseExpiresAt > now && existing.leaseOwner !== workerId) {
         return { run: existing, busy: true as const };
       }
+      // FAILED 必须可重新认领：下载账单遇到一次瞬时网络故障即置 FAILED，
+      // 若只认 RUNNING，该账期该类型的对账将永久缺失——每日 Cron 只跑一次、
+      // 管理端手动触发走同一路径也只会空转，资金差异从此无人比对。
       const claimed = await this.prisma.raw.reconciliationRun.updateMany({
-        where: { id: existing.id, status: 'RUNNING' },
-        data: { leaseOwner: workerId, leaseExpiresAt, startedAt: now },
+        where: { id: existing.id, status: { in: ['RUNNING', 'FAILED'] } },
+        data: {
+          leaseOwner: workerId,
+          leaseExpiresAt,
+          startedAt: now,
+          status: 'RUNNING',
+          errorMessage: null,
+          finishedAt: null,
+        },
       });
       if (claimed.count !== 1) return { run: existing, busy: true as const };
       return { run: existing, done: false as const };

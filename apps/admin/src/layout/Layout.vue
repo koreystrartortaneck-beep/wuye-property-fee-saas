@@ -108,7 +108,7 @@ import {
 import { api, type Page } from '../api';
 import { store } from '../store';
 import { NAV, locate, type NavGroup } from '../nav';
-import { badges, startBadgePolling, stopBadgePolling } from '../badges';
+import { badges, refreshBadges, startBadgePolling, stopBadgePolling } from '../badges';
 import CommandPalette from '../components/CommandPalette.vue';
 
 const icons: Record<string, unknown> = {
@@ -191,6 +191,9 @@ onMounted(async () => {
         actingTenant.value = page.list[0].id;
         store.setActingTenant(actingTenant.value);
       }
+      // 超管首屏：startBadgePolling 先于租户列表返回，此时无租户上下文导致
+      // 计数恒为 0，须在租户就绪后补算一次。
+      void refreshBadges();
     } catch {
       tenants.value = [];
     }
@@ -204,6 +207,9 @@ onUnmounted(() => {
 
 function onTenantChange(id: string) {
   store.setActingTenant(id);
+  // 角标按租户统计：切换后若不立刻重算，侧栏最多 60 秒仍显示上一个租户的
+  // 待办数，点进去却是空列表。
+  void refreshBadges();
 }
 
 function logout() {

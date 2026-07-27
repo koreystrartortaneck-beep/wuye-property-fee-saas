@@ -72,7 +72,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialog = false">取消</el-button>
-        <el-button type="primary" @click="save">发放</el-button>
+        <el-button type="primary" :loading="saving" @click="save">发放</el-button>
       </template>
     </el-dialog>
   </el-card>
@@ -90,6 +90,8 @@ interface Coupon { id: string; name: string; type: string; faceValue: string | n
 const { communities } = useCommunities();
 const rows = ref<Coupon[]>([]);
 const total = ref(0);
+/** 提交中：防止连点造成重复创建（如双击保存会生成两条同名收费标准 → 业主看到两张一样的账单） */
+const saving = ref(false);
 const page = ref(1);
 const loading = ref(false);
 const dialog = ref(false);
@@ -115,22 +117,28 @@ function openCreate() {
 }
 
 async function save() {
-  const f = form.value;
-  if (!f.name.trim()) return ElMessage.warning('请填写券名称');
-  if (!f.range || f.range.length !== 2) return ElMessage.warning('请选择有效期');
-  await api('/admin/coupons', {
-    method: 'POST',
-    body: {
-      communityId: f.communityId || undefined,
-      name: f.name, type: f.type,
-      faceValue: f.faceValue, threshold: f.type === 'DISCOUNT' ? f.threshold : undefined,
-      description: f.description, totalQty: f.totalQty, perUserLimit: f.perUserLimit,
-      validFrom: f.range[0], validTo: f.range[1],
-    },
-  });
-  ElMessage.success('已发放');
-  dialog.value = false;
-  await load();
+  if (saving.value) return;
+  saving.value = true;
+  try {
+    const f = form.value;
+    if (!f.name.trim()) return ElMessage.warning('请填写券名称');
+    if (!f.range || f.range.length !== 2) return ElMessage.warning('请选择有效期');
+    await api('/admin/coupons', {
+      method: 'POST',
+      body: {
+        communityId: f.communityId || undefined,
+        name: f.name, type: f.type,
+        faceValue: f.faceValue, threshold: f.type === 'DISCOUNT' ? f.threshold : undefined,
+        description: f.description, totalQty: f.totalQty, perUserLimit: f.perUserLimit,
+        validFrom: f.range[0], validTo: f.range[1],
+      },
+    });
+    ElMessage.success('已发放');
+    dialog.value = false;
+    await load();
+  } finally {
+    saving.value = false;
+  }
 }
 
 async function toggle(row: Coupon, enabled: boolean) {

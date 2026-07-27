@@ -34,7 +34,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialog = false">取消</el-button>
-        <el-button type="primary" @click="save">创建</el-button>
+        <el-button type="primary" :loading="saving" @click="save">创建</el-button>
       </template>
     </el-dialog>
   </el-card>
@@ -56,6 +56,8 @@ interface Tenant {
 
 const rows = ref<Tenant[]>([]);
 const loading = ref(false);
+/** 提交中：防止连点造成重复创建（如双击保存会生成两条同名收费标准 → 业主看到两张一样的账单） */
+const saving = ref(false);
 const dialog = ref(false);
 const form = ref({ name: '', code: '', contactName: '', contactPhone: '', adminUsername: '', adminPassword: '' });
 
@@ -70,14 +72,20 @@ async function load() {
 }
 
 async function save() {
-  const f = form.value;
-  if (!f.name || !f.code || !f.adminUsername || f.adminPassword.length < 6) {
-    return ElMessage.warning('请完整填写（密码至少 6 位）');
+  if (saving.value) return;
+  saving.value = true;
+  try {
+    const f = form.value;
+    if (!f.name || !f.code || !f.adminUsername || f.adminPassword.length < 6) {
+      return ElMessage.warning('请完整填写（密码至少 6 位）');
+    }
+    await api('/admin/tenants', { method: 'POST', body: f });
+    ElMessage.success('租户已创建');
+    dialog.value = false;
+    await load();
+  } finally {
+    saving.value = false;
   }
-  await api('/admin/tenants', { method: 'POST', body: f });
-  ElMessage.success('租户已创建');
-  dialog.value = false;
-  await load();
 }
 
 async function toggle(row: Tenant) {

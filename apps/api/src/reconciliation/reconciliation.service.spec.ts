@@ -137,4 +137,35 @@ describe('ReconciliationService 每日对账', () => {
     expect(res.status).toBe('MANUALLY_CLOSED');
     expect(audit.append).toHaveBeenCalledWith(expect.objectContaining({ action: 'RECONCILE', resourceType: 'ReconciliationItem' }), expect.anything());
   });
+
+  it('失败的 Run 可重新认领重跑：一次瞬时故障不应让该账期对账永久缺失', async () => {
+    const prisma = makePrisma();
+    prisma.raw.reconciliationRun.findFirst.mockResolvedValue({
+      id: 'run-failed',
+      status: 'FAILED',
+      differenceRecordCount: 0,
+      leaseExpiresAt: null,
+      leaseOwner: null,
+    });
+    prisma.raw.reconciliationRun.updateMany.mockResolvedValue({ count: 1 });
+    billProvider.downloadBill.mockResolvedValue({
+      billType: 'TRANSACTION', businessDate, fileHash: 'h', recordCount: 0, totalAmountCents: 0,
+      trades: [], refunds: [],
+    });
+    const service = makeService(prisma);
+
+    const res = await service.reconcile(baseInput);
+    // 修复前这里会因认领只认 RUNNING 而直接 busy 返回，压根不会下载对账单
+    expect(billProvider.downloadBill).toHaveBeenCalled();
+
+    // 认领条件必须含 FAILED，且认领时清空错误并回到 RUNNING
+    expect(prisma.raw.reconciliationRun.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'run-failed', status: { in: ['RUNNING', 'FAILED'] } }),
+        data: expect.objectContaining({ status: 'RUNNING', errorMessage: null }),
+      }),
+    );
+    // 真正重跑了：下载过对账单
+    expect(res.status).not.toBe('FAILED');
+  });
 });

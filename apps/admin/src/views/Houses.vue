@@ -59,7 +59,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialog = false">取消</el-button>
-        <el-button type="primary" @click="save">保存</el-button>
+        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
       </template>
     </el-dialog>
 
@@ -102,6 +102,8 @@ interface House {
 
 const { communities } = useCommunities();
 const filter = ref({ communityId: '', type: '', keyword: '' });
+/** 提交中：防止连点造成重复创建（如双击保存会生成两条同名收费标准 → 业主看到两张一样的账单） */
+const saving = ref(false);
 const rows = ref<House[]>([]);
 const total = ref(0);
 const page = ref(1);
@@ -161,36 +163,42 @@ function openEdit(row: House) {
 }
 
 async function save() {
-  if (editing.value) {
-    await api(`/admin/houses/${editing.value.id}`, {
-      method: 'PATCH',
-      body: {
-        displayName: form.value.displayName,
+  if (saving.value) return;
+  saving.value = true;
+  try {
+    if (editing.value) {
+      await api(`/admin/houses/${editing.value.id}`, {
+        method: 'PATCH',
+        body: {
+          displayName: form.value.displayName,
+          area: form.value.area || undefined,
+          ownerName: form.value.ownerName,
+          ownerPhone: form.value.ownerPhone,
+        },
+      });
+    } else {
+      // 单条新增复用 import（唯一键 upsert）
+      const row = {
+        type: form.value.type,
+        code: form.value.code.trim(),
+        displayName: form.value.displayName.trim(),
         area: form.value.area || undefined,
-        ownerName: form.value.ownerName,
-        ownerPhone: form.value.ownerPhone,
-      },
-    });
-  } else {
-    // 单条新增复用 import（唯一键 upsert）
-    const row = {
-      type: form.value.type,
-      code: form.value.code.trim(),
-      displayName: form.value.displayName.trim(),
-      area: form.value.area || undefined,
-      ownerName: form.value.ownerName || undefined,
-      ownerPhone: form.value.ownerPhone || undefined,
-    };
-    if (!row.code || !row.displayName) return ElMessage.warning('编号与显示名称必填');
-    const res = await api<{ created: number; failed: { reason: string }[] }>('/admin/houses/import', {
-      method: 'POST',
-      body: { communityId: filter.value.communityId, rows: [row] },
-    });
-    if (res.failed.length > 0) return ElMessage.error(res.failed[0].reason);
+        ownerName: form.value.ownerName || undefined,
+        ownerPhone: form.value.ownerPhone || undefined,
+      };
+      if (!row.code || !row.displayName) return ElMessage.warning('编号与显示名称必填');
+      const res = await api<{ created: number; failed: { reason: string }[] }>('/admin/houses/import', {
+        method: 'POST',
+        body: { communityId: filter.value.communityId, rows: [row] },
+      });
+      if (res.failed.length > 0) return ElMessage.error(res.failed[0].reason);
+    }
+    ElMessage.success('已保存');
+    dialog.value = false;
+    await load();
+  } finally {
+    saving.value = false;
   }
-  ElMessage.success('已保存');
-  dialog.value = false;
-  await load();
 }
 
 const TYPE_ALIAS: Record<string, string> = { 住宅: 'RESIDENCE', 车位: 'PARKING', 商铺: 'SHOP' };

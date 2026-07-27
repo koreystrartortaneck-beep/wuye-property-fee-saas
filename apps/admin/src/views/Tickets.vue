@@ -76,7 +76,7 @@
       <el-input v-model="assigneeName" placeholder="维修/处理负责人姓名" />
       <template #footer>
         <el-button @click="processDialog = false">取消</el-button>
-        <el-button type="primary" @click="doProcess">确认受理</el-button>
+        <el-button type="primary" :loading="submitting" @click="doProcess">确认受理</el-button>
       </template>
     </el-dialog>
 
@@ -84,7 +84,7 @@
       <el-input v-model="replyContent" type="textarea" :rows="4" placeholder="处理结果说明（业主可见）" />
       <template #footer>
         <el-button @click="doneDialog = false">取消</el-button>
-        <el-button type="success" @click="doDone">确认办结</el-button>
+        <el-button type="success" :loading="submitting" @click="doDone">确认办结</el-button>
       </template>
     </el-dialog>
   </el-card>
@@ -96,6 +96,7 @@ import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { useCommunities } from '../composables';
 import { dt } from '../finance';
+import { refreshBadges } from '../badges';
 
 interface Ticket {
   id: string;
@@ -117,6 +118,8 @@ const STATUS_TAG: Record<string, 'warning' | 'primary' | 'success' | 'info'> = {
 
 const { communities } = useCommunities();
 const filter = ref({ communityId: '', type: '', status: 'PENDING' });
+/** 提交中：防连点重复受理/办结；完成后刷新侧栏待处理角标 */
+const submitting = ref(false);
 const rows = ref<Ticket[]>([]);
 const total = ref(0);
 const page = ref(1);
@@ -182,11 +185,18 @@ function openProcess(row: Ticket) {
 }
 
 async function doProcess() {
-  if (!assigneeName.value.trim()) return ElMessage.warning('请填写负责人');
-  await api(`/admin/tickets/${current.value!.id}/process`, { method: 'POST', body: { assigneeName: assigneeName.value } });
-  ElMessage.success('已受理');
-  processDialog.value = false;
-  await load();
+  if (submitting.value) return;
+  submitting.value = true;
+  try {
+    if (!assigneeName.value.trim()) return ElMessage.warning('请填写负责人');
+    await api(`/admin/tickets/${current.value!.id}/process`, { method: 'POST', body: { assigneeName: assigneeName.value } });
+    ElMessage.success('已受理');
+    processDialog.value = false;
+    await load();
+    await refreshBadges();
+  } finally {
+    submitting.value = false;
+  }
 }
 
 function openDone(row: Ticket) {
@@ -196,11 +206,18 @@ function openDone(row: Ticket) {
 }
 
 async function doDone() {
-  if (!replyContent.value.trim()) return ElMessage.warning('请填写处理结果');
-  await api(`/admin/tickets/${current.value!.id}/done`, { method: 'POST', body: { replyContent: replyContent.value } });
-  ElMessage.success('已办结');
-  doneDialog.value = false;
-  await load();
+  if (submitting.value) return;
+  submitting.value = true;
+  try {
+    if (!replyContent.value.trim()) return ElMessage.warning('请填写处理结果');
+    await api(`/admin/tickets/${current.value!.id}/done`, { method: 'POST', body: { replyContent: replyContent.value } });
+    ElMessage.success('已办结');
+    doneDialog.value = false;
+    await load();
+    await refreshBadges();
+  } finally {
+    submitting.value = false;
+  }
 }
 
 async function close(row: Ticket) {

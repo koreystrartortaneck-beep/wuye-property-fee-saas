@@ -57,7 +57,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialog = false">取消</el-button>
-        <el-button type="primary" @click="save">{{ editing ? '保存' : '发布' }}</el-button>
+        <el-button type="primary" :loading="saving" @click="save">{{ editing ? '保存' : '发布' }}</el-button>
       </template>
     </el-dialog>
   </el-card>
@@ -83,6 +83,8 @@ interface Announcement {
 const { communities } = useCommunities();
 const rows = ref<Announcement[]>([]);
 const total = ref(0);
+/** 提交中：防止连点造成重复创建（如双击保存会生成两条同名收费标准 → 业主看到两张一样的账单） */
+const saving = ref(false);
 const page = ref(1);
 const loading = ref(false);
 const dialog = ref(false);
@@ -117,21 +119,27 @@ function openEdit(row: Announcement) {
 }
 
 async function save() {
-  if (!form.value.title.trim() || !form.value.content.trim()) return ElMessage.warning('标题和内容必填');
-  if (editing.value) {
-    await api(`/admin/announcements/${editing.value.id}`, {
-      method: 'PATCH',
-      body: { title: form.value.title, content: form.value.content, pinned: form.value.pinned },
-    });
-  } else {
-    await api('/admin/announcements', {
-      method: 'POST',
-      body: { ...form.value, communityId: form.value.communityId || undefined },
-    });
+  if (saving.value) return;
+  saving.value = true;
+  try {
+    if (!form.value.title.trim() || !form.value.content.trim()) return ElMessage.warning('标题和内容必填');
+    if (editing.value) {
+      await api(`/admin/announcements/${editing.value.id}`, {
+        method: 'PATCH',
+        body: { title: form.value.title, content: form.value.content, pinned: form.value.pinned },
+      });
+    } else {
+      await api('/admin/announcements', {
+        method: 'POST',
+        body: { ...form.value, communityId: form.value.communityId || undefined },
+      });
+    }
+    ElMessage.success(editing.value ? '已保存' : '已发布');
+    dialog.value = false;
+    await load();
+  } finally {
+    saving.value = false;
   }
-  ElMessage.success(editing.value ? '已保存' : '已发布');
-  dialog.value = false;
-  await load();
 }
 
 async function togglePin(row: Announcement) {

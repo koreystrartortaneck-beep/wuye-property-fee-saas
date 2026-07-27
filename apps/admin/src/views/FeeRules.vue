@@ -133,7 +133,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialog = false">取消</el-button>
-        <el-button type="primary" @click="save">保存</el-button>
+        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
       </template>
     </el-dialog>
 
@@ -212,6 +212,8 @@ interface FormulaReportItem {
 
 const { communities } = useCommunities();
 const communityId = ref('');
+/** 提交中：防止连点造成重复创建（如双击保存会生成两条同名收费标准 → 业主看到两张一样的账单） */
+const saving = ref(false);
 const rows = ref<FeeRule[]>([]);
 const loading = ref(false);
 const dialog = ref(false);
@@ -297,21 +299,27 @@ function openEdit(row: FeeRule) {
 }
 
 async function save() {
-  if (!form.value.name.trim()) return ElMessage.warning('请填写规则名称');
-  if (editing.value) {
-    await api(`/admin/fee-rules/${editing.value.id}`, {
-      method: 'PATCH',
-      body: { name: form.value.name, params: buildParams(form.value.ruleType, p.value), billDay: form.value.billDay, dueDays: form.value.dueDays },
-    });
-  } else {
-    await api('/admin/fee-rules', {
-      method: 'POST',
-      body: { ...form.value, params: buildParams(form.value.ruleType, p.value), communityId: communityId.value },
-    });
+  if (saving.value) return;
+  saving.value = true;
+  try {
+    if (!form.value.name.trim()) return ElMessage.warning('请填写规则名称');
+    if (editing.value) {
+      await api(`/admin/fee-rules/${editing.value.id}`, {
+        method: 'PATCH',
+        body: { name: form.value.name, params: buildParams(form.value.ruleType, p.value), billDay: form.value.billDay, dueDays: form.value.dueDays },
+      });
+    } else {
+      await api('/admin/fee-rules', {
+        method: 'POST',
+        body: { ...form.value, params: buildParams(form.value.ruleType, p.value), communityId: communityId.value },
+      });
+    }
+    ElMessage.success('已保存');
+    dialog.value = false;
+    await load();
+  } finally {
+    saving.value = false;
   }
-  ElMessage.success('已保存');
-  dialog.value = false;
-  await load();
 }
 
 async function toggle(row: FeeRule, enabled: boolean) {

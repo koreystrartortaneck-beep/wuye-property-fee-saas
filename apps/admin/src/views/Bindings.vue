@@ -31,7 +31,7 @@
       <el-table-column label="操作" width="160">
         <template #default="{ row }">
           <template v-if="row.status === 'PENDING'">
-            <el-button size="small" type="success" @click="review(row, true)">通过</el-button>
+            <el-button size="small" type="success" :loading="reviewing" @click="review(row, true)">通过</el-button>
             <el-button size="small" type="danger" @click="openReject(row)">驳回</el-button>
           </template>
         </template>
@@ -50,7 +50,7 @@
       <el-input v-model="rejectReason" placeholder="驳回原因（业主可见）" />
       <template #footer>
         <el-button @click="rejectDialog = false">取消</el-button>
-        <el-button type="danger" @click="review(rejecting!, false)">确认驳回</el-button>
+        <el-button type="danger" :loading="reviewing" @click="review(rejecting!, false)">确认驳回</el-button>
       </template>
     </el-dialog>
   </el-card>
@@ -77,6 +77,8 @@ const STATUS: Record<string, string> = { PENDING: '待审核', ACTIVE: '已通�
 const TAG: Record<string, 'warning' | 'success' | 'danger'> = { PENDING: 'warning', ACTIVE: 'success', REJECTED: 'danger' };
 
 const status = ref('PENDING');
+/** 审核中：连点会重复提交，且审核通过意味着放开他人费用可见性，必须防重 */
+const reviewing = ref(false);
 const rows = ref<Binding[]>([]);
 const total = ref(0);
 const page = ref(1);
@@ -108,13 +110,21 @@ function openReject(row: Binding) {
 }
 
 async function review(row: Binding, approve: boolean) {
-  await api(`/admin/bindings/${row.id}/review`, {
-    method: 'POST',
-    body: { approve, rejectReason: approve ? undefined : rejectReason.value || '未通过审核' },
-  });
-  ElMessage.success(approve ? '已通过' : '已驳回');
-  rejectDialog.value = false;
-  await load();
+  if (reviewing.value) return;
+  reviewing.value = true;
+  try {
+    await api(`/admin/bindings/${row.id}/review`, {
+      method: 'POST',
+      body: { approve, rejectReason: approve ? undefined : rejectReason.value || '未通过审核' },
+    });
+    ElMessage.success(approve ? '已通过' : '已驳回');
+    rejectDialog.value = false;
+    await load();
+    // 审完立刻刷新角标，否则侧栏仍显示旧的待审数，用户会反复点回来确认
+    await refreshBadges();
+  } finally {
+    reviewing.value = false;
+  }
 }
 
 onMounted(load);

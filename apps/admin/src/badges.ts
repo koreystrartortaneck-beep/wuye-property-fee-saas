@@ -32,7 +32,12 @@ export async function refreshBadges(): Promise<void> {
   const [bindings, tickets, invoices] = await Promise.all([
     count('/admin/bindings?status=PENDING&page=1&pageSize=1'),
     count('/admin/tickets?status=PENDING&page=1&pageSize=1'),
-    count('/admin/invoices?status=SUBMITTED&page=1&pageSize=1'),
+    // 开票待办含「待红冲」：退款联动自动产生的冲红任务同样在等人处理，
+    // 只统计 SUBMITTED 会让这类任务无人知晓。
+    Promise.all([
+      count('/admin/invoices?status=SUBMITTED&page=1&pageSize=1'),
+      count('/admin/invoices?status=REVERSAL_REQUIRED&page=1&pageSize=1'),
+    ]).then(([a, b]) => a + b),
   ]);
   badges.bindings = bindings;
   badges.tickets = tickets;

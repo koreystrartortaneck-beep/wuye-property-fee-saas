@@ -85,7 +85,7 @@
     </el-form>
     <template #footer>
       <el-button @click="dialog = false">取消</el-button>
-      <el-button type="primary" @click="save">保存</el-button>
+      <el-button type="primary" :loading="saving" @click="save">保存</el-button>
     </template>
   </el-dialog>
 </template>
@@ -105,6 +105,8 @@ const ORDER_TAG: Record<string, 'warning' | 'primary' | 'success' | 'info'> = { 
 const { communities } = useCommunities();
 const items = ref<Item[]>([]);
 const loadingItems = ref(false);
+/** 提交中：防止连点造成重复创建（如双击保存会生成两条同名收费标准 → 业主看到两张一样的账单） */
+const saving = ref(false);
 const orders = ref<Order[]>([]);
 const loadingOrders = ref(false);
 const orderFilter = ref({ status: 'PENDING' });
@@ -153,15 +155,21 @@ function openEdit(row: Item) {
 }
 
 async function save() {
-  if (!form.value.name.trim()) return ElMessage.warning('请填写服务名称');
-  if (editing.value) {
-    await api(`/admin/service-items/${editing.value.id}`, { method: 'PATCH', body: { name: form.value.name, category: form.value.category, price: form.value.price, unit: form.value.unit, description: form.value.description } });
-  } else {
-    await api('/admin/service-items', { method: 'POST', body: { ...form.value, communityId: form.value.communityId || undefined } });
+  if (saving.value) return;
+  saving.value = true;
+  try {
+    if (!form.value.name.trim()) return ElMessage.warning('请填写服务名称');
+    if (editing.value) {
+      await api(`/admin/service-items/${editing.value.id}`, { method: 'PATCH', body: { name: form.value.name, category: form.value.category, price: form.value.price, unit: form.value.unit, description: form.value.description } });
+    } else {
+      await api('/admin/service-items', { method: 'POST', body: { ...form.value, communityId: form.value.communityId || undefined } });
+    }
+    ElMessage.success('已保存');
+    dialog.value = false;
+    await loadItems();
+  } finally {
+    saving.value = false;
   }
-  ElMessage.success('已保存');
-  dialog.value = false;
-  await loadItems();
 }
 
 async function toggle(row: Item, enabled: boolean) {

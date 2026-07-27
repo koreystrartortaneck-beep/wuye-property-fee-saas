@@ -43,13 +43,17 @@
             size="small"
             @click="openProcess(row)"
           >处理</el-button>
+          <!--
+            REVERSAL_REQUIRED 是退款联动自动产生的冲红任务，后端允许
+            REVERSAL_REQUIRED → REVERSED。此前只对 ISSUED 显示按钮、
+            对 REVERSAL_REQUIRED 只渲染一行灰字，任务永久卡住无法处理。
+          -->
           <el-button
-            v-if="row.status === 'ISSUED'"
+            v-if="row.status === 'ISSUED' || row.status === 'REVERSAL_REQUIRED'"
             size="small"
-            type="warning"
+            :type="row.status === 'REVERSAL_REQUIRED' ? 'danger' : 'warning'"
             @click="openReverse(row)"
-          >红冲</el-button>
-          <span v-else-if="row.status === 'REVERSAL_REQUIRED'" class="warn">待红冲</span>
+          >{{ row.status === 'REVERSAL_REQUIRED' ? '待红冲 · 立即处理' : '红冲' }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -93,6 +97,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { useCommunities } from '../composables';
 import { INVOICE_STATUS_LABEL, INVOICE_TITLE_TYPE_LABEL, invoiceStatusTag, yuan, dt } from '../finance';
+import { refreshBadges } from '../badges';
 
 interface Invoice {
   id: string;
