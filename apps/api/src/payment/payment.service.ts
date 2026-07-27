@@ -57,6 +57,78 @@ export class PaymentService {
     }
   }
 
+  /**
+   * 事务内消费优惠券，返回抵扣的「分」。
+   *
+   * 全部校验必须在同一事务内完成并把券置 USED：
+   * - 券归属本人且未使用；
+   * - 在有效期内、券本身仍启用；
+   * - 券适用于该小区（communityId 为 null 表示全公司通用）；
+   * - 满足满减门槛；
+   * - 抵扣不超过账单金额（不产生负数应付，也不退差额）。
+   * 置 USED 用条件 updateMany，count 必须为 1，从而杜绝并发下同一张券
+   * 被两笔支付同时抵扣。
+   */
+  private async consumeCouponInTx(
+    tx: Prisma.TransactionClient,
+    input: { tenantId: string; ownerId: string; userCouponId: string; billCents: number; communityId: string },
+  ): Promise<number> {
+    const uc = await tx.userCoupon.findFirst({
+      where: { id: input.userCouponId, wxUserId: input.ownerId, tenantId: input.tenantId },
+      include: { coupon: true },
+    });
+    if (!uc) throw new BizException(ErrorCode.NOT_FOUND, '优惠券不存在或不属于你');
+    if (uc.status !== 'UNUSED') throw new BizException(ErrorCode.VALIDATION, '该优惠券已使用或已过期');
+
+    const coupon = uc.coupon;
+    if (!coupon || !coupon.enabled) throw new BizException(ErrorCode.VALIDATION, '该优惠券已停用');
+
+    const now = new Date();
+    if (coupon.validFrom > now) throw new BizException(ErrorCode.VALIDATION, '该优惠券尚未开始生效');
+    if (coupon.validTo < now) throw new BizException(ErrorCode.VALIDATION, '该优惠券已过期');
+    if (coupon.communityId && coupon.communityId !== input.communityId) {
+      throw new BizException(ErrorCode.VALIDATION, '该优惠券不适用于本小区');
+    }
+
+    const face = coupon.faceValue ? toCents(coupon.faceValue.toString()) : 0;
+    if (face <= 0) throw new BizException(ErrorCode.VALIDATION, '该优惠券无可抵扣金额');
+    const threshold = coupon.threshold ? toCents(coupon.threshold.toString()) : 0;
+    if (input.billCents < threshold) {
+      throw new BizException(
+        ErrorCode.VALIDATION,
+        `该优惠券需满 ${(threshold / 100).toFixed(2)} 元可用，本单金额不足`,
+      );
+    }
+
+    // 抵扣上限为账单金额：不允许出现 0 元以下应付，也不退还差额
+    const discount = Math.min(face, input.billCents);
+
+    const used = await tx.userCoupon.updateMany({
+      where: { id: uc.id, status: 'UNUSED' },
+      data: { status: 'USED', usedAt: now },
+    });
+    if (used.count !== 1) {
+      throw new BizException(ErrorCode.VALIDATION, '该优惠券刚刚已被使用，请刷新后重试');
+    }
+    return discount;
+  }
+
+  /**
+   * 订单未成交或已退款时，把当时抵扣的优惠券置回 UNUSED。
+   * 用条件 updateMany 保证幂等（重复调用不会把已重新使用的券再改回来）。
+   */
+  private async releaseCouponFor(paymentId: string): Promise<void> {
+    const p = await this.prisma.raw.payment.findUnique({
+      where: { id: paymentId },
+      select: { userCouponId: true },
+    });
+    if (!p?.userCouponId) return;
+    await this.prisma.raw.userCoupon.updateMany({
+      where: { id: p.userCouponId, status: 'USED' },
+      data: { status: 'UNUSED', usedAt: null },
+    });
+  }
+
   private genOrderNo(): string {
     const d = new Date();
     const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
@@ -84,7 +156,7 @@ export class PaymentService {
    * 单账单下单：billId 必须属于本人 ACTIVE 绑定房屋、UNPAID、未被进行中订单占用；
    * 以 requestId 做幂等；订单写入 billId/communityId 与金额、商户范围快照，事务内写创建审计。
    */
-  async createPayment(ownerId: string, billId: string, requestId: string) {
+  async createPayment(ownerId: string, billId: string, requestId: string, userCouponId?: string) {
     if (typeof billId !== 'string' || !billId) {
       throw new BizException(ErrorCode.VALIDATION, '请选择单张账单支付');
     }
@@ -118,7 +190,7 @@ export class PaymentService {
         actorKey: ownerId,
         action: 'owner.payment.create',
         requestId,
-        payload: { billId },
+        payload: { billId, userCouponId: userCouponId ?? null },
       });
       if (reservation.outcome === 'REPLAY') return reservation.responseBody;
       if (reservation.outcome === 'IN_PROGRESS') {
@@ -143,6 +215,21 @@ export class PaymentService {
         payment = await this.prisma.raw.$transaction(async (tx) => {
           // 与账单预占同事务加锁复核分层收款策略，防止并发暂停被绕过。
           await this.collectionPolicy.assertOpenForUpdate(tx, tenantId, [communityId]);
+
+          // 优惠券抵扣：必须在同一事务内把券置为 USED，
+          // 否则同一张券可被并发用于两笔支付（券只发一次、却抵扣两次）。
+          let discountCents = 0;
+          if (userCouponId) {
+            discountCents = await this.consumeCouponInTx(tx, {
+              tenantId,
+              ownerId,
+              userCouponId,
+              billCents: totalCents,
+              communityId,
+            });
+          }
+          const payableCents = totalCents - discountCents;
+
           const p = await tx.payment.create({
             data: {
               tenantId,
@@ -150,7 +237,9 @@ export class PaymentService {
               wxUserId: ownerId,
               billId,
               orderNo: this.genOrderNo(),
-              totalAmount: (totalCents / 100).toFixed(2),
+              totalAmount: (payableCents / 100).toFixed(2),
+              discountAmount: discountCents > 0 ? (discountCents / 100).toFixed(2) : null,
+              userCouponId: userCouponId ?? null,
               channel,
               status: 'CREATED',
               ...this.wxPaySnapshot(channel),
@@ -452,6 +541,8 @@ export class PaymentService {
   }
 
   private async finishUnpaidPayment(paymentId: string, status: 'CLOSED' | 'FAILED'): Promise<void> {
+    // 订单未成交（关闭/失败）时把抵扣券退还业主，否则券被白扣。
+    await this.releaseCouponFor(paymentId);
     await this.prisma.raw.$transaction(async (tx) => {
       const updated = await tx.payment.updateMany({
         where: { id: paymentId, status: { in: [...ACTIVE_PAYMENT_STATUSES] } },
@@ -593,6 +684,39 @@ export class PaymentService {
       where: { billId: bill.id, payment: { status: { in: [...ACTIVE_PAYMENT_STATUSES] } } },
       select: { billId: true },
     });
+    // 该账单可用的优惠券：满足门槛、在有效期、适用本小区、未使用
+    const billCents = toCents(bill.amount.toString());
+    const now = new Date();
+    const myCoupons = await this.prisma.raw.userCoupon.findMany({
+      where: { wxUserId: ownerId, status: 'UNUSED' },
+      include: { coupon: true },
+      take: 50,
+    });
+    const usableCoupons = myCoupons
+      .filter((uc) => {
+        const c = uc.coupon;
+        if (!c || !c.enabled) return false;
+        if (c.validFrom > now || c.validTo < now) return false;
+        if (c.communityId && c.communityId !== bill.communityId) return false;
+        const face = c.faceValue ? toCents(c.faceValue.toString()) : 0;
+        if (face <= 0) return false;
+        const threshold = c.threshold ? toCents(c.threshold.toString()) : 0;
+        return billCents >= threshold;
+      })
+      .map((uc) => {
+        const c = uc.coupon;
+        const face = toCents(c.faceValue!.toString());
+        const discount = Math.min(face, billCents);
+        return {
+          userCouponId: uc.id,
+          name: c.name,
+          discount: (discount / 100).toFixed(2),
+          threshold: c.threshold ? c.threshold.toString() : null,
+          validTo: c.validTo,
+        };
+      })
+      .sort((a, b) => Number(b.discount) - Number(a.discount));
+
     return {
       billId: bill.id,
       title: bill.title,
@@ -601,6 +725,7 @@ export class PaymentService {
       period: bill.period,
       house: { displayName: bill.house.displayName, communityName: bill.house.community.name },
       collection,
+      usableCoupons,
       pendingOrder: !!occupied,
       payable: bill.status === 'UNPAID' && collection.status === 'OPEN' && !occupied,
     };

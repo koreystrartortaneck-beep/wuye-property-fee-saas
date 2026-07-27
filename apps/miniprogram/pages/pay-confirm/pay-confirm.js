@@ -13,6 +13,11 @@ Page({
     payable: false,
     pendingOrder: false,
     billStatus: '',
+    // 优惠券抵扣
+    coupons: [],
+    pickedCouponId: '',
+    discount: '0.00',
+    payAmount: '0.00',
     loaded: false,
     paying: false,
     // 幂等请求标识：同一次缴费动作的重试复用同一 requestId
@@ -49,11 +54,31 @@ Page({
         pendingOrder: !!quote.pendingOrder,
         billStatus: quote.status || '',
         payable: quote.payable,
+        coupons: quote.usableCoupons || [],
       });
+      this.recalc();
     } catch (e) {
       wx.showToast({ title: '账单信息获取失败', icon: 'none' });
       setTimeout(() => wx.navigateBack(), 800);
     }
+  },
+
+  /** 选择/取消优惠券 */
+  pickCoupon(e) {
+    const id = e.currentTarget.dataset.id || '';
+    this.setData({ pickedCouponId: this.data.pickedCouponId === id ? '' : id });
+    this.recalc();
+  },
+
+  /** 按所选券重算实付金额（抵扣不超过账单金额） */
+  recalc() {
+    const total = Number(this.data.totalAmount) || 0;
+    const picked = (this.data.coupons || []).find((c) => c.userCouponId === this.data.pickedCouponId);
+    const discount = picked ? Math.min(Number(picked.discount) || 0, total) : 0;
+    this.setData({
+      discount: discount.toFixed(2),
+      payAmount: Math.max(0, total - discount).toFixed(2),
+    });
   },
 
   async submitPay() {
@@ -70,7 +95,11 @@ Page({
     try {
       order = await request('/owner/payments', {
         method: 'POST',
-        data: { billId: this.data.billId, requestId: this.data.requestId },
+        data: {
+          billId: this.data.billId,
+          requestId: this.data.requestId,
+          userCouponId: this.data.pickedCouponId || undefined,
+        },
       });
       if (order.payParams && order.payParams.mock) {
         // mock 模式：直接确认

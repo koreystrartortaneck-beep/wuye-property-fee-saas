@@ -589,6 +589,10 @@ model Payment {
   failureMessage       String?
   receiptNo            String?                    @unique
   receiptSnapshot      Json?
+  /// 优惠券抵扣：券面额记入 discountAmount，totalAmount 为业主实付。
+  /// 二者之和应等于账单原额，差额为物业承担的营销成本。
+  discountAmount       Decimal?                   @db.Decimal(12, 2)
+  userCouponId         String?                    @unique
   offlineVoucherNo     String?                    @unique
   offlinePaidAt        DateTime?
   offlineOperatorId    String?

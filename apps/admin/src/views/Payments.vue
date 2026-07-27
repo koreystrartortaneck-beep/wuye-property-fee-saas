@@ -42,6 +42,12 @@
       <el-table-column label="金额（元）" width="100">
         <template #default="{ row }">{{ yuan(row.totalAmount) }}</template>
       </el-table-column>
+      <el-table-column label="券抵扣（元）" width="120" align="right">
+        <template #default="{ row }">
+          <span v-if="Number(row.discountAmount) > 0" class="num discount">−{{ yuan(row.discountAmount) }}</span>
+          <span v-else class="num muted">—</span>
+        </template>
+      </el-table-column>
       <el-table-column label="渠道" width="90">
         <template #default="{ row }">{{ PAYMENT_CHANNEL_LABEL[row.channel] || row.channel }}</template>
       </el-table-column>
@@ -158,6 +164,8 @@ import {
 } from '../finance';
 
 interface Payment {
+  /** 优惠券抵扣额；totalAmount 为业主实付，二者之和为账单原额 */
+  discountAmount?: string | null;
   orderNo: string;
   totalAmount: string;
   channel: string;
@@ -305,6 +313,13 @@ async function showRefund(row: Payment) {
 </script>
 
 <style scoped>
+.discount {
+  color: var(--brand-gold);
+  font-weight: var(--fw-medium);
+}
+.muted {
+  color: var(--text-tertiary);
+}
 .tbl-empty {
   padding: var(--sp-8) 0;
   text-align: center;

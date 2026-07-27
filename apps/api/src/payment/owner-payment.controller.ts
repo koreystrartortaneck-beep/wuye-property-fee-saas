@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { Current, CurrentOwner } from '../auth/current.decorator';
 import { OwnerGuard } from '../auth/owner.guard';
 import { PageQuery } from '../common/pagination';
@@ -14,6 +14,11 @@ class CreatePaymentDto {
   @IsString()
   @IsNotEmpty()
   requestId!: string;
+
+  /** 可选：使用某张已领取的优惠券抵扣 */
+  @IsOptional()
+  @IsString()
+  userCouponId?: string;
 }
 
 @Controller('owner/payments')
@@ -23,7 +28,7 @@ export class OwnerPaymentController {
 
   @Post()
   create(@Current() cur: CurrentOwner, @Body() dto: CreatePaymentDto) {
-    return this.service.createPayment(cur.ownerId, dto.billId, dto.requestId);
+    return this.service.createPayment(cur.ownerId, dto.billId, dto.requestId, dto.userCouponId);
   }
 
   @Get('quote/:billId')

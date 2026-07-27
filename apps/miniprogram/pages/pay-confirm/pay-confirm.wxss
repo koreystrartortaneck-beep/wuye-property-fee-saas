@@ -128,3 +128,74 @@
 .page.confirm-page {
   padding-top: 32rpx;
 }
+
+/* ---------- 优惠券抵扣 ---------- */
+.coupon-card {
+  margin-top: 20rpx;
+  padding: 24rpx;
+}
+.coupon-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8rpx;
+}
+.coupon-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #251c38;
+}
+.coupon-sub {
+  font-size: 24rpx;
+  color: #8b8199;
+}
+.coupon-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 0;
+  border-top: 1rpx solid rgba(37, 28, 56, 0.06);
+}
+.coupon-row.on .coupon-name {
+  color: #9b743a;
+}
+.coupon-name {
+  font-size: 27rpx;
+  font-weight: 600;
+  color: #251c38;
+}
+.coupon-meta {
+  margin-top: 4rpx;
+  font-size: 23rpx;
+  color: #8b8199;
+}
+.coupon-check {
+  width: 40rpx;
+  text-align: center;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #9b743a;
+}
+
+.pay-sum {
+  margin-top: 20rpx;
+  padding: 24rpx;
+}
+.ps-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 26rpx;
+  color: #5f574d;
+  padding: 6rpx 0;
+}
+.ps-row.discount {
+  color: #9b743a;
+}
+.ps-row.total {
+  margin-top: 8rpx;
+  padding-top: 14rpx;
+  border-top: 1rpx solid rgba(37, 28, 56, 0.08);
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #251c38;
+}

@@ -75,7 +75,7 @@ export class AdminPaymentsService {
         ...pageArgs(q),
         orderBy: { createdAt: 'desc' },
         select: {
-          orderNo: true, totalAmount: true, channel: true, status: true, paidAt: true,
+          orderNo: true, totalAmount: true, discountAmount: true, channel: true, status: true, paidAt: true,
           offlineVoucherNo: true, receiptNo: true, createdAt: true, billId: true,
         },
       }),

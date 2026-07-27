@@ -78,7 +78,12 @@ describe('PaymentService', () => {
         houseBinding: { findFirst: jest.fn().mockResolvedValue({ houseId: 'house-1' }) },
         paymentBill: { findFirst: jest.fn().mockResolvedValue(null) },
         wxUser: { findUnique: jest.fn().mockResolvedValue({ openid: 'openid-1' }) },
-        payment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        payment: {
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          // releaseCouponFor 会在关单/失败时读订单上的 userCouponId
+          findUnique: jest.fn().mockResolvedValue({ userCouponId: null }),
+        },
+        userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
         $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
       },
       ...overrides,
@@ -123,7 +128,12 @@ describe('PaymentService', () => {
         tx,
       );
       expect(idempotency.reserve).toHaveBeenCalledWith(
-        expect.objectContaining({ actorKey: 'owner-1', requestId: 'req-1', payload: { billId: 'bill-1' } }),
+        expect.objectContaining({
+          actorKey: 'owner-1',
+          requestId: 'req-1',
+          // 载荷含 userCouponId：换券后复用同一 requestId 不应被当成重放
+          payload: { billId: 'bill-1', userCouponId: null },
+        }),
       );
       expect(idempotency.complete).toHaveBeenCalledWith(
         expect.objectContaining({ recordId: 'idem-1', responseCode: 0 }),

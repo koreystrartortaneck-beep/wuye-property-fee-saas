@@ -32,6 +32,34 @@
     <view class="paused-desc">可在「我的 → 缴费记录」查看电子收据</view>
   </view>
 
+  <!-- 优惠券：有可用券才显示，避免无谓干扰 -->
+  <view wx:if="{{coupons.length > 0}}" class="coupon-card card">
+    <view class="coupon-head">
+      <text class="coupon-title">优惠券</text>
+      <text class="coupon-sub">{{pickedCouponId ? '已抵扣 ¥' + discount : coupons.length + ' 张可用'}}</text>
+    </view>
+    <view
+      wx:for="{{coupons}}"
+      wx:key="userCouponId"
+      class="coupon-row {{pickedCouponId === item.userCouponId ? 'on' : ''}}"
+      data-id="{{item.userCouponId}}"
+      bindtap="pickCoupon"
+    >
+      <view class="coupon-info">
+        <view class="coupon-name">{{item.name}}</view>
+        <view class="coupon-meta">抵扣 ¥{{item.discount}}</view>
+      </view>
+      <view class="coupon-check">{{pickedCouponId === item.userCouponId ? '✓' : ''}}</view>
+    </view>
+  </view>
+
+  <!-- 抵扣后实付 -->
+  <view wx:if="{{pickedCouponId}}" class="pay-sum card">
+    <view class="ps-row"><text>账单金额</text><text class="amount">¥{{totalAmount}}</text></view>
+    <view class="ps-row discount"><text>优惠券抵扣</text><text class="amount">−¥{{discount}}</text></view>
+    <view class="ps-row total"><text>实付金额</text><text class="amount">¥{{payAmount}}</text></view>
+  </view>
+
   <view class="method-card card">
     <view class="method-left">
       <view class="wechat-icon">微</view>
@@ -44,6 +72,6 @@
   </view>
 
   <button class="dark-button submit-btn" bindtap="submitPay" disabled="{{!payable}}">
-    {{payable ? '确认支付 ¥' + totalAmount : (paused ? '收款已暂停' : pendingOrder ? '上笔支付进行中' : billStatus === 'PAID' ? '该账单已缴清' : '暂不可缴费')}}
+    {{payable ? '确认支付 ¥' + (pickedCouponId ? payAmount : totalAmount) : (paused ? '收款已暂停' : pendingOrder ? '上笔支付进行中' : billStatus === 'PAID' ? '该账单已缴清' : '暂不可缴费')}}
   </button>
 </view>
