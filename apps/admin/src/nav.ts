@@ -64,10 +64,17 @@ export const NAV: NavGroup[] = [
     label: '收费',
     icon: 'Tickets',
     pages: [
-      { path: '/bills', label: '出账与账单', hint: '按规则批量出账、导入账单、发布给业主' },
+      {
+        path: '/bill-run',
+        label: '出账',
+        title: '出账（每月一次）',
+        hint: '按 4 步完成：设收费标准 → 选账期 → 生成账单 → 核对后发布给业主',
+      },
+      { path: '/bills', label: '账单查询', hint: '查看每户的账单、缴费与逾期情况' },
+      { path: '/bill-import', label: '导入账单', hint: '每户金额不同时，用表格批量导入' },
       { path: '/meters', label: '抄表', title: '水电气抄表', hint: '录入本期读数，用于按量计费' },
       { path: '/share-pools', label: '公共分摊', title: '公共水电分摊', hint: '录入本期公共能耗总额并分摊到各户' },
-      { path: '/fee-rules', label: '收费标准', hint: '设置每平米单价、固定费用等计费方式' },
+      { path: '/fee-rules', label: '收费标准', hint: '设置每平米单价、固定费用等计费方式（高级设置）' },
     ],
   },
   {
