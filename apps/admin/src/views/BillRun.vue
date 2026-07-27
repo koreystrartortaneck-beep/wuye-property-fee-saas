@@ -112,13 +112,16 @@
       <template v-else>
         <div class="verify-bar">
           <div class="verify-figures">
-            <span><i>共</i><b class="num">{{ batchBills.length }}</b><i>户</i></span>
+            <span><i>共</i><b class="num">{{ batchCount }}</b><i>户</i></span>
             <span><i>合计</i><b class="num strong">¥{{ batchTotal }}</b></span>
           </div>
           <el-tag v-if="published" type="success" size="small">已发布 · 业主可见</el-tag>
           <el-tag v-else type="warning" size="small">未发布 · 业主看不到</el-tag>
         </div>
 
+        <p v-if="listCapped" class="capped-note">
+          下方仅显示前 {{ batchBills.length }} 户明细，合计金额与户数已按全部 {{ batchCount }} 户统计。
+        </p>
         <el-table :data="batchBills" size="small" max-height="360" class="verify-table">
           <el-table-column label="房屋" min-width="160">
             <template #default="{ row }">{{ row.house?.displayName || '—' }}</template>
@@ -138,7 +141,7 @@
 
         <div v-if="!published" class="publish-row">
           <el-button type="primary" size="large" :loading="publishing" @click="publish">
-            发布给业主（{{ batchBills.length }} 户 · ¥{{ batchTotal }}）
+            发布给业主（{{ batchCount }} 户 · ¥{{ batchTotal }}）
           </el-button>
           <span class="publish-note">发布后业主立即可在小程序缴费；发布不可撤销，请先核对金额。</span>
         </div>
@@ -232,7 +235,9 @@ interface Batch {
   batchNo: string;
   period: string;
   status: string;
+  /** 权威合计与户数：不能用已加载的行去求和，超过一页会算少 */
   totalAmount: string;
+  validRows: number;
 }
 interface Bill {
   id: string;
@@ -258,11 +263,13 @@ const periodLabel = computed(() => {
   const [y, m] = chosen.value.period.split('-');
   return `${y} 年 ${Number(m)} 月`;
 });
-const batchTotal = computed(() =>
-  yuan(batchBills.value.reduce((s, b) => s + Number(b.amount || 0), 0)),
-);
+/** 合计与户数一律取后端权威值，避免只加载一页时算少 */
+const batchTotal = computed(() => yuan(batch.value?.totalAmount ?? 0));
+const batchCount = computed(() => batch.value?.validRows ?? batchBills.value.length);
+/** 明细表最多展示一页，超出时明确告知，不让用户误以为只有这些 */
+const listCapped = computed(() => batchCount.value > batchBills.value.length);
 const publishedAmount = computed(() => batchTotal.value);
-const publishedCount = computed(() => batchBills.value.length);
+const publishedCount = computed(() => batchCount.value);
 
 const phaseText = computed(() => {
   if (!rules.value.length) return '还没有收费标准，先在下面第 1 步设置';
@@ -341,7 +348,7 @@ async function loadBatchForPeriod() {
 }
 
 async function loadBatchBills(batchId: string) {
-  const data = await api<Page<Bill>>(`/admin/bills${qs({ batchId, pageSize: 300 })}`);
+  const data = await api<Page<Bill>>(`/admin/bills${qs({ batchId, pageSize: 200 })}`);
   batchBills.value = (data.list ?? []).filter((b) => b.status !== 'CANCELED');
 }
 
@@ -673,6 +680,11 @@ onMounted(async () => {
 }
 .verify-figures b.strong {
   font-size: var(--fs-20);
+}
+.capped-note {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--warning-text);
 }
 .verify-table {
   border: 1px solid var(--border);
