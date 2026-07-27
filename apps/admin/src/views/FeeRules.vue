@@ -30,6 +30,13 @@
           <span v-else class="sub">已退役</span>
         </template>
       </el-table-column>
+      <template #empty>
+        <div class="tbl-empty">
+          <p class="te-title">还没有收费标准</p>
+          <p class="te-desc">收费标准决定每户收多少钱，建好后即可出账</p>
+        <el-button type="primary" text @click="$router.push('/bill-run')">去设置 →</el-button>
+        </div>
+      </template>
     </el-table>
   </el-card>
 
@@ -359,6 +366,20 @@ async function retire(row: { id: string }) {
 </script>
 
 <style scoped>
+.tbl-empty {
+  padding: var(--sp-8) 0;
+  text-align: center;
+}
+.te-title {
+  margin: 0;
+  font-size: var(--fs-13);
+  color: var(--text-secondary);
+}
+.te-desc {
+  margin: var(--sp-1) 0 var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+}
 .mb {
   margin-bottom: 16px;
 }

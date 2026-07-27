@@ -33,6 +33,12 @@
           <el-button size="small" @click="openEdit(row)">编辑</el-button>
         </template>
       </el-table-column>
+      <template #empty>
+        <div class="tbl-empty">
+          <p class="te-title">还没有房屋</p>
+          <p class="te-desc">先到「设置 → 小区信息」创建小区，然后用 CSV 批量导入房屋</p>
+        </div>
+      </template>
     </el-table>
     <el-pagination
       class="pager"
@@ -237,6 +243,20 @@ async function doImport() {
 </script>
 
 <style scoped>
+.tbl-empty {
+  padding: var(--sp-8) 0;
+  text-align: center;
+}
+.te-title {
+  margin: 0;
+  font-size: var(--fs-13);
+  color: var(--text-secondary);
+}
+.te-desc {
+  margin: var(--sp-1) 0 var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+}
 .toolbar {
   display: flex;
   gap: 10px;

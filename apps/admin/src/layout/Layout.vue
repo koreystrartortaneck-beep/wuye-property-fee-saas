@@ -28,7 +28,7 @@
       </nav>
 
       <div class="side-foot">
-        <button class="nav-item ghost" :title="mini ? '展开' : undefined" @click="mini = !mini">
+        <button class="nav-item ghost" :title="mini ? '展开' : undefined" @click="toggleMini">
           <el-icon class="nav-icon"><component :is="mini ? icons.Expand : icons.Fold" /></el-icon>
           <span v-show="!mini || drawerOpen" class="nav-label">收起侧栏</span>
         </button>
@@ -166,9 +166,12 @@ function openGroup(group: NavGroup) {
 const mini = ref(false);
 const drawerOpen = ref(false);
 
+/** 用户是否手动调过侧栏：调过之后不再被 resize 覆盖 */
+const miniTouched = ref(false);
+
 function applyViewport() {
   const w = window.innerWidth;
-  mini.value = w < 1200;
+  if (!miniTouched.value) mini.value = w < 1200;
   if (w >= 900) drawerOpen.value = false;
 }
 
@@ -204,6 +207,11 @@ onUnmounted(() => {
   window.removeEventListener('resize', applyViewport);
   stopBadgePolling();
 });
+
+function toggleMini() {
+  mini.value = !mini.value;
+  miniTouched.value = true;
+}
 
 function onTenantChange(id: string) {
   store.setActingTenant(id);

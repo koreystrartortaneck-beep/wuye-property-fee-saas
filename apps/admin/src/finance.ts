@@ -44,6 +44,28 @@ export const REFUND_STATUS_LABEL: Record<string, string> = {
   ABNORMAL: '异常待查',
 };
 
+/** 退款外呼尝试状态：此前退款详情里直接渲染英文原文 */
+export const REFUND_ATTEMPT_STATUS_LABEL: Record<string, string> = {
+  PENDING: '进行中',
+  SUCCESS: '成功',
+  FAILED: '失败',
+  UNKNOWN: '结果未知',
+};
+
+/** 发票交付方式 */
+export const INVOICE_DELIVERY_LABEL: Record<string, string> = {
+  EMAIL: '电子邮件',
+  SELF_PICKUP: '到物业领取',
+  MAIL: '邮寄',
+};
+
+/** 通知发送通道 */
+export const NOTIFY_CHANNEL_LABEL: Record<string, string> = {
+  SUBSCRIBE: '微信订阅消息',
+  SMS: '短信',
+  NONE: '未发送',
+};
+
 export const RECON_RUN_STATUS_LABEL: Record<string, string> = { RUNNING: '进行中', COMPLETED: '已完成', FAILED: '失败' };
 
 export const RECON_BILL_TYPE_LABEL: Record<string, string> = { TRANSACTION: '交易账单', REFUND: '退款账单' };

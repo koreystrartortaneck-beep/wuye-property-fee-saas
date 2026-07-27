@@ -71,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { Search } from '@element-plus/icons-vue';
 import { api, qs, type Page } from '../api';
@@ -181,6 +181,8 @@ function onHotkey(e: KeyboardEvent) {
 }
 
 window.addEventListener('keydown', onHotkey);
+// 组件卸载时必须移除，否则热键监听会随实例累积泄漏
+onUnmounted(() => window.removeEventListener('keydown', onHotkey));
 
 defineExpose({ open });
 </script>

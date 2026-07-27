@@ -51,6 +51,12 @@
           <el-button size="small" @click="openItems(row)">明细</el-button>
         </template>
       </el-table-column>
+      <template #empty>
+        <div class="tbl-empty">
+          <p class="te-title">还没有对账记录</p>
+          <p class="te-desc">系统每日自动与微信支付对账，也可在上方手动触发</p>
+        </div>
+      </template>
     </el-table>
     <el-pagination
       class="pager"
@@ -243,6 +249,20 @@ async function submitResolve() {
 </script>
 
 <style scoped>
+.tbl-empty {
+  padding: var(--sp-8) 0;
+  text-align: center;
+}
+.te-title {
+  margin: 0;
+  font-size: var(--fs-13);
+  color: var(--text-secondary);
+}
+.te-desc {
+  margin: var(--sp-1) 0 var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+}
 .mb {
   margin-bottom: 16px;
 }

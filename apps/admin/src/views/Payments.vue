@@ -73,6 +73,12 @@
           <el-button size="small" @click="showRefund(row)">退款详情</el-button>
         </template>
       </el-table-column>
+      <template #empty>
+        <div class="tbl-empty">
+          <p class="te-title">还没有收款记录</p>
+          <p class="te-desc">业主缴费或登记线下现金后会出现在这里</p>
+        </div>
+      </template>
     </el-table>
     <el-pagination
       class="pager"
@@ -117,7 +123,7 @@
       <el-table :data="refundDetail.attempts || []" size="small">
         <el-table-column prop="attemptNo" label="#" width="50" />
         <el-table-column label="状态" width="90">
-          <template #default="{ row }">{{ row.status }}</template>
+          <template #default="{ row }">{{ REFUND_ATTEMPT_STATUS_LABEL[row.status] || '—' }}</template>
         </el-table-column>
         <el-table-column label="时间" min-width="150">
           <template #default="{ row }">{{ dt(row.createdAt) }}</template>
@@ -137,17 +143,18 @@ import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { useCommunities } from '../composables';
 import {
-  PAYMENT_STATUS_LABEL,
   PAYMENT_CHANNEL_LABEL,
+  PAYMENT_STATUS_LABEL,
+  REFUND_ATTEMPT_STATUS_LABEL,
   REFUND_STATUS_LABEL,
+  buildOfflinePayload,
+  buildReasonPayload,
+  buildRefundPayload,
+  dt,
+  genRequestId,
   paymentStatusTag,
   refundStatusTag,
   yuan,
-  dt,
-  buildRefundPayload,
-  buildReasonPayload,
-  buildOfflinePayload,
-  genRequestId,
 } from '../finance';
 
 interface Payment {
@@ -298,6 +305,20 @@ async function showRefund(row: Payment) {
 </script>
 
 <style scoped>
+.tbl-empty {
+  padding: var(--sp-8) 0;
+  text-align: center;
+}
+.te-title {
+  margin: 0;
+  font-size: var(--fs-13);
+  color: var(--text-secondary);
+}
+.te-desc {
+  margin: var(--sp-1) 0 var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+}
 .mb {
   margin-bottom: 16px;
 }

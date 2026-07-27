@@ -30,7 +30,7 @@
         <el-form-item label="联系电话"><el-input v-model="form.contactPhone" /></el-form-item>
         <el-divider>初始管理员账号</el-divider>
         <el-form-item label="管理员账号"><el-input v-model="form.adminUsername" /></el-form-item>
-        <el-form-item label="管理员密码"><el-input v-model="form.adminPassword" placeholder="至少 6 位" /></el-form-item>
+        <el-form-item label="管理员密码"><el-input v-model="form.adminPassword" placeholder="至少 6 位"  type="password" show-password /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialog = false">取消</el-button>

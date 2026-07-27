@@ -24,7 +24,7 @@
       </el-table-column>
       <el-table-column label="交付" min-width="150">
         <template #default="{ row }">
-          <div>{{ row.deliveryMethod }}</div>
+          <div>{{ INVOICE_DELIVERY_LABEL[row.deliveryMethod] || '—' }}</div>
           <div class="sub">{{ row.email || '' }}</div>
         </template>
       </el-table-column>
@@ -56,6 +56,12 @@
           >{{ row.status === 'REVERSAL_REQUIRED' ? '待红冲 · 立即处理' : '红冲' }}</el-button>
         </template>
       </el-table-column>
+      <template #empty>
+        <div class="tbl-empty">
+          <p class="te-title">暂无开票申请</p>
+          <p class="te-desc">业主对已缴账单申请开票后会出现在这里</p>
+        </div>
+      </template>
     </el-table>
     <el-pagination
       class="pager"
@@ -96,7 +102,14 @@ import { onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { useCommunities } from '../composables';
-import { INVOICE_STATUS_LABEL, INVOICE_TITLE_TYPE_LABEL, invoiceStatusTag, yuan, dt } from '../finance';
+import {
+  INVOICE_DELIVERY_LABEL,
+  INVOICE_STATUS_LABEL,
+  INVOICE_TITLE_TYPE_LABEL,
+  dt,
+  invoiceStatusTag,
+  yuan,
+} from '../finance';
 import { refreshBadges } from '../badges';
 
 interface Invoice {
@@ -185,6 +198,20 @@ async function openReverse(row: Invoice) {
 </script>
 
 <style scoped>
+.tbl-empty {
+  padding: var(--sp-8) 0;
+  text-align: center;
+}
+.te-title {
+  margin: 0;
+  font-size: var(--fs-13);
+  color: var(--text-secondary);
+}
+.te-desc {
+  margin: var(--sp-1) 0 var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+}
 .toolbar {
   display: flex;
   flex-wrap: wrap;

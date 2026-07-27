@@ -62,6 +62,12 @@
           </el-popconfirm>
         </template>
       </el-table-column>
+      <template #empty>
+        <div class="tbl-empty">
+          <p class="te-title">暂无报事报修</p>
+          <p class="te-desc">业主在小程序提交报修或投诉后会出现在这里</p>
+        </div>
+      </template>
     </el-table>
     <el-pagination
       class="pager"
@@ -230,6 +236,20 @@ onMounted(load);
 </script>
 
 <style scoped>
+.tbl-empty {
+  padding: var(--sp-8) 0;
+  text-align: center;
+}
+.te-title {
+  margin: 0;
+  font-size: var(--fs-13);
+  color: var(--text-secondary);
+}
+.te-desc {
+  margin: var(--sp-1) 0 var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+}
 .toolbar {
   display: flex;
   gap: 10px;

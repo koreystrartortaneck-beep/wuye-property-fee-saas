@@ -29,6 +29,12 @@
           <el-button size="small" type="primary" class="ml" @click="submit(row)">录入</el-button>
         </template>
       </el-table-column>
+      <template #empty>
+        <div class="tbl-empty">
+          <p class="te-title">还没有抄表记录</p>
+          <p class="te-desc">选择小区与账期后为各户录入本期读数</p>
+        </div>
+      </template>
     </el-table>
 
     <h4>已录读数</h4>
@@ -142,6 +148,20 @@ async function update(row: Reading) {
 </script>
 
 <style scoped>
+.tbl-empty {
+  padding: var(--sp-8) 0;
+  text-align: center;
+}
+.te-title {
+  margin: 0;
+  font-size: var(--fs-13);
+  color: var(--text-secondary);
+}
+.te-desc {
+  margin: var(--sp-1) 0 var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+}
 .toolbar {
   display: flex;
   gap: 10px;

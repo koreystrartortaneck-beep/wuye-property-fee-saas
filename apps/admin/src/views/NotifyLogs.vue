@@ -40,7 +40,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { api, qs, type Page } from '../api';
-import { dt } from '../finance';
+import { NOTIFY_CHANNEL_LABEL, dt } from '../finance';
 
 interface Log {
   id: string;
