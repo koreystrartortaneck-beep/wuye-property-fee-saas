@@ -40,7 +40,14 @@
           <el-button text type="primary" size="small" @click="showDetail(row)">查看</el-button>
         </template>
       </el-table-column>
-    </el-table>
+          <template #empty>
+        <EmptyState
+          icon="📜"
+          title="还没有操作记录"
+          desc="后台的增删改、审核、退款等敏感操作都会自动留痕，可按操作人与时间范围追溯"
+        />
+      </template>
+</el-table>
     <el-pagination
       class="pager"
       layout="total, prev, pager, next"
@@ -65,6 +72,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { api, qs, type Page } from '../api';
 import { useCommunities } from '../composables';
@@ -129,16 +137,6 @@ function pretty(v: unknown): string {
 </script>
 
 <style scoped>
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-.pager {
-  margin-top: 14px;
-  justify-content: flex-end;
-}
 .sub {
   color: var(--text-secondary);
   font-size: var(--fs-12);

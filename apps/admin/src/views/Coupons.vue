@@ -41,7 +41,12 @@
           <el-switch :model-value="row.enabled" @change="(v: boolean) => toggle(row, v)" />
         </template>
       </el-table-column>
-    </el-table>
+          <template #empty>
+        <EmptyState icon="🎟" title="还没有优惠券" desc="可发放满减券用于物业费抵扣；业主缴费时自动可选，核销后不可重复使用">
+          <template #action><el-button type="primary" @click="openCreate">发放优惠券</el-button></template>
+        </EmptyState>
+      </template>
+</el-table>
     <el-pagination class="pager" layout="total, prev, pager, next" :total="total" :page-size="20" :current-page="page"
       @current-change="(p: number) => { page = p; load(); }" />
 
@@ -79,6 +84,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, type Page } from '../api';
@@ -167,7 +173,4 @@ onMounted(load);
 .verify-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .found { font-size: var(--fs-13); }
 .ml { margin-left: 6px; }
-.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-.hint { color: var(--text-secondary); font-size: var(--fs-12); }
-.pager { margin-top: 14px; justify-content: flex-end; }
 </style>

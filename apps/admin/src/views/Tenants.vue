@@ -20,7 +20,14 @@
           </el-button>
         </template>
       </el-table-column>
-    </el-table>
+          <template #empty>
+        <EmptyState
+          icon="🏢"
+          title="还没有物业公司"
+          desc="平台超管在此创建物业公司（租户）；各公司的数据相互隔离"
+        />
+      </template>
+</el-table>
 
     <el-dialog v-model="dialog" title="新建租户" width="min(460px, 92vw)">
       <el-form label-width="110px">
@@ -41,6 +48,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, type Page } from '../api';
@@ -112,7 +120,4 @@ onMounted(load);
 </script>
 
 <style scoped>
-.toolbar {
-  margin-bottom: 14px;
-}
 </style>

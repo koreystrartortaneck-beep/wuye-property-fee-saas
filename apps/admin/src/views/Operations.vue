@@ -43,7 +43,7 @@
               {{ m.pass ? '达标' : '未达标' }}
             </el-tag>
           </div>
-          <div class="m-value num">{{ m.display }}</div>
+          <div class="stat-value">{{ m.display }}</div>
           <div class="m-desc">{{ m.desc }}</div>
         </div>
       </div>
@@ -124,10 +124,11 @@
           </template>
         </el-table-column>
         <template #empty>
-          <div class="tbl-empty">
-            <p class="te-title">没有{{ incidentStatus === 'OPEN' ? '待处理的' : '' }}运营事件</p>
-            <p class="te-desc">支付回调失败、对账差异、定时任务异常等会自动在此登记</p>
-          </div>
+          <EmptyState
+            icon="🟢"
+            :title="incidentStatus === 'OPEN' ? '没有待处理的运营事件' : '没有运营事件'"
+            desc="支付回调失败、对账差异、定时任务异常等会自动在此登记；配置告警 Webhook 后还会主动通知"
+          />
         </template>
       </el-table>
       <el-pagination
@@ -142,6 +143,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { computed, onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs, type Page } from '../api';
@@ -426,13 +428,6 @@ onMounted(async () => {
   font-size: var(--fs-12);
   color: var(--text-secondary);
 }
-.m-value {
-  margin-top: var(--sp-1);
-  font-size: var(--fs-28);
-  font-weight: var(--fw-semibold);
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-}
 .m-desc {
   font-size: var(--fs-11);
   color: var(--text-tertiary);
@@ -477,29 +472,4 @@ onMounted(async () => {
   font-variant-numeric: tabular-nums;
 }
 
-.cell-main {
-  font-size: var(--fs-13);
-  font-weight: var(--fw-medium);
-}
-.cell-sub {
-  font-size: var(--fs-12);
-  color: var(--text-secondary);
-}
-.num {
-  font-variant-numeric: tabular-nums;
-}
-.tbl-empty {
-  padding: var(--sp-8) 0;
-  text-align: center;
-}
-.te-title {
-  margin: 0;
-  font-size: var(--fs-13);
-  color: var(--text-secondary);
-}
-.te-desc {
-  margin: var(--sp-1) 0 0;
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
-}
 </style>

@@ -1,0 +1,332 @@
+/**
+ * 共享 UI 层 —— 页面级重复样式的唯一定义处。
+ *
+ * 为什么需要这一层：改版前 27 个页面各自维护 <style scoped>，合计 1570 行，
+ * 其中 .toolbar 被写了 19 遍且出现 9 种不同写法（6 处甚至漏了 display:flex），
+ * .pager 14 遍、空状态 12 遍。同一个控件在不同页面疏密/对齐都不一样，
+ * 这就是「整体性差」的直接来源。
+ *
+ * 规则：凡是跨页面出现的结构（工具条、分页、空状态、卡片、统计块、
+ * 房屋链接、字段行），只在本文件定义一次；页面的 <style scoped> 只放
+ * 该页独有的样式。imports.spec 里有守卫禁止页面重新声明这些类名。
+ *
+ * 本文件不使用 scoped，故必须全部以 u-/card-/toolbar/pager/empty- 等
+ * 明确前缀命名，避免与 Element Plus 内部类冲突。
+ */
+
+/* ══════════════ 卡片：整个后台的基本容器 ══════════════ */
+
+/*
+ * 卡片质感：白底 + 发丝描边 + 两层柔和投影。
+ * 两层投影（近距离紧密 + 远距离弥散）比单层更接近真实光照，
+ * 这是「精美」与「廉价」的分界；单层大模糊阴影会显脏。
+ */
+.el-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+
+/* 卡头：用留白与字重建立层级，不靠粗描边切割 */
+.el-card__header {
+  padding: var(--sp-4) var(--sp-4) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-13);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  line-height: var(--lh-tight);
+}
+
+.el-card__body {
+  padding: var(--sp-4);
+}
+
+/* 只有真正可点的卡片才抬起，否则鼠标一扫全页乱动，反而廉价 */
+.card-interactive {
+  cursor: pointer;
+}
+.card-interactive:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-1px);
+}
+
+/* 卡片之间的纵向节奏：页面里连续多张卡片时统一间距 */
+.card-stack > * + * {
+  margin-top: var(--sp-4);
+}
+
+/*
+ * 卡片网格：auto-fit 让卡片数量变化时自动重排，
+ * 不必为「1 张 / 2 张 / 3 张」各写一套媒体查询。
+ */
+.card-grid {
+  display: grid;
+  gap: var(--sp-4);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.card-grid-wide {
+  display: grid;
+  gap: var(--sp-4);
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+}
+
+/* 卡片右上角的次要操作/说明，靠右不抢标题 */
+.card-head-extra {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-weight: var(--fw-regular);
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+}
+
+/* ══════════════ 工具条：筛选 + 操作 ══════════════ */
+
+/*
+ * 唯一定义。align-items 用 center 而非 flex-end：
+ * 表单控件高度一致时 center 更稳，混入按钮也不会错位。
+ */
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+/* 把后续元素推到右侧（主操作区） */
+.toolbar-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 带标签的筛选项：标签在上、控件在下，窄屏也不会挤成一行 */
+.toolbar-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.toolbar-field > label {
+  font-size: var(--fs-11);
+  color: var(--text-tertiary);
+  line-height: 1;
+}
+
+@media (max-width: 720px) {
+  /* 窄屏：筛选控件占满整行，避免被压成不可点的窄条 */
+  .toolbar > .el-select,
+  .toolbar > .el-input,
+  .toolbar > .el-date-editor {
+    width: 100% !important;
+  }
+  .toolbar-spacer {
+    display: none;
+  }
+}
+
+/* ══════════════ 分页 ══════════════ */
+
+.pager {
+  margin-top: var(--sp-4);
+  justify-content: flex-end;
+}
+
+/* ══════════════ 空状态 ══════════════ */
+
+/*
+ * 空状态必须回答两个问题：为什么是空的、现在该做什么。
+ * 改版前 12 处空状态里只有 1 处给了按钮，其余让用户自己猜路径
+ * （例如 Houses 写「先到设置 → 小区信息创建小区」却不能点）。
+ */
+.empty {
+  padding: var(--sp-8) var(--sp-4);
+  text-align: center;
+}
+.empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: var(--sp-3);
+  border-radius: var(--r-full);
+  background: var(--c-gray-100);
+  color: var(--text-tertiary);
+  font-size: var(--fs-20);
+}
+.empty-title {
+  margin: 0;
+  font-size: var(--fs-15);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.empty-desc {
+  margin: var(--sp-1) auto 0;
+  max-width: 34em;
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+  line-height: var(--lh-normal);
+}
+.empty-actions {
+  margin-top: var(--sp-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+/* ══════════════ 统计块：数字是主角 ══════════════ */
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.stat-label {
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+  line-height: 1;
+}
+.stat-value {
+  font-size: var(--fs-28);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  color: var(--text-primary);
+}
+.stat-value.is-good {
+  color: var(--success-text);
+}
+.stat-value.is-bad {
+  color: var(--danger-text);
+}
+.stat-sub {
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+}
+/* 一行多个统计块时均分，窄屏自动换行 */
+.stat-row {
+  display: flex;
+  gap: var(--sp-6);
+  flex-wrap: wrap;
+}
+.stat-row > .stat {
+  flex: 1 1 120px;
+}
+
+/* ══════════════ 表格内的通用单元格 ══════════════ */
+
+/* 主次两行：主行是标识（房号/单号），次行是补充（业主/时间） */
+.cell-main {
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+  line-height: var(--lh-tight);
+}
+.cell-sub {
+  margin-top: 2px;
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+  line-height: var(--lh-tight);
+}
+
+/*
+ * 房屋链接：后台里「房屋」是所有单据的交汇点，凡出现必须能点进档案。
+ * 改版前 Bindings/Tickets/VisitorPasses/Services/MeterReadings 都只是死文本，
+ * 审核一条绑定申请时无法就地确认这户欠不欠费、还有谁绑过。
+ */
+.house-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: var(--fw-medium);
+  color: var(--primary);
+  cursor: pointer;
+  text-align: left;
+}
+.house-link:hover {
+  text-decoration: underline;
+}
+.house-link:disabled {
+  color: var(--text-primary);
+  cursor: default;
+  text-decoration: none;
+}
+
+/* 可点行内的标识文本：看起来像链接，但点击由整行接管（不重复绑事件） */
+.link-text {
+  color: var(--primary);
+  font-weight: var(--fw-semibold);
+}
+
+/* 金额：右对齐 + 等宽，列才能扫读 */
+.money {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  font-weight: var(--fw-medium);
+}
+
+/* ══════════════ 说明性文字 ══════════════ */
+
+/* 表单/对话框里的提示段落 */
+.hint {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+  line-height: var(--lh-normal);
+}
+.hint b {
+  color: var(--text-secondary);
+  font-weight: var(--fw-semibold);
+}
+
+/* 区块小标题（卡片内再分段时用，避免嵌套卡片） */
+.section-title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-13);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+.section-title + .hint {
+  margin-top: calc(var(--sp-2) * -1);
+}
+
+/* ══════════════ 表格细节 ══════════════ */
+
+/*
+ * 可点行：给出光标与悬停反馈，否则用户不知道能点。
+ * 注意本文件是全局 CSS，不能用 :deep()——那是 SFC scoped 专用语法，
+ * 写在这里属于无效选择器，会让整条规则被丢弃。
+ */
+.clickable-rows .el-table__row {
+  cursor: pointer;
+}
+
+.el-table th.el-table__cell {
+  background: var(--c-gray-50) !important;
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+  font-size: var(--fs-12);
+}
+.el-table {
+  font-size: var(--fs-13);
+}
+.el-table td.el-table__cell {
+  padding: var(--sp-2) 0;
+}

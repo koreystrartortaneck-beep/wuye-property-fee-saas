@@ -1,9 +1,31 @@
 <template>
   <el-card class="mb">
     <template #header>线下缴费核销</template>
+    <!--
+      账单不是靠手输 ID 选的：从「收费 → 账单查询」里对某张待缴账单点「收现金」
+      会带着 billId 跳到这里并回填。这条确认行让收费员在动钱之前先核对户与金额。
+    -->
+    <div v-if="billLabel" class="picked-bill">
+      <span class="pb-tag">已选账单</span>
+      <b class="pb-text">{{ billLabel }}</b>
+      <el-button size="small" text @click="clearPickedBill">换一张</el-button>
+    </div>
+    <el-alert
+      v-else
+      class="mb"
+      type="warning"
+      :closable="false"
+      show-icon
+      title="请先到「收费 → 账单查询」找到这户的待缴账单，点该行的「收现金」再回来登记"
+    >
+      <template #default>
+        <el-button size="small" type="primary" text @click="$router.push('/bills')">去选账单 →</el-button>
+      </template>
+    </el-alert>
+
     <el-form inline>
       <el-form-item label="账单 ID">
-        <el-input v-model="offline.billId" placeholder="待缴账单 ID" style="width: 220px" />
+        <el-input v-model="offline.billId" placeholder="从账单查询点「收现金」自动带入" style="width: 220px" />
       </el-form-item>
       <el-form-item label="凭证号">
         <el-input v-model="offline.voucherNo" placeholder="收据/流水号" style="width: 160px" />
@@ -14,7 +36,7 @@
       <el-form-item label="缴款人">
         <el-input v-model="offline.payerName" placeholder="可选" style="width: 120px" />
       </el-form-item>
-      <el-button type="primary" :loading="settling" @click="settleOffline">核销入账</el-button>
+      <el-button type="primary" :loading="settling" :disabled="!offline.billId" @click="settleOffline">核销入账</el-button>
     </el-form>
     <el-alert
       type="info"
@@ -81,10 +103,12 @@
         </template>
       </el-table-column>
       <template #empty>
-        <div class="tbl-empty">
-          <p class="te-title">还没有收款记录</p>
-          <p class="te-desc">业主缴费或登记线下现金后会出现在这里</p>
-        </div>
+        <EmptyState
+          icon="💰"
+          title="还没有收款记录"
+          desc="业主在小程序缴费、或物业登记线下现金后会出现在这里；退款与冲正也在本页操作"
+          :action="{ label: '去出账让业主能缴费', to: '/bill-run' }"
+        />
       </template>
     </el-table>
     <el-pagination
@@ -138,14 +162,19 @@
         <el-table-column label="返回" min-width="140">
           <template #default="{ row }">{{ row.failureMessage || row.channelStatus || '—' }}</template>
         </el-table-column>
-      </el-table>
+              <template #empty>
+          <EmptyState icon="↩️" title="还没有退款尝试" desc="发起退款后每次向微信提交的结果都会记录在此，失败可重试" />
+        </template>
+</el-table>
     </template>
     <el-empty v-else description="该订单暂无退款记录" />
   </el-dialog>
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { computed, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { useCommunities } from '../composables';
@@ -205,6 +234,20 @@ const offline = ref<{ billId: string; voucherNo: string; paidAt: string; payerNa
 const settling = ref(false);
 /** 线下核销幂等键：一次填表持有一把，成功后重置 */
 const offlineRequestId = ref('');
+
+/*
+ * 由「账单查询 → 收现金」带入：billId 用于提交，billLabel 仅供核对展示。
+ * 之前这里要求人工输入账单 cuid，而后台任何页面都不显示这串 ID，等于这条路走不通。
+ */
+const route = useRoute();
+const billLabel = ref((route.query.billLabel as string) || '');
+const offlineFromRoute = (route.query.billId as string) || '';
+if (offlineFromRoute) offline.value.billId = offlineFromRoute;
+
+function clearPickedBill() {
+  billLabel.value = '';
+  offline.value.billId = '';
+}
 
 const reasonDialog = ref(false);
 const reasonAction = ref<'refund' | 'reverse'>('refund');
@@ -331,6 +374,31 @@ async function showRefund(row: Payment) {
 </script>
 
 <style scoped>
+/* 已选账单确认行：动钱之前必须让收费员看清是哪一户哪一笔 */
+.picked-bill {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--c-gray-50);
+  flex-wrap: wrap;
+}
+.pb-tag {
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-full);
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: var(--fs-11);
+  font-weight: var(--fw-semibold);
+}
+.pb-text {
+  font-size: var(--fs-13);
+  color: var(--text-primary);
+}
+
 .discount {
   color: var(--brand-gold);
   font-weight: var(--fw-medium);
@@ -338,32 +406,8 @@ async function showRefund(row: Payment) {
 .muted {
   color: var(--text-tertiary);
 }
-.tbl-empty {
-  padding: var(--sp-8) 0;
-  text-align: center;
-}
-.te-title {
-  margin: 0;
-  font-size: var(--fs-13);
-  color: var(--text-secondary);
-}
-.te-desc {
-  margin: var(--sp-1) 0 var(--sp-2);
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
-}
 .mb {
   margin-bottom: 16px;
-}
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-.pager {
-  margin-top: 14px;
-  justify-content: flex-end;
 }
 .json-title {
   margin: 12px 0 6px;

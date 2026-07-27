@@ -19,7 +19,12 @@
           </el-button>
         </template>
       </el-table-column>
-    </el-table>
+          <template #empty>
+        <EmptyState icon="🏘" title="还没有小区" desc="小区是房屋、收费标准、账单的归属单位，先建小区才能录入房屋">
+          <template #action><el-button type="primary" @click="openCreate">新建小区</el-button></template>
+        </EmptyState>
+      </template>
+</el-table>
     <el-pagination
       class="pager"
       layout="total, prev, pager, next"
@@ -44,6 +49,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs, type Page } from '../api';
@@ -131,11 +137,4 @@ onMounted(load);
 </script>
 
 <style scoped>
-.toolbar {
-  margin-bottom: 14px;
-}
-.pager {
-  margin-top: 14px;
-  justify-content: flex-end;
-}
 </style>

@@ -40,11 +40,10 @@
       </div>
     </div>
 
-    <el-table v-loading="loading" :data="bills" class="bill-table">
+    <el-table v-loading="loading" :data="bills">
       <el-table-column label="房屋 / 费用" min-width="240">
         <template #default="{ row }">
-          <div class="cell-main">{{ row.house?.displayName || '未知房屋' }}</div>
-          <div class="cell-sub">{{ row.title }}</div>
+          <HouseCell :house-id="row.houseId" :text="row.house?.displayName || '未知房屋'" :sub="row.title" />
         </template>
       </el-table-column>
 
@@ -78,8 +77,19 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="130" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
+          <!--
+            线下现金登记原先要求在「收款」页手输账单 ID，而这串 cuid 后台任何地方
+            都不显示，收费员实际无法完成登记。改为从账单直接带过去。
+          -->
+          <el-button
+            v-if="row.status === 'UNPAID'"
+            size="small"
+            type="primary"
+            plain
+            @click="registerOffline(row)"
+          >收现金</el-button>
           <el-button v-if="row.status === 'UNPAID'" size="small" text type="danger" @click="openCancel(row)">
             作废
           </el-button>
@@ -93,12 +103,21 @@
       </el-table-column>
 
       <template #empty>
-        <div class="empty">
-          <p>{{ filter.period || filter.status ? '当前条件下没有账单' : '还没有账单' }}</p>
-          <el-button v-if="!filter.period && !filter.status" type="primary" text @click="router.push('/bill-run')">
-            去出账 →
-          </el-button>
-        </div>
+        <EmptyState
+          v-if="filter.period || filter.status"
+          icon="🔎"
+          title="当前条件下没有账单"
+          desc="换个账期或状态再查，也可以清空筛选看全部"
+        >
+          <template #action><el-button @click="clearFilter">清空筛选</el-button></template>
+        </EmptyState>
+        <EmptyState
+          v-else
+          icon="🧾"
+          title="还没有账单"
+          desc="账单由「出账」按收费标准批量生成，发布后业主才能在小程序看到"
+          :action="{ label: '去出账', to: '/bill-run' }"
+        />
       </template>
     </el-table>
 
@@ -152,6 +171,8 @@
 </template>
 
 <script setup lang="ts">
+import HouseCell from '../components/HouseCell.vue';
+import EmptyState from '../components/EmptyState.vue';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
@@ -168,6 +189,7 @@ interface Bill {
   dueDate: string;
   paidAt: string | null;
   snapshot?: Record<string, unknown> | null;
+  houseId: string;
   house?: { displayName: string; code?: string };
 }
 
@@ -253,6 +275,29 @@ function doExport() {
   ElMessage.success(`已导出 ${bills.value.length} 条`);
 }
 
+/** 空状态里的「清空筛选」：账期/状态/批次/房屋都清掉，只留小区 */
+/**
+ * 带着这张账单去「收款」页登记线下现金。
+ * label 只用于让收费员核对是不是这一户这一笔，真正的校验在后端按 billId 做。
+ */
+function registerOffline(row: Bill) {
+  router.push({
+    path: '/payments',
+    query: {
+      billId: row.id,
+      billLabel: `${row.house?.displayName ?? '未知房屋'} · ${row.title} · ¥${row.amount}`,
+    },
+  });
+}
+
+function clearFilter() {
+  filter.value.period = '';
+  filter.value.status = '';
+  filter.value.batchId = '';
+  filter.value.houseId = '';
+  reload();
+}
+
 function reload() {
   page.value = 1;
   void loadBills();
@@ -323,13 +368,6 @@ onMounted(loadBills);
 </script>
 
 <style scoped>
-.toolbar {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--sp-4);
-  margin-bottom: var(--sp-3);
-  flex-wrap: wrap;
-}
 .field {
   display: flex;
   flex-direction: column;
@@ -351,16 +389,6 @@ onMounted(loadBills);
   font-weight: var(--fw-semibold);
 }
 
-.cell-main {
-  font-size: var(--fs-13);
-  font-weight: var(--fw-medium);
-  color: var(--text-primary);
-}
-.cell-sub {
-  font-size: var(--fs-12);
-  color: var(--text-secondary);
-  margin-top: 1px;
-}
 .cell-sub.overdue {
   color: var(--danger-text);
   font-weight: var(--fw-medium);
@@ -370,19 +398,7 @@ onMounted(loadBills);
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
-.num {
-  font-variant-numeric: tabular-nums;
-}
-.money {
-  font-weight: var(--fw-semibold);
-  color: var(--text-primary);
-}
 
-.empty {
-  padding: var(--sp-8) 0;
-  text-align: center;
-  color: var(--text-tertiary);
-}
 .empty p {
   margin: 0 0 var(--sp-2);
   font-size: var(--fs-13);

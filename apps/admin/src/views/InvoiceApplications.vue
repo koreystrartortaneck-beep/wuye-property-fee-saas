@@ -57,10 +57,12 @@
         </template>
       </el-table-column>
       <template #empty>
-        <div class="tbl-empty">
-          <p class="te-title">暂无开票申请</p>
-          <p class="te-desc">业主对已缴账单申请开票后会出现在这里</p>
-        </div>
+        <EmptyState
+          icon="🧾"
+          title="暂无开票申请"
+          desc="业主在小程序对已缴账单申请开票后会出现在这里，需要物业提交与回传发票"
+          :action="{ label: '查看收款记录', to: '/payments' }"
+        />
       </template>
     </el-table>
     <el-pagination
@@ -98,6 +100,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs, type Page } from '../api';
@@ -198,36 +201,7 @@ async function openReverse(row: Invoice) {
 </script>
 
 <style scoped>
-.tbl-empty {
-  padding: var(--sp-8) 0;
-  text-align: center;
-}
-.te-title {
-  margin: 0;
-  font-size: var(--fs-13);
-  color: var(--text-secondary);
-}
-.te-desc {
-  margin: var(--sp-1) 0 var(--sp-2);
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
-}
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 14px;
-}
-.pager {
-  margin-top: 14px;
-  justify-content: flex-end;
-}
 .sub {
-  color: var(--text-secondary);
-  font-size: var(--fs-12);
-}
-.hint {
   color: var(--text-secondary);
   font-size: var(--fs-12);
 }

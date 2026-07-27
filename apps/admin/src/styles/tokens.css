@@ -93,6 +93,13 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.1);
+  /*
+   * 卡片阴影单独成 token：一层贴边的紧密投影交代厚度，
+   * 一层远距离弥散投影交代离地高度。单层大模糊会糊成灰块，
+   * 这两层的比例是卡片「精美」与否的关键。
+   */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.05), 0 6px 16px -4px rgba(16, 24, 40, 0.08);
+  --shadow-card-hover: 0 2px 4px rgba(16, 24, 40, 0.06), 0 12px 28px -6px rgba(16, 24, 40, 0.12);
 
   /* ---------- 动效 ---------- */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
@@ -131,7 +138,7 @@
   --el-fill-color-blank: var(--bg-card);
   --el-fill-color-light: var(--c-gray-100);
 
-  --el-border-radius-base: var(--r-sm);
+  --el-border-radius-base: var(--r-md);
   --el-border-radius-small: var(--r-sm);
   --el-font-size-base: var(--fs-13);
 
@@ -183,38 +190,7 @@ body {
   text-align: right;
 }
 
-/* ---------- Element Plus 细节打磨 ---------- */
-.el-card {
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-sm) !important;
-  overflow: hidden;
-}
-.el-card__header {
-  padding: var(--sp-3) var(--sp-4);
-  border-bottom: 1px solid var(--border);
-  font-size: var(--fs-13);
-  font-weight: var(--fw-semibold);
-  color: var(--text-primary);
-  background: var(--bg-card);
-}
-.el-card__body {
-  padding: var(--sp-4);
-}
-
-/* 表头更轻，让数据成为主角 */
-.el-table th.el-table__cell {
-  background: var(--c-gray-50) !important;
-  font-weight: var(--fw-medium);
-  color: var(--text-secondary);
-  font-size: var(--fs-12);
-}
-.el-table {
-  font-size: var(--fs-13);
-}
-.el-table td.el-table__cell {
-  padding: var(--sp-2) 0;
-}
+/* 注：卡片与表格的外观规则已统一搬到 styles/ui.css，此处不再重复定义 */
 
 .el-button {
   font-weight: var(--fw-medium);

@@ -28,7 +28,9 @@
       <el-table-column prop="visitorPhone" label="电话" width="130" />
       <el-table-column prop="plateNo" label="车牌" width="110" />
       <el-table-column label="到访房屋" min-width="150">
-        <template #default="{ row }">{{ row.house?.displayName }}</template>
+        <template #default="{ row }">
+            <HouseCell :house-id="row.houseId" :house="row.house" />
+          </template>
       </el-table-column>
       <el-table-column label="到访日期" width="110">
         <template #default="{ row }">{{ day(row.visitDate) }}</template>
@@ -45,10 +47,11 @@
         </template>
       </el-table-column>
       <template #empty>
-        <div class="tbl-empty">
-          <p class="te-title">暂无访客通行码</p>
-          <p class="te-desc">业主在小程序生成通行码后可在此查询与核销</p>
-        </div>
+        <EmptyState
+          icon="🎫"
+          title="暂无访客通行码"
+          desc="业主在小程序为来访者生成通行码，门岗核销后状态会变为「已使用」"
+        />
       </template>
     </el-table>
     <el-pagination
@@ -63,6 +66,8 @@
 </template>
 
 <script setup lang="ts">
+import HouseCell from '../components/HouseCell.vue';
+import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
@@ -78,6 +83,7 @@ interface Pass {
   visitDate: string;
   status: string;
   usedAt: string | null;
+  houseId: string;
   house?: { displayName: string };
 }
 
@@ -137,20 +143,6 @@ onMounted(load);
 </script>
 
 <style scoped>
-.tbl-empty {
-  padding: var(--sp-8) 0;
-  text-align: center;
-}
-.te-title {
-  margin: 0;
-  font-size: var(--fs-13);
-  color: var(--text-secondary);
-}
-.te-desc {
-  margin: var(--sp-1) 0 var(--sp-2);
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
-}
 .mb {
   margin-bottom: 16px;
 }
@@ -166,15 +158,6 @@ onMounted(load);
 }
 .ml {
   margin-left: 6px;
-}
-.toolbar {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-.pager {
-  margin-top: 14px;
-  justify-content: flex-end;
 }
 .used-at {
   color: var(--text-tertiary);

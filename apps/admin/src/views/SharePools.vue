@@ -23,11 +23,19 @@
       <el-table-column prop="createdAt" label="录入时间" min-width="170">
         <template #default="{ row }">{{ dt(row.createdAt) }}</template>
       </el-table-column>
-    </el-table>
+          <template #empty>
+        <EmptyState
+          icon="🧮"
+          title="还没有公摊池"
+          desc="公摊池用于把公共水电等总额按面积或户数分摊到各户；先录入总额再生成分摊"
+        />
+      </template>
+</el-table>
   </el-card>
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs, type Page } from '../api';
@@ -103,9 +111,6 @@ async function save() {
 </script>
 
 <style scoped>
-.toolbar {
-  margin-bottom: 14px;
-}
 .mb {
   margin-bottom: 8px;
 }

@@ -16,17 +16,17 @@
         </div>
       </div>
 
-      <div class="hero-figures">
-        <div class="fig">
-          <span class="fig-label">待缴</span>
-          <b class="fig-value num" :class="{ bad: Number(data.summary.unpaidAmount) > 0 }">
+      <div class="stat-row">
+        <div class="stat">
+          <span class="stat-label">待缴</span>
+          <b class="stat-value" :class="{ 'is-bad': Number(data.summary.unpaidAmount) > 0 }">
             ¥{{ yuan(data.summary.unpaidAmount) }}
           </b>
           <span class="fig-sub">{{ data.summary.unpaidCount }} 笔</span>
         </div>
-        <div class="fig">
-          <span class="fig-label">已缴</span>
-          <b class="fig-value num">¥{{ yuan(data.summary.paidAmount) }}</b>
+        <div class="stat">
+          <span class="stat-label">已缴</span>
+          <b class="stat-value">¥{{ yuan(data.summary.paidAmount) }}</b>
           <span class="fig-sub">{{ data.summary.paidCount }} 笔</span>
         </div>
       </div>
@@ -74,6 +74,22 @@
               <span class="cell-sub">
                 {{ row.status === 'PAID' && row.paidAt ? `缴于 ${day(row.paidAt)}` : `到期 ${day(row.dueDate)}` }}
               </span>
+            </template>
+          </el-table-column>
+          <!--
+            接电话时最常见的动作就是「业主说交现金了」，所以每张待缴账单
+            这里直接给入口，带 billId 跳收款页。原先只有卡头一个按钮，
+            而它传的是 houseId、收款页并不识别，点了等于没反应。
+          -->
+          <el-table-column label="操作" width="110" fixed="right">
+            <template #default="{ row }">
+              <el-button
+                v-if="row.status === 'UNPAID'"
+                size="small"
+                type="primary"
+                plain
+                @click="settleBill(row)"
+              >收现金</el-button>
             </template>
           </el-table-column>
           <template #empty><div class="pf-empty">这户还没有账单</div></template>
@@ -289,10 +305,24 @@ function goBills() {
   void router.push({ path: '/bills', query: { houseId: data.value.house.id } });
 }
 
-/** 带上房屋直达收款页，省去手输账单 ID */
+/**
+ * 「登记现金收款」不再直接跳收款页——收款页需要具体是哪一张账单，
+ * 而房屋可能有多张待缴。这里切到账单页签，由用户选中具体那一笔。
+ */
 function goSettle() {
+  tab.value = 'bills';
+}
+
+/** 带着这张待缴账单去收款页登记现金；label 仅供核对，校验在后端按 billId 做 */
+function settleBill(row: { id: string; title: string; amount: string }) {
   if (!data.value) return;
-  void router.push({ path: '/payments', query: { houseId: data.value.house.id } });
+  void router.push({
+    path: '/payments',
+    query: {
+      billId: row.id,
+      billLabel: `${data.value.house.displayName} · ${row.title} · ¥${row.amount}`,
+    },
+  });
 }
 
 async function load() {
@@ -350,26 +380,6 @@ onMounted(load);
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
 }
-.hero-figures {
-  display: flex;
-  gap: var(--sp-8);
-}
-.fig {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.fig-label {
-  font-size: var(--fs-11);
-  color: var(--text-tertiary);
-}
-.fig-value {
-  font-size: var(--fs-20);
-  font-weight: var(--fw-semibold);
-}
-.fig-value.bad {
-  color: var(--danger-text);
-}
 .fig-sub {
   font-size: var(--fs-11);
   color: var(--text-tertiary);
@@ -391,22 +401,6 @@ onMounted(load);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-sm);
   padding: 0 var(--sp-4) var(--sp-3);
-}
-.cell-main {
-  font-size: var(--fs-13);
-  font-weight: var(--fw-medium);
-  color: var(--text-primary);
-}
-.cell-sub {
-  font-size: var(--fs-12);
-  color: var(--text-secondary);
-}
-.num {
-  font-variant-numeric: tabular-nums;
-}
-.money {
-  font-weight: var(--fw-semibold);
-  color: var(--text-primary);
 }
 .pf-empty {
   padding: var(--sp-6) 0;

@@ -24,7 +24,12 @@
       <el-table-column label="操作" width="80" fixed="right">
         <template #default="{ row }"><el-button size="small" @click="openEdit(row)">编辑</el-button></template>
       </el-table-column>
-    </el-table>
+          <template #empty>
+        <EmptyState icon="🧰" title="还没有增值服务" desc="上架开锁、家政、维修等有偿服务，业主可在小程序下单">
+          <template #action><el-button type="primary" @click="openCreate">新增服务</el-button></template>
+        </EmptyState>
+      </template>
+</el-table>
   </el-card>
 
   <el-card>
@@ -43,7 +48,9 @@
         <template #default="{ row }">{{ row.price }} {{ row.unit }}</template>
       </el-table-column>
       <el-table-column label="房屋" min-width="130">
-        <template #default="{ row }">{{ row.house?.displayName }}</template>
+        <template #default="{ row }">
+            <HouseCell :house-id="row.houseId" :house="row.house" />
+          </template>
       </el-table-column>
       <el-table-column prop="contactName" label="联系人" width="90" />
       <el-table-column prop="contactPhone" label="电话" width="130" />
@@ -65,7 +72,10 @@
           </el-popconfirm>
         </template>
       </el-table-column>
-    </el-table>
+          <template #empty>
+        <EmptyState icon="📋" title="还没有服务工单" desc="业主在小程序下单后出现在这里，可接单、完成或取消" />
+      </template>
+</el-table>
     <el-pagination class="pager" layout="total, prev, pager, next" :total="orderTotal" :page-size="20" :current-page="orderPage"
       @current-change="(p: number) => { orderPage = p; loadOrders(); }" />
   </el-card>
@@ -91,6 +101,8 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
+import HouseCell from '../components/HouseCell.vue';
 import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
@@ -98,7 +110,7 @@ import { SERVICE_ORDER_STATUS_LABEL, useCommunities } from '../composables';
 import { day } from '../finance';
 
 interface Item { id: string; name: string; category: string | null; price: string; unit: string; communityId: string | null; description: string | null; enabled: boolean; }
-interface Order { id: string; serviceName: string; price: string; unit: string; contactName: string; contactPhone: string; expectDate: string; remark: string | null; status: string; house?: { displayName: string }; }
+interface Order { id: string; serviceName: string; price: string; unit: string; contactName: string; contactPhone: string; expectDate: string; remark: string | null; status: string; houseId: string; house?: { displayName: string }; }
 
 const ORDER_TAG: Record<string, 'warning' | 'primary' | 'success' | 'info'> = { PENDING: 'warning', ACCEPTED: 'primary', DONE: 'success', CANCELED: 'info' };
 
@@ -192,6 +204,4 @@ onMounted(() => {
 <style scoped>
 .mb { margin-bottom: 16px; }
 .card-head { display: flex; justify-content: space-between; align-items: center; }
-.toolbar { margin-bottom: 14px; }
-.pager { margin-top: 14px; justify-content: flex-end; }
 </style>

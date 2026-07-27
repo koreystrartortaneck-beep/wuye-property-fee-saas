@@ -52,10 +52,15 @@
         </template>
       </el-table-column>
       <template #empty>
-        <div class="tbl-empty">
-          <p class="te-title">还没有对账记录</p>
-          <p class="te-desc">系统每日自动与微信支付对账，也可在上方手动触发</p>
-        </div>
+        <EmptyState
+          icon="⚖️"
+          title="还没有对账记录"
+          desc="系统每日自动拉取微信支付账单核对金额与笔数，差异会登记为运营事件"
+        >
+          <template #action>
+            <el-button type="primary" :loading="triggering" @click="doTrigger">立即对账</el-button>
+          </template>
+        </EmptyState>
       </template>
     </el-table>
     <el-pagination
@@ -87,7 +92,10 @@
             <span v-else class="sub">{{ row.handlingRemark || '已处置' }}</span>
           </template>
         </el-table-column>
-      </el-table>
+              <template #empty>
+          <EmptyState icon="✅" title="这次对账没有差异" desc="系统账与微信支付账单逐笔核对一致，无需处置" />
+        </template>
+</el-table>
     </el-dialog>
 
     <el-dialog v-model="resolveDialog" title="处置对账差异" width="min(440px, 92vw)">
@@ -111,6 +119,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
@@ -249,26 +258,8 @@ async function submitResolve() {
 </script>
 
 <style scoped>
-.tbl-empty {
-  padding: var(--sp-8) 0;
-  text-align: center;
-}
-.te-title {
-  margin: 0;
-  font-size: var(--fs-13);
-  color: var(--text-secondary);
-}
-.te-desc {
-  margin: var(--sp-1) 0 var(--sp-2);
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
-}
 .mb {
   margin-bottom: 16px;
-}
-.pager {
-  margin-top: 14px;
-  justify-content: flex-end;
 }
 .warn {
   color: var(--danger-text);

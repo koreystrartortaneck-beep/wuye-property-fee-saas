@@ -7,7 +7,7 @@
       <el-select v-model="filter.category" placeholder="分类" clearable style="width: 130px" @change="reload">
         <el-option v-for="(label, val) in WORK_CATEGORY_LABEL" :key="val" :label="label" :value="val" />
       </el-select>
-      <div class="spacer" />
+      <div class="toolbar-spacer" />
       <el-button type="primary" :disabled="!filter.communityId" @click="openCreate">发布工作照片</el-button>
     </div>
 
@@ -42,7 +42,12 @@
           </el-popconfirm>
         </template>
       </el-table-column>
-    </el-table>
+          <template #empty>
+        <EmptyState icon="📷" title="还没有工作日志" desc="发布保洁、绿化、维修等日常工作照片，业主可在小程序看到，是最直接的服务体现">
+          <template #action><el-button type="primary" @click="openCreate">发布工作照片</el-button></template>
+        </EmptyState>
+      </template>
+</el-table>
     <el-pagination class="pager" layout="total, prev, pager, next" :total="total" :page-size="20" :current-page="page"
       @current-change="(p: number) => { page = p; load(); }" />
 
@@ -78,6 +83,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Plus } from '@element-plus/icons-vue';
@@ -181,7 +187,4 @@ async function remove(row: WorkLog) {
 </script>
 
 <style scoped>
-.toolbar { display: flex; gap: 10px; margin-bottom: 14px; align-items: center; }
-.spacer { flex: 1; }
-.pager { margin-top: 14px; justify-content: flex-end; }
 </style>

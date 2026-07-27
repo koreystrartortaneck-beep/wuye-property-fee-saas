@@ -189,6 +189,27 @@ defineExpose({ open });
 </script>
 
 <style scoped>
+/*
+ * 命令面板要占满弹窗：Element 默认给 body 留 16px 内边距、给 header 留高度，
+ * 搜索框的分隔线因此内缩、顶部还有一条空白。这里清零后才是「面板」的样子。
+ * 原先 .palette-dialog / .palette 只是没有任何规则的空钩子。
+ */
+.palette-dialog :deep(.el-dialog__header) {
+  display: none;
+}
+.palette-dialog :deep(.el-dialog__body) {
+  padding: 0;
+}
+.palette-dialog :deep(.el-dialog) {
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.palette {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .palette-input {
   display: flex;
   align-items: center;

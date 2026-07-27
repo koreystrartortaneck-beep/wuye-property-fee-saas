@@ -165,7 +165,10 @@
           <el-table-column label="到期日" width="110">
             <template #default="{ row }">{{ day(row.dueDate) }}</template>
           </el-table-column>
-        </el-table>
+                  <template #empty>
+            <EmptyState icon="⚠️" title="这一批没有生成任何账单" desc="通常是所选收费标准没有匹配到房屋（如面积缺失或房屋类型不符），请回上一步检查" />
+          </template>
+</el-table>
 
         <div v-if="!published" class="publish-row">
           <el-button type="primary" size="large" :loading="publishing" @click="publish">
@@ -237,6 +240,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -842,9 +846,6 @@ onMounted(async () => {
 }
 .calc {
   color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-.num {
   font-variant-numeric: tabular-nums;
 }
 .strong {

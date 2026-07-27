@@ -24,7 +24,9 @@
         </template>
       </el-table-column>
       <el-table-column label="房屋" width="150">
-        <template #default="{ row }">{{ row.house?.displayName }}</template>
+        <template #default="{ row }">
+            <HouseCell :house-id="row.houseId" :house="row.house" />
+          </template>
       </el-table-column>
       <el-table-column prop="content" label="内容" min-width="200" show-overflow-tooltip />
       <el-table-column label="图片" width="120">
@@ -63,10 +65,12 @@
         </template>
       </el-table-column>
       <template #empty>
-        <div class="tbl-empty">
-          <p class="te-title">暂无报事报修</p>
-          <p class="te-desc">业主在小程序提交报修或投诉后会出现在这里</p>
-        </div>
+        <EmptyState
+          icon="🛠"
+          title="暂无报事报修"
+          desc="业主在小程序提交报修或投诉后会出现在这里，受理与处理结果会同步回小程序"
+          :action="{ label: '发公告告知报修入口', to: '/announcements' }"
+        />
       </template>
     </el-table>
     <el-pagination
@@ -97,6 +101,8 @@
 </template>
 
 <script setup lang="ts">
+import HouseCell from '../components/HouseCell.vue';
+import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
@@ -113,6 +119,7 @@ interface Ticket {
   assigneeName: string | null;
   rating: number | null;
   createdAt: string;
+  houseId: string;
   house?: { displayName: string };
 }
 
@@ -236,28 +243,4 @@ onMounted(load);
 </script>
 
 <style scoped>
-.tbl-empty {
-  padding: var(--sp-8) 0;
-  text-align: center;
-}
-.te-title {
-  margin: 0;
-  font-size: var(--fs-13);
-  color: var(--text-secondary);
-}
-.te-desc {
-  margin: var(--sp-1) 0 var(--sp-2);
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
-}
-.toolbar {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
-.pager {
-  margin-top: 14px;
-  justify-content: flex-end;
-}
 </style>

@@ -84,7 +84,10 @@
             <span v-else class="bad-text">✕ {{ row.issues.map((i: Issue) => i.message).join('；') }}</span>
           </template>
         </el-table-column>
-      </el-table>
+              <template #empty>
+          <EmptyState icon="⚠️" title="没有可导入的数据行" desc="检查 CSV 是否只有表头、分隔符是否为英文逗号、房号是否与系统一致" />
+        </template>
+</el-table>
 
       <div class="confirm-row">
         <el-button
@@ -100,6 +103,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, type UploadFile } from 'element-plus';
@@ -308,8 +312,5 @@ function downloadTemplate() {
 .note {
   font-size: var(--fs-12);
   color: var(--text-secondary);
-}
-.num {
-  font-variant-numeric: tabular-nums;
 }
 </style>

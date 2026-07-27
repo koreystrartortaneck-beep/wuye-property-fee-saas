@@ -9,7 +9,7 @@
       </el-select>
       <el-input v-model="filter.keyword" placeholder="房号/业主/手机号" style="width: 200px" clearable @keyup.enter="reload" />
       <el-button @click="reload">查询</el-button>
-      <div class="spacer" />
+      <div class="toolbar-spacer" />
       <el-button type="primary" :disabled="!filter.communityId" @click="openCreate">新增房产</el-button>
       <el-button type="success" :disabled="!filter.communityId" @click="importDialog = true">CSV 批量导入</el-button>
     </div>
@@ -28,7 +28,7 @@
       @row-click="(row: House) => $router.push(`/houses/${row.id}`)"
     >
       <el-table-column prop="code" label="编号" width="120">
-        <template #default="{ row }"><span class="link-cell">{{ row.code }}</span></template>
+        <template #default="{ row }"><span class="link-text">{{ row.code }}</span></template>
       </el-table-column>
       <el-table-column prop="displayName" label="名称" min-width="160" />
       <el-table-column label="类型" width="90">
@@ -49,11 +49,26 @@
           <el-button size="small" @click.stop="openEdit(row)">编辑</el-button>
         </template>
       </el-table-column>
+      <!-- 原文案让用户自己去找「设置 → 小区信息」，现在按是否已有小区给出可点的下一步 -->
       <template #empty>
-        <div class="tbl-empty">
-          <p class="te-title">还没有房屋</p>
-          <p class="te-desc">先到「设置 → 小区信息」创建小区，然后用 CSV 批量导入房屋</p>
-        </div>
+        <EmptyState
+          v-if="communities.length === 0"
+          icon="🏘"
+          title="还没有小区"
+          desc="房屋要挂在小区下面，先创建小区再导入房屋"
+          :action="{ label: '去创建小区', to: '/communities' }"
+        />
+        <EmptyState
+          v-else
+          icon="🏠"
+          title="这个小区还没有房屋"
+          desc="房屋是账单、绑定、报修的载体；几十户以上建议用 CSV 一次导入"
+        >
+          <template #action>
+            <el-button type="primary" @click="importDialog = true">CSV 批量导入</el-button>
+            <el-button @click="openCreate">手动加一户</el-button>
+          </template>
+        </EmptyState>
       </template>
     </el-table>
     <el-pagination
@@ -106,6 +121,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
@@ -260,25 +276,6 @@ async function doImport() {
 </script>
 
 <style scoped>
-.tbl-empty {
-  padding: var(--sp-8) 0;
-  text-align: center;
-}
-.te-title {
-  margin: 0;
-  font-size: var(--fs-13);
-  color: var(--text-secondary);
-}
-.te-desc {
-  margin: var(--sp-1) 0 var(--sp-2);
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
-}
-.row-tip {
-  margin: 0 0 var(--sp-1);
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
-}
 .row-tip b {
   color: var(--text-secondary);
   font-weight: 600;
@@ -286,29 +283,6 @@ async function doImport() {
 /* 整行可点：给出光标与悬停反馈，否则用户不知道能点 */
 .clickable-rows :deep(.el-table__row) {
   cursor: pointer;
-}
-.link-cell {
-  color: var(--primary);
-  font-weight: 600;
-}
-.toolbar {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.spacer {
-  flex: 1;
-}
-.pager {
-  margin-top: 14px;
-  justify-content: flex-end;
-}
-.hint {
-  color: var(--text-secondary);
-  font-size: var(--fs-13);
-  margin-top: 0;
 }
 .import-result {
   margin-top: 10px;

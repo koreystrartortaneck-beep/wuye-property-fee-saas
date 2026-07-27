@@ -35,10 +35,9 @@
         </template>
       </el-table-column>
       <template #empty>
-        <div class="tbl-empty">
-          <p class="te-title">还没有公告</p>
-          <p class="te-desc">发布公告后业主可在小程序看到</p>
-        </div>
+        <EmptyState icon="📣" title="还没有公告" desc="公告发布后业主会在小程序首页看到，置顶的排在最前">
+          <template #action><el-button type="primary" @click="openCreate">发布公告</el-button></template>
+        </EmptyState>
       </template>
     </el-table>
     <el-pagination
@@ -70,6 +69,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, type Page } from '../api';
@@ -165,27 +165,6 @@ onMounted(load);
 </script>
 
 <style scoped>
-.tbl-empty {
-  padding: var(--sp-8) 0;
-  text-align: center;
-}
-.te-title {
-  margin: 0;
-  font-size: var(--fs-13);
-  color: var(--text-secondary);
-}
-.te-desc {
-  margin: var(--sp-1) 0 var(--sp-2);
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
-}
-.toolbar {
-  margin-bottom: 14px;
-}
-.pager {
-  margin-top: 14px;
-  justify-content: flex-end;
-}
 .mr {
   margin-right: 6px;
 }

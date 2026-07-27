@@ -56,7 +56,15 @@
           <el-button size="small" @click="openEdit('community', row.communityId)">调整</el-button>
         </template>
       </el-table-column>
-    </el-table>
+          <template #empty>
+        <EmptyState
+          icon="⚙️"
+          title="还没有小区可配置"
+          desc="收费策略（滞纳金、宽限期等）按小区分别设置，未单独设置的沿用公司级默认值"
+          :action="{ label: '去创建小区', to: '/communities' }"
+        />
+      </template>
+</el-table>
     <div class="acts">
       <el-select v-model="pickCommunity" placeholder="选择小区新增策略" style="width: 200px">
         <el-option v-for="c in communities" :key="c.id" :label="c.name" :value="c.id" />
@@ -88,6 +96,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { computed, onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '../api';

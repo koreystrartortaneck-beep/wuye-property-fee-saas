@@ -30,17 +30,18 @@
         </template>
       </el-table-column>
       <template #empty>
-        <div class="tbl-empty">
-          <p class="te-title">还没有抄表记录</p>
-          <p class="te-desc">选择小区与账期后为各户录入本期读数</p>
-        </div>
+        <EmptyState icon="✅" title="本期读数已全部录入" desc="这个小区所有房屋的本期读数都有了，可以出账了">
+          <template #action><el-button type="primary" @click="$router.push('/bill-run')">去出账</el-button></template>
+        </EmptyState>
       </template>
-    </el-table>
+</el-table>
 
     <h4>已录读数</h4>
     <el-table :data="readings" size="small">
       <el-table-column label="房屋" min-width="140">
-        <template #default="{ row }">{{ houseName(row.houseId) }}</template>
+        <template #default="{ row }">
+            <HouseCell :house-id="row.houseId" :text="houseName(row.houseId)" />
+          </template>
       </el-table-column>
       <el-table-column prop="prevValue" label="上期读数" width="110" />
       <el-table-column prop="value" label="本期读数" width="110" />
@@ -53,11 +54,20 @@
           <el-button size="small" class="ml" @click="update(row)">覆盖</el-button>
         </template>
       </el-table-column>
+          <template #empty>
+        <EmptyState
+          icon="💧"
+          title="还没有抄表记录"
+          desc="在上方「未录房屋」逐户录入本期读数后出现在这里；本期减上期即为用量，用量类收费标准据此计费"
+        />
+      </template>
     </el-table>
   </el-card>
 </template>
 
 <script setup lang="ts">
+import HouseCell from '../components/HouseCell.vue';
+import EmptyState from '../components/EmptyState.vue';
 import { ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs } from '../api';
@@ -148,26 +158,6 @@ async function update(row: Reading) {
 </script>
 
 <style scoped>
-.tbl-empty {
-  padding: var(--sp-8) 0;
-  text-align: center;
-}
-.te-title {
-  margin: 0;
-  font-size: var(--fs-13);
-  color: var(--text-secondary);
-}
-.te-desc {
-  margin: var(--sp-1) 0 var(--sp-2);
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
-}
-.toolbar {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
 .mb {
   margin-bottom: 16px;
 }

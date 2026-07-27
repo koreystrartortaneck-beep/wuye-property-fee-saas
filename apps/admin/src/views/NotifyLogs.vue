@@ -25,7 +25,15 @@
       <el-table-column label="时间" width="160">
         <template #default="{ row }">{{ dt(row.sentAt) }}</template>
       </el-table-column>
-    </el-table>
+          <template #empty>
+        <EmptyState
+          icon="🔔"
+          title="还没有通知记录"
+          desc="账单发布、催缴、工单进展等发给业主的通知都会记录在此，可查看送达结果"
+          :action="{ label: '去发布账单', to: '/bill-run' }"
+        />
+      </template>
+</el-table>
     <el-pagination
       class="pager"
       layout="total, prev, pager, next"
@@ -38,6 +46,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { api, qs, type Page } from '../api';
 import { NOTIFY_CHANNEL_LABEL, dt } from '../finance';
@@ -81,13 +90,4 @@ onMounted(load);
 </script>
 
 <style scoped>
-.toolbar {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-.pager {
-  margin-top: 14px;
-  justify-content: flex-end;
-}
 </style>

@@ -1,17 +1,17 @@
 <template>
   <!-- 概览：一眼看到欠多少、多少户 -->
   <div class="sum-bar">
-    <div class="sum-item">
-      <span class="sum-label">欠费合计</span>
-      <b class="sum-value strong num">¥{{ totalAmount }}</b>
+    <div class="stat">
+      <span class="stat-label">欠费合计</span>
+      <b class="stat-value">¥{{ totalAmount }}</b>
     </div>
-    <div class="sum-item">
-      <span class="sum-label">欠费户数</span>
-      <b class="sum-value num">{{ totalHouses }}</b>
+    <div class="stat">
+      <span class="stat-label">欠费户数</span>
+      <b class="stat-value">{{ totalHouses }}</b>
     </div>
-    <div class="sum-item">
-      <span class="sum-label">其中已逾期</span>
-      <b class="sum-value num" :class="{ bad: overdueHouses > 0 }">{{ overdueHouses }}</b>
+    <div class="stat">
+      <span class="stat-label">其中已逾期</span>
+      <b class="stat-value" :class="{ 'is-bad': overdueHouses > 0 }">{{ overdueHouses }}</b>
     </div>
   </div>
 
@@ -96,17 +96,29 @@
         </template>
       </el-table-column>
 
+      <!-- 空状态分两种：筛掉了 vs 真的没欠费。前者给「清除筛选」，后者是好消息不需要动作 -->
       <template #empty>
-        <div class="tbl-empty">
-          <p class="te-title">{{ filter.overdueDays ? '没有符合条件的欠费住户' : '太好了，当前没有欠费' }}</p>
-          <p class="te-desc">发布账单后，未缴清的住户会自动出现在这里</p>
-        </div>
+        <EmptyState
+          v-if="filter.overdueDays"
+          icon="🔎"
+          title="没有符合条件的欠费住户"
+          desc="当前按「逾期天数」做了筛选，放宽条件可以看到更多"
+        >
+          <template #action><el-button @click="clearFilter">清除筛选</el-button></template>
+        </EmptyState>
+        <EmptyState
+          v-else
+          icon="✅"
+          title="太好了，当前没有欠费"
+          desc="发布账单后，未缴清的住户会自动出现在这里"
+        />
       </template>
     </el-table>
   </el-card>
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -143,6 +155,12 @@ const selected = ref<Row[]>([]);
 const dunning = ref(false);
 
 const overdueHouses = computed(() => rows.value.filter((r) => r.overdueDays > 0).length);
+
+/** 空状态里的「清除筛选」：只清逾期天数（小区不是筛选，是必选维度） */
+function clearFilter() {
+  filter.value.overdueDays = undefined;
+  void load();
+}
 
 async function load() {
   loading.value = true;
@@ -228,34 +246,7 @@ onMounted(load);
   box-shadow: var(--shadow-sm);
   flex-wrap: wrap;
 }
-.sum-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.sum-label {
-  font-size: var(--fs-11);
-  color: var(--text-tertiary);
-}
-.sum-value {
-  font-size: var(--fs-20);
-  font-weight: var(--fw-semibold);
-  color: var(--text-primary);
-}
-.sum-value.strong {
-  font-size: var(--fs-28);
-}
-.sum-value.bad {
-  color: var(--danger-text);
-}
 
-.toolbar {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--sp-4);
-  margin-bottom: var(--sp-3);
-  flex-wrap: wrap;
-}
 .field {
   display: flex;
   flex-direction: column;
@@ -271,35 +262,4 @@ onMounted(load);
   gap: var(--sp-2);
 }
 
-.cell-main {
-  font-size: var(--fs-13);
-  font-weight: var(--fw-medium);
-  color: var(--text-primary);
-}
-.cell-sub {
-  font-size: var(--fs-12);
-  color: var(--text-secondary);
-  margin-top: 1px;
-}
-.num {
-  font-variant-numeric: tabular-nums;
-}
-.money {
-  font-weight: var(--fw-semibold);
-  color: var(--text-primary);
-}
-.tbl-empty {
-  padding: var(--sp-8) 0;
-  text-align: center;
-}
-.te-title {
-  margin: 0;
-  font-size: var(--fs-13);
-  color: var(--text-secondary);
-}
-.te-desc {
-  margin: var(--sp-1) 0 0;
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
-}
 </style>

@@ -30,13 +30,7 @@
           <span v-else class="sub">已退役</span>
         </template>
       </el-table-column>
-      <template #empty>
-        <div class="tbl-empty">
-          <p class="te-title">还没有收费标准</p>
-          <p class="te-desc">收费标准决定每户收多少钱，建好后即可出账</p>
-        <el-button type="primary" text @click="$router.push('/bill-run')">去设置 →</el-button>
-        </div>
-      </template>
+      <!-- 本卡片有 v-if="formulaRules.length > 0"，表格为空时整卡不渲染，故无需空状态 -->
     </el-table>
   </el-card>
 
@@ -45,7 +39,7 @@
       <el-select v-model="communityId" placeholder="选择小区" style="width: 180px" @change="load">
         <el-option v-for="c in communities" :key="c.id" :label="c.name" :value="c.id" />
       </el-select>
-      <div class="spacer" />
+      <div class="toolbar-spacer" />
       <el-button type="primary" :disabled="!communityId" @click="openCreate">新建规则</el-button>
     </div>
 
@@ -86,6 +80,18 @@
           <el-button v-else size="small" @click="openEdit(row)">编辑</el-button>
         </template>
       </el-table-column>
+          <template #empty>
+        <EmptyState
+          icon="📐"
+          title="还没有收费标准"
+          desc="收费标准决定每户收多少钱（按面积、按户、按用量），建好后才能出账"
+        >
+          <template #action>
+            <el-button type="primary" :disabled="!communityId" @click="openCreate">新建收费标准</el-button>
+            <el-button v-if="!communityId" @click="$router.push('/communities')">先创建小区</el-button>
+          </template>
+        </EmptyState>
+      </template>
     </el-table>
 
     <el-dialog v-model="dialog" :title="editing ? '编辑规则' : '新建规则'" width="min(520px, 92vw)">
@@ -185,6 +191,7 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
@@ -366,31 +373,8 @@ async function retire(row: { id: string }) {
 </script>
 
 <style scoped>
-.tbl-empty {
-  padding: var(--sp-8) 0;
-  text-align: center;
-}
-.te-title {
-  margin: 0;
-  font-size: var(--fs-13);
-  color: var(--text-secondary);
-}
-.te-desc {
-  margin: var(--sp-1) 0 var(--sp-2);
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
-}
 .mb {
   margin-bottom: 16px;
-}
-.toolbar {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
-.spacer {
-  flex: 1;
 }
 .sub {
   color: var(--text-secondary);

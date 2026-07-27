@@ -55,18 +55,18 @@
     <div v-if="today" class="grid">
       <el-card class="block">
         <template #header>{{ periodLabel }}收缴进度</template>
-        <div class="figs">
-          <div class="fig">
-            <span class="fig-label">应收</span>
-            <b class="fig-value num">¥{{ yuan(today.collection.billAmount) }}</b>
+        <div class="stat-row">
+          <div class="stat">
+            <span class="stat-label">应收</span>
+            <b class="stat-value">¥{{ yuan(today.collection.billAmount) }}</b>
           </div>
-          <div class="fig">
-            <span class="fig-label">实收</span>
-            <b class="fig-value num ok">¥{{ yuan(today.collection.paidAmount) }}</b>
+          <div class="stat">
+            <span class="stat-label">实收</span>
+            <b class="stat-value is-good">¥{{ yuan(today.collection.paidAmount) }}</b>
           </div>
-          <div class="fig">
-            <span class="fig-label">笔数</span>
-            <b class="fig-value num">{{ today.collection.paidCount }} / {{ today.collection.billCount }}</b>
+          <div class="stat">
+            <span class="stat-label">笔数</span>
+            <b class="stat-value">{{ today.collection.paidCount }} / {{ today.collection.billCount }}</b>
           </div>
         </div>
         <div class="rate-row">
@@ -82,20 +82,20 @@
 
       <el-card class="block">
         <template #header>欠费情况（全部账期）</template>
-        <div class="figs">
-          <div class="fig">
-            <span class="fig-label">欠费合计</span>
-            <b class="fig-value num" :class="{ bad: Number(today.arrears.amount) > 0 }">
+        <div class="stat-row">
+          <div class="stat">
+            <span class="stat-label">欠费合计</span>
+            <b class="stat-value" :class="{ 'is-bad': Number(today.arrears.amount) > 0 }">
               ¥{{ yuan(today.arrears.amount) }}
             </b>
-            <span class="fig-sub">{{ today.arrears.houses }} 户</span>
+            <span class="stat-sub">{{ today.arrears.houses }} 户</span>
           </div>
-          <div class="fig">
-            <span class="fig-label">其中已逾期</span>
-            <b class="fig-value num" :class="{ bad: Number(today.arrears.overdueAmount) > 0 }">
+          <div class="stat">
+            <span class="stat-label">其中已逾期</span>
+            <b class="stat-value" :class="{ 'is-bad': Number(today.arrears.overdueAmount) > 0 }">
               ¥{{ yuan(today.arrears.overdueAmount) }}
             </b>
-            <span class="fig-sub">{{ today.arrears.overdueHouses }} 户</span>
+            <span class="stat-sub">{{ today.arrears.overdueHouses }} 户</span>
           </div>
         </div>
         <el-button
@@ -284,6 +284,12 @@ onMounted(load);
 </script>
 
 <style scoped>
+/*
+ * 统计数字改用 ui.css 的 .stat / .stat-value（28px），
+ * 原来本页自带的 .fig-value 只有 20px，和「首屏最该被看到的数字」不相称，
+ * 也与其它页面各写一套的问题同源。
+ */
+
 /* ---------- 查户搜索条 ---------- */
 .lookup {
   margin-bottom: var(--sp-2);
@@ -326,11 +332,19 @@ onMounted(load);
   justify-content: space-between;
   gap: var(--sp-6);
   padding: var(--sp-6);
-  border-radius: var(--r-md);
+  /* 圆角与阴影跟卡片保持一致，否则首屏这块横幅和下面的卡片明显不是一套东西 */
+  border-radius: var(--r-lg);
   background: var(--bg-card);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-card);
   flex-wrap: wrap;
+  margin-bottom: var(--sp-4);
+}
+
+/* 文案区吃掉剩余宽度，按钮才会稳定贴右；min-width:0 让长文案能正常折行 */
+.phase-text {
+  flex: 1;
+  min-width: 0;
 }
 .phase.is-todo {
   border-left: 3px solid var(--primary);
@@ -355,7 +369,7 @@ onMounted(load);
 }
 
 .block {
-  margin-top: var(--sp-3);
+  margin-top: var(--sp-4);
 }
 .hd-count {
   margin-left: var(--sp-2);
@@ -423,40 +437,12 @@ onMounted(load);
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: var(--sp-3);
-  margin-top: var(--sp-3);
+  /* 与 ui.css 的 .card-grid 一致，避免首屏和其它页面疏密不同 */
+  gap: var(--sp-4);
+  margin-top: var(--sp-4);
 }
 .grid .block {
   margin-top: 0;
-}
-.figs {
-  display: flex;
-  gap: var(--sp-8);
-  flex-wrap: wrap;
-}
-.fig {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.fig-label {
-  font-size: var(--fs-11);
-  color: var(--text-tertiary);
-}
-.fig-value {
-  font-size: var(--fs-20);
-  font-weight: var(--fw-semibold);
-  color: var(--text-primary);
-}
-.fig-value.ok {
-  color: var(--success-text);
-}
-.fig-value.bad {
-  color: var(--danger-text);
-}
-.fig-sub {
-  font-size: var(--fs-11);
-  color: var(--text-tertiary);
 }
 .rate-row {
   display: flex;
@@ -471,9 +457,6 @@ onMounted(load);
 }
 .rate-bar {
   flex: 1;
-}
-.num {
-  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 900px) {

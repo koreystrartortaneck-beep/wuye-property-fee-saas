@@ -10,7 +10,10 @@
     </div>
     <el-table :data="rows" v-loading="loading">
       <el-table-column label="房屋" min-width="180">
-        <template #default="{ row }">{{ row.house?.displayName }}（{{ row.house?.code }}）</template>
+        <template #default="{ row }">
+            <!-- 审核绑定前常要先看这户欠不欠费、之前有谁绑过，所以房屋必须能点进档案 -->
+            <HouseCell :house-id="row.houseId" :house="row.house" :sub="row.house?.code" />
+          </template>
       </el-table-column>
       <el-table-column prop="applicantName" label="申请人" width="110" />
       <el-table-column label="关系" width="80">
@@ -37,10 +40,12 @@
         </template>
       </el-table-column>
       <template #empty>
-        <div class="tbl-empty">
-          <p class="te-title">暂无待审核的业主申请</p>
-          <p class="te-desc">业主在小程序申请绑定房屋后会出现在这里</p>
-        </div>
+        <EmptyState
+          icon="✅"
+          title="暂无待审核的业主申请"
+          desc="业主在小程序提交房屋绑定后会出现在这里；若业主手机号已录入房屋档案，系统会自动通过"
+          :action="{ label: '去核对房屋业主手机号', to: '/houses' }"
+        />
       </template>
     </el-table>
     <el-pagination
@@ -63,6 +68,8 @@
 </template>
 
 <script setup lang="ts">
+import HouseCell from '../components/HouseCell.vue';
+import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
@@ -75,6 +82,7 @@ interface Binding {
   status: string;
   source: string;
   rejectReason: string | null;
+  houseId: string;
   house?: { displayName: string; code: string };
   wxUser?: { phone: string | null };
 }
@@ -138,25 +146,4 @@ onMounted(load);
 </script>
 
 <style scoped>
-.tbl-empty {
-  padding: var(--sp-8) 0;
-  text-align: center;
-}
-.te-title {
-  margin: 0;
-  font-size: var(--fs-13);
-  color: var(--text-secondary);
-}
-.te-desc {
-  margin: var(--sp-1) 0 var(--sp-2);
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
-}
-.toolbar {
-  margin-bottom: 14px;
-}
-.pager {
-  margin-top: 14px;
-  justify-content: flex-end;
-}
 </style>
