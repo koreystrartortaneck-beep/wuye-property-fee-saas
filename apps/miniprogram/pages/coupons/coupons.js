@@ -17,13 +17,39 @@ Page({
     tab: 0, // 0 可领取 1 我的
     available: [],
     mine: [],
+    // 三态：此前加载中 / 网络失败 / 未绑房都被渲染成「暂无可领取优惠券」，
+    // 用户无法分辨到底是没有券还是页面坏了。
+    loading: true,
+    error: false,
+    noHouse: false,
+    claiming: '',
   },
 
   async onShow() {
-    await getApp().loginReady;
-    await loadMyHouses().catch(() => []);
-    await this.loadAvailable();
-    if (this.data.tab === 1) await this.loadMine();
+    this.setData({ loading: true, error: false });
+    try {
+      await getApp().loginReady;
+      const houses = await loadMyHouses().catch(() => []);
+      const house = getApp().globalData.currentHouse;
+      if (!houses.length || !house) {
+        this.setData({ noHouse: true, loading: false, available: [], mine: [] });
+        return;
+      }
+      this.setData({ noHouse: false });
+      await this.loadAvailable();
+      if (this.data.tab === 1) await this.loadMine();
+      this.setData({ loading: false });
+    } catch (e) {
+      this.setData({ loading: false, error: true });
+    }
+  },
+
+  async retry() {
+    await this.onShow();
+  },
+
+  goBind() {
+    wx.navigateTo({ url: '/pages/bind-house/bind-house' });
   },
 
   async loadAvailable() {
@@ -81,6 +107,9 @@ Page({
 
   async claim(e) {
     const id = e.currentTarget.dataset.id;
+    // 防连点：perUserLimit > 1 时连点会重复领取
+    if (this.data.claiming) return;
+    this.setData({ claiming: id });
     try {
       const uc = await request(`/owner/coupons/${id}/claim`, { method: 'POST' });
       wx.showModal({
@@ -91,6 +120,8 @@ Page({
       await this.loadAvailable();
     } catch (err) {
       // 错误已由 request 统一提示
+    } finally {
+      this.setData({ claiming: '' });
     }
   },
 

@@ -177,3 +177,28 @@
   color: #8b8199;
   line-height: 1.5;
 }
+
+/* ---------- 三态（加载中 / 失败 / 未绑房）---------- */
+.cpn-state {
+  margin-top: 24rpx;
+  padding: 56rpx 32rpx;
+  text-align: center;
+}
+.cs-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #251c38;
+}
+.cs-desc {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #8b8199;
+  line-height: 1.6;
+}
+.cs-btn {
+  margin-top: 28rpx;
+  display: inline-flex;
+  height: 72rpx;
+  padding: 0 40rpx;
+  font-size: 26rpx;
+}

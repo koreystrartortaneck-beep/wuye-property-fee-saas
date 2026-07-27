@@ -78,12 +78,19 @@ Page({
     });
   },
 
+  /**
+   * 每次重载递增令牌：快速切换 tab / 科目时，先发的请求可能后返回，
+   * 从而覆盖列表或把上一筛选的第 2 页数据 concat 进新列表。
+   */
+  _reqToken: 0,
+
   async reload() {
+    this._reqToken += 1;
     this.setData({ page: 1, bills: [], groups: [] });
-    await this.fetchPage(1);
+    await this.fetchPage(1, this._reqToken);
   },
 
-  async fetchPage(page) {
+  async fetchPage(page, token) {
     const { house, activeTab, activeRuleId } = this.data;
     if (!house) return;
     const status = STATUS_BY_TAB[activeTab];
@@ -91,7 +98,10 @@ Page({
       `houseId=${house.houseId}&page=${page}&pageSize=20` +
       (status ? `&status=${status}` : '') +
       (activeRuleId ? `&ruleId=${activeRuleId}` : '');
+    const myToken = token === undefined ? this._reqToken : token;
     const res = await request(`/owner/bills?${qs}`);
+    // 过期响应直接丢弃，避免覆盖当前筛选结果
+    if (myToken !== this._reqToken) return;
     const now = new Date();
     const mapped = res.list.map((b, i) => {
       const overdue = b.status === 'UNPAID' && new Date(b.dueDate) < now;
@@ -149,7 +159,7 @@ Page({
     if (this.data.bills.length >= this.data.total || this.data.loadingMore) return;
     this.setData({ loadingMore: true });
     try {
-      await this.fetchPage(this.data.page + 1);
+      await this.fetchPage(this.data.page + 1, this._reqToken);
     } finally {
       this.setData({ loadingMore: false });
     }

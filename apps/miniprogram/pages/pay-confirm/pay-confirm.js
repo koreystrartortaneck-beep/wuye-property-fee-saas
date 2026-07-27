@@ -11,6 +11,8 @@ Page({
     paused: false,
     pausedReason: '',
     payable: false,
+    pendingOrder: false,
+    billStatus: '',
     loaded: false,
     paying: false,
     // 幂等请求标识：同一次缴费动作的重试复用同一 requestId
@@ -42,6 +44,10 @@ Page({
         house: quote.house ? `${quote.house.communityName} ${quote.house.displayName}` : '',
         paused,
         pausedReason: (quote.collection && quote.collection.reason) || '',
+        // 后端已返回 pendingOrder（该账单被进行中订单占用），此前被丢弃，
+        // 业主上次支付中断后再进来只看到「暂不可缴费」而无任何指引。
+        pendingOrder: !!quote.pendingOrder,
+        billStatus: quote.status || '',
         payable: quote.payable,
       });
     } catch (e) {

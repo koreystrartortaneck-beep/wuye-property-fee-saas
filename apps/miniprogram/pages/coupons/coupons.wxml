@@ -1,4 +1,22 @@
 <view class="page cpn-page">
+  <!-- 加载中 / 加载失败 / 未绑房：三种情况必须与「真的没有券」区分开 -->
+  <view wx:if="{{loading}}" class="cpn-state card">
+    <view class="cs-title">正在加载…</view>
+  </view>
+
+  <view wx:elif="{{error}}" class="cpn-state card">
+    <view class="cs-title">没能加载卡券</view>
+    <view class="cs-desc">请检查网络后重试</view>
+    <button class="gold-button cs-btn" bindtap="retry">重新加载</button>
+  </view>
+
+  <view wx:elif="{{noHouse}}" class="cpn-state card">
+    <view class="cs-title">先绑定房屋</view>
+    <view class="cs-desc">绑定名下房屋后即可查看和领取物业发放的卡券</view>
+    <button class="gold-button cs-btn" bindtap="goBind">去绑定房屋</button>
+  </view>
+
+  <block wx:else>
   <view class="cpn-tabs card">
     <view class="cpn-tab {{tab === 0 ? 'tab-on' : ''}}" data-tab="0" bindtap="switchTab">可领取</view>
     <view class="cpn-tab {{tab === 1 ? 'tab-on' : ''}}" data-tab="1" bindtap="switchTab">我的卡券</view>
@@ -19,7 +37,7 @@
             <view class="ticket-valid">有效期至 {{item.validTo}} · 剩 {{item.remaining}} 张</view>
           </view>
           <view class="ticket-right">
-            <button class="gold-button ticket-btn" wx:if="{{!item.soldOut && item.claimedByMe === 0}}" data-id="{{item.id}}" bindtap="claim">领取</button>
+            <button class="gold-button ticket-btn" wx:if="{{!item.soldOut && item.claimedByMe === 0}}" data-id="{{item.id}}" loading="{{claiming === item.id}}" bindtap="claim">领取</button>
             <view wx:elif="{{item.claimedByMe > 0}}" class="ticket-got">已领取</view>
             <view wx:else class="ticket-out">已领完</view>
           </view>
@@ -57,4 +75,5 @@
       </view>
     </view>
   </block>
+</block>
 </view>

@@ -22,6 +22,16 @@
     <view class="paused-desc">{{pausedReason || '请稍后再试或联系物业'}}</view>
   </view>
 
+  <view wx:elif="{{!payable && pendingOrder}}" class="paused-tip card">
+    <view class="paused-title">上一笔支付还在进行中</view>
+    <view class="paused-desc">请稍等一会儿再试，或到「我的 → 缴费记录」查看这笔的最终结果</view>
+  </view>
+
+  <view wx:elif="{{!payable && billStatus === 'PAID'}}" class="paused-tip card">
+    <view class="paused-title">该账单已缴清</view>
+    <view class="paused-desc">可在「我的 → 缴费记录」查看电子收据</view>
+  </view>
+
   <view class="method-card card">
     <view class="method-left">
       <view class="wechat-icon">微</view>
@@ -34,6 +44,6 @@
   </view>
 
   <button class="dark-button submit-btn" bindtap="submitPay" disabled="{{!payable}}">
-    {{payable ? '确认支付 ¥' + totalAmount : (paused ? '收款已暂停' : '暂不可缴费')}}
+    {{payable ? '确认支付 ¥' + totalAmount : (paused ? '收款已暂停' : pendingOrder ? '上笔支付进行中' : billStatus === 'PAID' ? '该账单已缴清' : '暂不可缴费')}}
   </button>
 </view>
