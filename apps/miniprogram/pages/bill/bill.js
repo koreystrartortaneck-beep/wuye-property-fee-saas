@@ -3,7 +3,13 @@ const { loadMyHouses } = require('../../utils/auth');
 
 const THEMES = ['sapphire', 'emerald', 'amber'];
 const STATUS_BY_TAB = [undefined, 'UNPAID', 'PAID']; // 全部 / 待缴 / 已缴
-const STATUS_LABEL = { UNPAID: '待缴', PAID: '已缴', CANCELED: '已作废' };
+const STATUS_LABEL = {
+  UNPAID: '待缴',
+  PAID: '已缴',
+  CANCELED: '已作废',
+  REFUNDING: '退款中',
+  REFUNDED: '已退款',
+};
 
 Page({
   data: {
@@ -43,7 +49,9 @@ Page({
     const house = app.globalData.currentHouse;
     const houseChanged = !this.data.house || this.data.house.houseId !== house.houseId;
     this.setData({ house, noHouse: false });
-    if (houseChanged) await this.loadFilters();
+    // 科目筛选条必须每次都刷新：物业新增收费科目后，同一套房也会出现新科目，
+    // 只在换房时刷新会导致新科目永远不出现。
+    await this.loadFilters();
     await this.reload();
     await this.loadSummary();
   },
@@ -66,9 +74,12 @@ Page({
   /** 该房屋实际存在的费用科目 */
   async loadFilters() {
     const list = await request(`/owner/bills/filters?houseId=${this.data.house.houseId}`).catch(() => []);
+    // 保留用户已选科目；仅当它在新列表里不存在（换房或科目消失）时才回到「全部」，
+    // 否则每次进入页面都会把筛选清掉。
+    const stillThere = (list || []).some((f) => f.ruleId === this.data.activeRuleId);
     this.setData({
-      filters: [{ ruleId: '', name: '全部' }, ...list],
-      activeRuleId: '',
+      filters: [{ ruleId: '', name: '全部' }, ...(list || [])],
+      activeRuleId: stillThere ? this.data.activeRuleId : '',
     });
   },
 
@@ -92,6 +103,8 @@ Page({
       let subline = '';
       if (b.status === 'PAID' && b.paidAt) subline = `缴于 ${b.paidAt.slice(0, 10)}`;
       else if (b.status === 'UNPAID') subline = `到期 ${(b.dueDate || '').slice(0, 10)}`;
+      else if (b.status === 'REFUNDED') subline = '已退款';
+      else if (b.status === 'REFUNDING') subline = '退款处理中';
       else subline = '已作废';
       return {
         id: b.id,
@@ -149,7 +162,9 @@ Page({
 
   async onPullDownRefresh() {
     try {
+      await this.loadFilters();
       await this.reload();
+      await this.loadSummary();
     } finally {
       wx.stopPullDownRefresh();
     }
