@@ -269,6 +269,8 @@ const rules = ref<Rule[]>([]);
 const chosen = ref({ period: currentMonth(), ruleId: '' });
 const running = ref(false);
 const publishing = ref(false);
+/** 同一批次的发布重试复用同一幂等键，避免超时重试被当成新一次发布 */
+const publishRequestId = ref('');
 const lastRun = ref<Run | null>(null);
 const batch = ref<Batch | null>(null);
 const batchBills = ref<Bill[]>([]);
@@ -364,6 +366,7 @@ async function loadBatchForPeriod() {
   batch.value = null;
   batchBills.value = [];
   lastRun.value = null;
+  publishRequestId.value = '';
   try {
     const data = await api<Page<Batch>>(`/admin/bill-batches${qs({ pageSize: 200 })}`);
     const hit = (data.list ?? [])
@@ -404,11 +407,12 @@ async function generate() {
 
 async function publish() {
   if (!batch.value) return;
+  if (!publishRequestId.value) publishRequestId.value = genRequestId(`publish-${batch.value.id}`);
   publishing.value = true;
   try {
     await api(`/admin/bill-batches/${batch.value.id}/publish`, {
       method: 'POST',
-      body: { requestId: genRequestId('publish') },
+      body: { requestId: publishRequestId.value },
     });
     ElMessage.success('已发布，业主现在可以缴费');
     await loadBatchForPeriod();

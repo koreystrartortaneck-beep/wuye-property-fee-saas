@@ -115,6 +115,10 @@ Page({
             return;
           }
           if (result.status === 'CLOSED') {
+            // 本次尝试已终结：必须换新的幂等键，否则再点支付会命中后端幂等重放，
+            // 拿回这张已关闭订单的旧 payParams（prepay_id 亦一次性），支付必然失败，
+            // 业主被困在「支付已取消」死循环里，只能退出页面重进。
+            this.resetRequestId();
             wx.showToast({ title: '支付已取消', icon: 'none' });
           }
         } catch (_) {
@@ -124,8 +128,19 @@ Page({
             showCancel: false,
           });
         }
+      } else if (!order) {
+        // 建单本身失败：幂等记录已落 FAILED 终态，同键重试只会重放同一错误，
+        // 同样需要换键才能真正重试。
+        this.resetRequestId();
       }
       this.setData({ paying: false });
     }
+  },
+
+  /** 开始一次新的支付尝试：换幂等键。同一次尝试内的网络重试仍复用同一键。 */
+  resetRequestId() {
+    this.setData({
+      requestId: `pay-${this.data.billId}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+    });
   },
 });

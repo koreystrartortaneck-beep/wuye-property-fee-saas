@@ -150,7 +150,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { useCommunities } from '../composables';
-import { billStatusTag, buildReasonPayload, day, yuan } from '../finance';
+import { billStatusTag, buildReasonPayload, day, genRequestId, yuan } from '../finance';
 
 interface Bill {
   id: string;
@@ -232,17 +232,25 @@ const reasonAction = ref<'cancel' | 'reissue'>('cancel');
 const reasonText = ref('');
 const reasonSubmitting = ref(false);
 const currentBill = ref<Bill | null>(null);
+/**
+ * 幂等键在「打开对话框」时生成并持有整个提交过程。
+ * 若每次点击都新生成，提交超时后重试会被后端当成一次全新操作——
+ * 重开账单时就会复制出第二张同期待缴账单，业主两张都能付，造成真实重复收款。
+ */
+const reasonRequestId = ref('');
 
 function openCancel(row: Bill) {
   currentBill.value = row;
   reasonAction.value = 'cancel';
   reasonText.value = '';
+  reasonRequestId.value = genRequestId('bill-cancel');
   reasonDialog.value = true;
 }
 function openReissue(row: Bill) {
   currentBill.value = row;
   reasonAction.value = 'reissue';
   reasonText.value = '';
+  reasonRequestId.value = genRequestId('bill-reissue');
   reasonDialog.value = true;
 }
 
@@ -250,7 +258,7 @@ async function submitReason() {
   if (!currentBill.value) return;
   let body;
   try {
-    body = buildReasonPayload(reasonText.value);
+    body = buildReasonPayload(reasonText.value, reasonRequestId.value);
   } catch (e) {
     return ElMessage.warning((e as Error).message);
   }

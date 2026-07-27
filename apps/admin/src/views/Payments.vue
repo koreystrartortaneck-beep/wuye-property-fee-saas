@@ -184,6 +184,8 @@ const offline = ref<{ billId: string; voucherNo: string; paidAt: string; payerNa
   payerName: '',
 });
 const settling = ref(false);
+/** 线下核销幂等键：一次填表持有一把，成功后重置 */
+const offlineRequestId = ref('');
 
 const reasonDialog = ref(false);
 const reasonAction = ref<'refund' | 'reverse'>('refund');
@@ -216,12 +218,13 @@ async function load() {
 async function settleOffline() {
   let payload;
   try {
+    if (!offlineRequestId.value) offlineRequestId.value = genRequestId('offline');
     payload = buildOfflinePayload({
       billId: offline.value.billId.trim(),
       voucherNo: offline.value.voucherNo,
       paidAt: offline.value.paidAt,
       payerName: offline.value.payerName || undefined,
-    });
+    }, offlineRequestId.value);
   } catch (e) {
     return ElMessage.warning((e as Error).message);
   }
@@ -230,16 +233,25 @@ async function settleOffline() {
     await api('/admin/payments/offline', { method: 'POST', body: payload });
     ElMessage.success('已核销入账');
     offline.value = { billId: '', voucherNo: '', paidAt: '', payerName: '' };
+    offlineRequestId.value = '';
     await load();
   } finally {
     settling.value = false;
   }
 }
 
+/**
+ * 幂等键在「打开对话框」时生成并持有到提交结束。
+ * 若每次点击都新生成，提交超时后重试会被后端视为一次全新退款/冲正——
+ * 这是直接动真钱的操作，必须让重试落在同一把键上。
+ */
+const opRequestId = ref('');
+
 function openRefund(row: Payment) {
   current.value = row;
   reasonAction.value = 'refund';
   reasonText.value = '';
+  opRequestId.value = genRequestId(`refund-${row.orderNo}`);
   reasonDialog.value = true;
 }
 
@@ -247,6 +259,7 @@ function openReverse(row: Payment) {
   current.value = row;
   reasonAction.value = 'reverse';
   reasonText.value = '';
+  opRequestId.value = genRequestId(`reverse-${row.orderNo}`);
   reasonDialog.value = true;
 }
 
@@ -255,11 +268,11 @@ async function submitReason() {
   submitting.value = true;
   try {
     if (reasonAction.value === 'refund') {
-      const body = buildRefundPayload(current.value.orderNo, reasonText.value);
+      const body = buildRefundPayload(current.value.orderNo, reasonText.value, opRequestId.value);
       await api('/admin/refunds', { method: 'POST', body });
       ElMessage.success('退款已发起');
     } else {
-      const body = buildReasonPayload(reasonText.value);
+      const body = buildReasonPayload(reasonText.value, opRequestId.value);
       await api(`/admin/payments/${current.value.orderNo}/reverse-offline`, { method: 'POST', body });
       ElMessage.success('已冲正');
     }
