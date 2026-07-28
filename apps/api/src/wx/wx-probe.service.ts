@@ -82,6 +82,26 @@ export class WxProbeService {
       ),
     );
 
+    /*
+     * ④ 登录路径单独探一次。
+     *
+     * sns/jscode2session 的路径前缀与 cgi-bin/* 不同，云托管代理未必按同样方式
+     * 转发——只验证 cgi-bin 就断定「登录也通了」是想当然。这里用一个明知无效的
+     * code 去打：只要微信回 40029 invalid code，就证明请求确实穿过代理到达了
+     * 微信服务，登录链路的网络层是通的（业务上当然该失败）。
+     */
+    probes.push(
+      await this.once(
+        '业主登录路径 sns/jscode2session',
+        wxApiUrl(
+          `/sns/jscode2session?appid=${this.appId}&secret=${this.secret}`
+            + '&js_code=probe-invalid-code&grant_type=authorization_code',
+        ),
+        // 40029 = code 无效，正是我们期望的「到达了微信」的证据
+        [40029],
+      ),
+    );
+
     return {
       appIdConfigured: Boolean(this.appId),
       secretConfigured: Boolean(this.secret),
@@ -89,7 +109,11 @@ export class WxProbeService {
     };
   }
 
-  private async once(name: string, url: string): Promise<WxProbeResult> {
+  /**
+   * @param expectedErrcodes 这些业务错误码视为「网络层通了」。
+   *   例如探测登录路径时故意用无效 code，微信回 40029 恰好证明请求到达了微信。
+   */
+  private async once(name: string, url: string, expectedErrcodes: number[] = []): Promise<WxProbeResult> {
     const started = Date.now();
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
@@ -101,6 +125,9 @@ export class WxProbeService {
         if (body.access_token) {
           ok = true;
           detail = '成功取得 access_token';
+        } else if (body.errcode !== undefined && expectedErrcodes.includes(body.errcode)) {
+          ok = true;
+          detail = `已到达微信服务（errcode=${body.errcode} ${body.errmsg ?? ''}，这是探测用的无效参数所致）`.trim();
         } else {
           ok = false;
           detail = `errcode=${body.errcode ?? '?'} ${body.errmsg ?? ''}`.trim();

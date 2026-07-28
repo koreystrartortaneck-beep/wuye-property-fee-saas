@@ -99,6 +99,19 @@ export class AdminOperationsController {
       },
       {
         /*
+         * WX_MODE 决定业主登录与手机号授权走真实微信还是 Mock（Mock 会伪造 openid
+         * 与手机号）。原先取值非 'real' 会静默退回 Mock，控制台一个手误就让业主
+         * 变成假身份，而界面上看不出来。现在配置错会启动失败，这里再做一层回显。
+         */
+        name: 'WX_MODE',
+        healthy: process.env.WX_MODE === 'real',
+        detail:
+          process.env.WX_MODE === 'real'
+            ? '业主登录与手机号授权走真实微信接口'
+            : `当前为 ${process.env.WX_MODE ?? '(未配置)'}，业主身份是伪造的`,
+      },
+      {
+        /*
          * 订阅消息模板同样是「静默失效」：模板 ID 没配时账单照发、通知全部
          * FAILED，业主什么也收不到，而唯一线索是通知记录里逐条的失败原因。
          * 生产实测 16 条通知全是 FAILED / SKIPPED。

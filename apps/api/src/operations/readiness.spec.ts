@@ -17,7 +17,13 @@ describe('运行状况就绪检查：支付与对账模式', () => {
    * 于是污染同一进程里后续用例——曾出现「单独跑绿、全量跑红」的偶发失败。
    * 偶发性测试比没有测试更糟，所以这里一次性兜住。
    */
-  const KEYS = ['PAY_MODE', 'WX_TMPL_BILL_CREATED', 'WX_TMPL_DUE_SOON', 'WX_TMPL_OVERDUE'] as const;
+  const KEYS = [
+    'PAY_MODE',
+    'WX_MODE',
+    'WX_TMPL_BILL_CREATED',
+    'WX_TMPL_DUE_SOON',
+    'WX_TMPL_OVERDUE',
+  ] as const;
   const saved: Record<string, string | undefined> = {};
   beforeEach(() => {
     for (const k of KEYS) saved[k] = process.env[k];
@@ -52,12 +58,14 @@ describe('运行状况就绪检查：支付与对账模式', () => {
 
   it('wxpay 模式：支付与对账都判为健康', () => {
     process.env.PAY_MODE = 'wxpay';
+    process.env.WX_MODE = 'real';
     setAllTemplates();
     const r = controller(true).getReadiness(cur) as never as {
       healthy: boolean;
       checks: { name: string; healthy: boolean; detail: string }[];
     };
     expect(checkByName(r, 'PAY_MODE').healthy).toBe(true);
+    expect(checkByName(r, 'WX_MODE').healthy).toBe(true);
     expect(checkByName(r, 'RECONCILIATION_CHANNEL').healthy).toBe(true);
     expect(r.healthy).toBe(true);
   });
@@ -110,8 +118,23 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     for (const k of ['WX_TMPL_BILL_CREATED', 'WX_TMPL_DUE_SOON', 'WX_TMPL_OVERDUE']) delete process.env[k];
   });
 
+  it('WX_MODE 非 real 时判为不健康，并说明业主身份是伪造的', () => {
+    process.env.PAY_MODE = 'wxpay';
+    process.env.WX_MODE = 'mock';
+    setAllTemplates();
+    const r = controller(true).getReadiness(cur) as never as {
+      healthy: boolean;
+      checks: { name: string; healthy: boolean; detail: string }[];
+    };
+    const c = checkByName(r as never, 'WX_MODE');
+    expect(c.healthy).toBe(false);
+    expect(c.detail).toContain('伪造');
+    expect(r.healthy).toBe(false);
+  });
+
   it('告警目的地未配置时整体也不健康（原有行为不被新检查掩盖）', () => {
     process.env.PAY_MODE = 'wxpay';
+    process.env.WX_MODE = 'real';
     const r = controller(false).getReadiness(cur) as never as {
       healthy: boolean;
       checks: { name: string; healthy: boolean }[];
