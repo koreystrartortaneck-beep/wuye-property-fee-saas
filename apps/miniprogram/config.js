@@ -19,10 +19,21 @@ module.exports = {
 
   mockAuth: false,
 
-  // 订阅消息模板 ID（在微信公众平台「订阅消息」选用模板后填入；顺序即请求顺序）
-  // 与后端环境变量 WX_TMPL_BILL_CREATED / WX_TMPL_DUE_SOON / WX_TMPL_OVERDUE 对应同一批模板
+  /*
+   * 订阅消息模板 ID。
+   *
+   * 公众平台「功能 → 订阅消息」选用的是同一个公共模板（33214 缴费业务通知 /
+   * 物业管理），出账、到期、逾期三类通知共用它，靠「温馨提示」字段区分文案，
+   * 所以这里只有一个 ID，后端三个环境变量
+   * （WX_TMPL_BILL_CREATED / WX_TMPL_DUE_SOON / WX_TMPL_OVERDUE）也都填这一个。
+   *
+   * 这里必须填：不填业主端根本不会弹订阅授权，弹不出授权就永远收不到通知
+   * ——后端配好模板 ID 也没用。
+   *
+   * 注意这是一次性订阅：用户每授权一次只能下发一条，所以小程序在缴费等
+   * 关键节点会再次请求授权来累积额度。
+   */
   subscribeTmplIds: [
-    // 'xxxxxxx',  // 账单生成提醒
-    // 'yyyyyyy',  // 缴费到期提醒
+    'jvaB_jR2VUolwxPk1MRV1by9d3Kg2AXyn21JdiIhFOk', // 缴费业务通知（出账/到期/逾期共用）
   ],
 };
