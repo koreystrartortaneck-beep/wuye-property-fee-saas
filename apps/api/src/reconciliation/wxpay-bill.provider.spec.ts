@@ -1,5 +1,6 @@
 import { WxPayBillProvider } from './wxpay-bill.provider';
 import { MockWechatBillProvider, hashBill } from './wechat-bill.provider';
+import { PaymentProviderError } from '../payment/provider';
 
 /**
  * 起因：生产环境的对账一直在跑，但 WECHAT_BILL_PROVIDER 被无条件绑到 Mock，
@@ -178,5 +179,64 @@ describe('对账单汇总段必须被截掉', () => {
     });
     expect(bill.recordCount).toBe(0);
     expect(bill.totalAmountCents).toBe(0);
+  });
+});
+
+/**
+ * 两个线上实测暴露的问题。
+ *
+ * ① 零交易账期：微信返回 NO_STATEMENT_EXIST（明确答复「那天没有账单」），
+ *    原实现当成故障，07-22 REFUND / 07-25 / 07-26 四个账期全部 FAILED、
+ *    管理端拿到 500。物业公司大多数日子没有交易，不区分就等于天天对账失败。
+ *
+ * ② bill_type=ALL 让同一笔订单出现两行（SUCCESS + REFUND，后者应结金额 0）。
+ *    07-24 本地 2 笔、渠道 4 行，多出的两行被判成 AMOUNT_MISMATCH，纯属虚报。
+ */
+describe('零交易账期与重复退款行', () => {
+  const input = {
+    merchantAccountId: 'a', mchid: '1748438704', appid: 'wx9e8', businessDate: '2026-07-25',
+  };
+
+  it('NO_STATEMENT_EXIST 按空账期正常完成，而不是判为失败', async () => {
+    const wxpay = {
+      downloadBillCsv: jest
+        .fn()
+        .mockRejectedValue(new PaymentProviderError(400, 'NO_STATEMENT_EXIST', '请求的账单文件不存在')),
+    };
+    const bill = await new WxPayBillProvider(wxpay as never).downloadBill({
+      ...input, billType: 'TRANSACTION',
+    });
+    expect(bill.recordCount).toBe(0);
+    expect(bill.trades).toEqual([]);
+    expect(bill.totalAmountCents).toBe(0);
+  });
+
+  it('其它错误必须继续抛出——下载失败绝不能被当成「当天没交易」', async () => {
+    const wxpay = {
+      downloadBillCsv: jest.fn().mockRejectedValue(new PaymentProviderError(500, 'SYSTEM_ERROR', '系统繁忙')),
+    };
+    await expect(
+      new WxPayBillProvider(wxpay as never).downloadBill({ ...input, billType: 'TRANSACTION' }),
+    ).rejects.toThrow('系统繁忙');
+  });
+
+  it('交易账单只保留成功付款行，退款行不重复计入（退款由 REFUND 账单单独对账）', async () => {
+    // 真实形态：同一笔订单两行，SUCCESS 一行、REFUND 一行且应结金额为 0
+    const csv = [
+      '交易时间,公众账号ID,商户号,商户订单号,微信支付订单号,交易状态,应结订单金额',
+      '`2026-07-24 10:46:37,`wx9e8,`1748438704,`WY20260724205585,`4200001,`SUCCESS,`0.01',
+      '`2026-07-24 23:31:40,`wx9e8,`1748438704,`WY20260724205585,`4200001,`REFUND,`0.00',
+      '总交易单数,应结订单总金额',
+      '`2,`0.01',
+    ].join('\n');
+    const wxpay = { downloadBillCsv: jest.fn().mockResolvedValue(csv) };
+    const bill = await new WxPayBillProvider(wxpay as never).downloadBill({
+      ...input, businessDate: '2026-07-24', billType: 'TRANSACTION',
+    });
+
+    expect(bill.recordCount).toBe(1);
+    expect(bill.trades.map((t) => t.tradeState)).toEqual(['SUCCESS']);
+    // 若把 REFUND 行也算进来，金额会被 0.00 那行拉出一条 AMOUNT_MISMATCH 虚报
+    expect(bill.totalAmountCents).toBe(1);
   });
 });
