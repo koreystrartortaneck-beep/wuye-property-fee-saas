@@ -3,6 +3,7 @@ import { ErrorCode } from '@pf/shared';
 import { BizException } from '../common/biz.exception';
 import { SubscribeMessage, WxApi } from './wx.service';
 import { WxCloudService } from './wx-cloud.service';
+import { wxApiUrl } from './wx-endpoint';
 
 /**
  * 真实微信实现（WX_MODE=real）。
@@ -38,7 +39,10 @@ export class RealWxService implements WxApi {
   /** wx.login 的 code 换 openid */
   async code2session(code: string): Promise<{ openid: string }> {
     this.assertConfigured();
-    const url = `https://api.weixin.qq.com/sns/jscode2session?appid=${this.appId}&secret=${this.secret}&js_code=${encodeURIComponent(code)}&grant_type=authorization_code`;
+    const url = wxApiUrl(
+      `/sns/jscode2session?appid=${this.appId}&secret=${this.secret}`
+        + `&js_code=${encodeURIComponent(code)}&grant_type=authorization_code`,
+    );
     let data: { openid?: string; session_key?: string; errcode?: number; errmsg?: string };
     try {
       const response = await fetch(url);
@@ -55,7 +59,7 @@ export class RealWxService implements WxApi {
   /** 手机号快速验证组件的 code 换手机号（新版 getPhoneNumber，button 返回 e.detail.code） */
   async getPhoneNumber(code: string): Promise<{ phone: string }> {
     const token = await this.wxCloud.getAccessToken();
-    const res = await fetch(`https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=${token}`, {
+    const res = await fetch(wxApiUrl(`/wxa/business/getuserphonenumber?access_token=${token}`), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ code }),
@@ -94,7 +98,7 @@ export class RealWxService implements WxApi {
         const truncatable = /^(thing|phrase)\d*$/.test(k);
         data[k] = { value: truncatable ? text.slice(0, 20) : text };
       }
-      const res = await fetch(`https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token=${token}`, {
+      const res = await fetch(wxApiUrl(`/cgi-bin/message/subscribe/send?access_token=${token}`), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({

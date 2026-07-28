@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { wxApiBase, wxApiUrl } from './wx-endpoint';
 
 /**
  * 微信开放接口连通性探测。
@@ -46,9 +47,9 @@ export class WxProbeService {
   /**
    * 依次探测两种传输方式，返回两条结果。
    * 结论怎么读：
-   *   - 只有 HTTPS 成功 → 直连模式可用，保持现状；
-   *   - 只有 HTTP 成功  → 云托管开放接口代理生效，必须改用 HTTP 且不带 access_token；
-   *   - 两个都失败      → 容器到 api.weixin.qq.com 不通，或开放接口服务未开通。
+   *   - 只有 HTTPS 成功 → 不在云托管环境，WX_API_BASE 应设为 https://api.weixin.qq.com；
+   *   - 只有 HTTP 成功  → 云托管代理生效（实测就是这种），WX_API_BASE 保持默认 http://；
+   *   - 两个都失败      → 容器到 api.weixin.qq.com 不通，检查云托管公网出口。
    */
   async probe(): Promise<{ appIdConfigured: boolean; secretConfigured: boolean; probes: WxProbeResult[] }> {
     const probes: WxProbeResult[] = [];
@@ -61,11 +62,23 @@ export class WxProbeService {
       ),
     );
 
-    // ② 云托管开放接口代理：HTTP，免鉴权（不带 appid/secret）
+    // ② 明文 HTTP（云托管代理的通路），带正常凭据
     probes.push(
       await this.once(
-        '云托管开放接口 HTTP（免鉴权）',
-        'http://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential',
+        '明文 HTTP + 凭据',
+        `http://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${this.appId}&secret=${this.secret}`,
+      ),
+    );
+
+    /*
+     * ③ 当前代码实际使用的地址（WX_API_BASE，默认 http://api.weixin.qq.com）。
+     * 前两条是诊断用的对照，这一条才是「线上到底能不能用」的答案——
+     * 只看对照容易漏掉配置被改坏的情况。
+     */
+    probes.push(
+      await this.once(
+        `当前配置（WX_API_BASE=${wxApiBase()}）`,
+        wxApiUrl(`/cgi-bin/token?grant_type=client_credential&appid=${this.appId}&secret=${this.secret}`),
       ),
     );
 

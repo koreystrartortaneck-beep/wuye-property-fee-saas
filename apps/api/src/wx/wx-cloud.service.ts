@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { wxApiUrl } from './wx-endpoint';
 
 /**
  * 微信云存储辅助：把小程序上传得到的 cloud:// fileID 解析成浏览器可访问的临时 https URL，
@@ -6,6 +7,8 @@ import { Injectable, Logger } from '@nestjs/common';
  *
  * 依赖环境变量：WX_APPID / WX_SECRET（换 access_token）、WX_CLOUD_ENV（云环境ID）。
  * 注意：调用 cgi-bin/token 的服务器出口 IP 需在小程序「IP白名单」内（若开启了该校验）。
+ * 基础地址统一由 wx-endpoint 提供——云托管劫持了 api.weixin.qq.com 且用自签证书，
+ * 必须走 HTTP，详见该文件的说明。
  */
 @Injectable()
 export class WxCloudService {
@@ -29,7 +32,9 @@ export class WxCloudService {
     if (this.tokenCache && this.tokenCache.exp > Date.now() + 60_000) {
       return this.tokenCache.token;
     }
-    const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${this.appId}&secret=${this.secret}`;
+    const url = wxApiUrl(
+      `/cgi-bin/token?grant_type=client_credential&appid=${this.appId}&secret=${this.secret}`,
+    );
     const res = await fetch(url);
     const data = (await res.json()) as { access_token?: string; expires_in?: number; errmsg?: string };
     if (!data.access_token) {
@@ -50,7 +55,7 @@ export class WxCloudService {
   async uploadToCloud(cloudPath: string, buffer: Buffer, mime = 'image/jpeg'): Promise<string> {
     if (!this.env) throw new Error('WX_CLOUD_ENV 未配置，无法上传云存储');
     const token = await this.getAccessToken();
-    const metaRes = await fetch(`https://api.weixin.qq.com/tcb/uploadfile?access_token=${token}`, {
+    const metaRes = await fetch(wxApiUrl(`/tcb/uploadfile?access_token=${token}`), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ env: this.env, path: cloudPath }),
@@ -86,7 +91,7 @@ export class WxCloudService {
     if (cloudIds.length === 0 || !this.env || !this.appId || !this.secret) return {};
     try {
       const token = await this.getAccessToken();
-      const res = await fetch(`https://api.weixin.qq.com/tcb/batchdownloadfile?access_token=${token}`, {
+      const res = await fetch(wxApiUrl(`/tcb/batchdownloadfile?access_token=${token}`), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
