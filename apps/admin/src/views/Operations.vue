@@ -49,6 +49,36 @@
           </div>
         </div>
       </div>
+
+      <!--
+        订阅消息下发曾稳定失败于 `fetch failed`——网络层错误，界面上只有这四个字，
+        无从判断是域名不可达、TLS 失败还是凭据不对。这里把探测能力直接给到运维手上。
+      -->
+      <div class="probe">
+        <div class="probe-head">
+          <b class="probe-title">微信开放接口连通性</b>
+          <span class="probe-desc">订阅消息、云存储都依赖 api.weixin.qq.com；发不出通知时先测这里</span>
+          <el-button size="small" :loading="probing" @click="runProbe">开始检测</el-button>
+        </div>
+        <div v-if="probe" class="probe-body">
+          <div class="probe-meta">
+            WX_APPID {{ probe.appIdConfigured ? '已配置' : '未配置' }} ·
+            WX_SECRET {{ probe.secretConfigured ? '已配置' : '未配置' }}
+          </div>
+          <div v-for="p in probe.probes" :key="p.name" class="probe-row">
+            <span class="ck-icon" :class="p.ok ? 'ok' : 'bad'">{{ p.ok ? '✓' : '!' }}</span>
+            <div class="probe-text">
+              <div class="ck-name">{{ p.name }}<span class="probe-ms">{{ p.elapsedMs }}ms</span></div>
+              <div class="ck-detail">{{ p.detail }}</div>
+              <div class="probe-url">{{ p.url }}</div>
+            </div>
+          </div>
+          <div class="ck-hint">
+            只有 HTTPS 通 → 保持直连；只有 HTTP 通 → 云托管开放接口代理生效，需改用 HTTP 免鉴权调用；
+            两个都不通 → 容器到 api.weixin.qq.com 不可达，或云托管「开放接口服务」未开通。
+          </div>
+        </div>
+      </div>
     </el-card>
 
     <!-- 六项灰度指标 -->
@@ -216,6 +246,24 @@ const INCIDENT_STATUS_LABEL: Record<string, string> = {
 
 const metrics = ref<Metrics | null>(null);
 const readiness = ref<Readiness | null>(null);
+
+interface WxProbe {
+  appIdConfigured: boolean;
+  secretConfigured: boolean;
+  probes: { name: string; url: string; ok: boolean; httpStatus: number | null; detail: string; elapsedMs: number }[];
+}
+const probe = ref<WxProbe | null>(null);
+const probing = ref(false);
+
+/** 手动触发连通性探测：两次网络请求，各 6 秒超时，不放在页面加载里跑 */
+async function runProbe() {
+  probing.value = true;
+  try {
+    probe.value = await api<WxProbe>('/admin/operations/wx-probe');
+  } finally {
+    probing.value = false;
+  }
+}
 const incidents = ref<Incident[]>([]);
 const incidentTotal = ref(0);
 const incidentPage = ref(1);
@@ -349,6 +397,57 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* ---------- 微信接口连通性探测 ---------- */
+.probe {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+.probe-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.probe-title {
+  font-size: var(--fs-13);
+  font-weight: var(--fw-semibold);
+}
+.probe-desc {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+}
+.probe-body {
+  margin-top: var(--sp-3);
+}
+.probe-meta {
+  margin-bottom: var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+}
+.probe-row {
+  display: flex;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+}
+.probe-text {
+  min-width: 0;
+}
+.probe-ms {
+  margin-left: var(--sp-2);
+  font-size: var(--fs-11);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.probe-url {
+  margin-top: 2px;
+  font-size: var(--fs-11);
+  color: var(--text-tertiary);
+  word-break: break-all;
+}
+
 .verdict {
   display: flex;
   align-items: center;

@@ -39,7 +39,7 @@ describe('运行状况就绪检查：支付与对账模式', () => {
   /** 构造顺序是 (metrics, alerts, incidents)；本用例只需要 alerts.readiness() */
   function controller(destinationConfigured: boolean) {
     const alerts = { readiness: () => ({ healthy: destinationConfigured, destinationConfigured }) };
-    return new AdminOperationsController({} as never, alerts as never, {} as never);
+    return new AdminOperationsController({} as never, alerts as never, {} as never, {} as never);
   }
 
   const cur = { tenantId: 't1' } as never;

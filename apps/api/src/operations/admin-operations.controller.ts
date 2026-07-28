@@ -9,6 +9,7 @@ import { PageQuery } from '../common/pagination';
 import { AlertService } from './alert.service';
 import { IncidentService, IncidentStatus } from './incident.service';
 import { PilotMetricsService } from './pilot-metrics.service';
+import { WxProbeService } from '../wx/wx-probe.service';
 
 const INCIDENT_STATUSES: IncidentStatus[] = ['OPEN', 'ACKNOWLEDGED', 'RESOLVED'];
 
@@ -46,6 +47,7 @@ export class AdminOperationsController {
     private readonly metrics: PilotMetricsService,
     private readonly alerts: AlertService,
     private readonly incidents: IncidentService,
+    private readonly wxProbe: WxProbeService,
   ) {}
 
   @Get('metrics')
@@ -111,6 +113,20 @@ export class AdminOperationsController {
     ];
 
     return { healthy: checks.every((c) => c.healthy), checks };
+  }
+
+  /**
+   * 微信开放接口连通性探测。
+   *
+   * 订阅消息下发曾稳定失败于 `fetch failed`——网络层错误，管理端只看到这四个字，
+   * 无从判断是域名不可达、TLS 失败还是凭据不对。这个端点把 HTTPS 直连与云托管
+   * 开放接口 HTTP 代理各探一次，把 errno（ENOTFOUND / EPROTO 等）也带出来，
+   * 让「到底哪一层不通」有据可查而不是靠猜。
+   */
+  @Get('wx-probe')
+  probeWx(@Current() cur: CurrentAdmin) {
+    requireTenant(cur);
+    return this.wxProbe.probe();
   }
 
   @Get('incidents')
