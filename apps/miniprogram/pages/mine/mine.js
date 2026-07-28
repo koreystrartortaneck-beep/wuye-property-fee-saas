@@ -1,5 +1,6 @@
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
+const { requestSubscribe } = require('../../utils/subscribe');
 
 const RELATION_LABEL = { OWNER: '业主', FAMILY: '家属', TENANT: '租客' };
 
@@ -22,6 +23,14 @@ Page({
       { key: 'announcements', title: '社区公告', desc: '物业通知与公示' },
       { key: 'coupons', title: '我的卡券', desc: '物业发放的抵扣与服务券' },
       { key: 'workwall', title: '物业公示', desc: '保洁巡检等日常工作留痕' },
+      /*
+       * 缴费提醒授权入口。
+       *
+       * 订阅消息是一次性的：用户每授权一次才能收到一条。此前全站只有「支付确认页」
+       * 一处请求授权，于是从没缴过费的业主永远没有额度、永远收不到出账与催缴通知
+       * ——而最需要催缴的恰恰是这批人。这里给一个主动开启的入口。
+       */
+      { key: 'notify', title: '缴费提醒', desc: '开启后账单生成与到期前微信提醒你' },
     ],
   },
 
@@ -119,6 +128,26 @@ Page({
     if (key === 'announcements') wx.navigateTo({ url: '/pages/announcements/announcements' });
     if (key === 'coupons') wx.navigateTo({ url: '/pages/coupons/coupons' });
     if (key === 'workwall') wx.navigateTo({ url: '/pages/work-wall/work-wall' });
+    if (key === 'notify') this.enableNotify();
+  },
+
+  /**
+   * 请求订阅授权。
+   * 必须在用户点击的手势上下文中同步调用 wx.requestSubscribeMessage，
+   * 所以这里不 await 任何网络请求再调，直接走 requestSubscribe。
+   */
+  async enableNotify() {
+    const accepted = await requestSubscribe();
+    if (accepted) {
+      wx.showToast({ title: '已开启缴费提醒', icon: 'success' });
+      return;
+    }
+    wx.showModal({
+      title: '未开启提醒',
+      content: '没有拿到微信通知授权。可在「右上角 ··· → 设置 → 订阅消息」中开启，或稍后再点一次。',
+      showCancel: false,
+      confirmText: '知道了',
+    });
   },
 
   /**
