@@ -1,6 +1,4 @@
-.bill-page {
-  padding-bottom: 48rpx;
-}
+
 
 /* ---------- 汇总细条 ---------- */
 .summary-card {
@@ -13,6 +11,14 @@
   justify-content: space-between;
   background: radial-gradient(circle at 90% 0%, rgba(201, 166, 107, 0.32), transparent 30%), linear-gradient(150deg, #2b2145 0%, #251c38 55%, #3b2b57 100%);
   box-shadow: 0 22rpx 54rpx rgba(37, 28, 56, 0.2);
+}
+
+/* 汇总卡左栏：.summary-card 是 space-between 的 flex，左栏纵向排布标签与金额 */
+.summary-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  min-width: 0;
 }
 
 .summary-label {
@@ -123,6 +129,12 @@
 }
 
 /* ---------- 账单卡片（两行式：标题独占一行更舒展） ---------- */
+/* 账单文案块撑开剩余宽度（.bill-item 是 flex，不加则按内容收缩） */
+.bill-info {
+  flex: 1;
+  min-width: 0;
+}
+
 .bill-item {
   padding: 28rpx 26rpx;
   display: flex;

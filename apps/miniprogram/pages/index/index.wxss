@@ -1,6 +1,4 @@
-.index-page {
-  padding-bottom: 48rpx;
-}
+
 
 .top-line {
   display: flex;

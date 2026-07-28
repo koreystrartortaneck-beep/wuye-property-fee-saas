@@ -68,6 +68,18 @@
 }
 
 /* 收讫章 */
+/*
+ * 作废印章：原先只写了 class="rc-stamp rc-stamp-void" 却没有 .rc-stamp-void 规则，
+ * 「已作废」和「收讫」渲染成一模一样的红色印章，业主完全看不出这张收据无效。
+ * 改成灰调 + 降透明度，与收讫形成明确区分。
+ */
+.rc-stamp-void {
+  border-color: rgba(124, 114, 136, 0.55);
+  color: rgba(124, 114, 136, 0.7);
+  font-size: 34rpx;
+  letter-spacing: 2rpx;
+}
+
 .rc-stamp {
   position: absolute;
   right: 36rpx;

@@ -129,6 +129,37 @@
   padding-top: 32rpx;
 }
 
+/*
+ * 不可缴费原因提示（收款暂停 / 上一笔在进行中 / 已缴清）。
+ * 这三块原先只有 class="paused-tip card"，而 app.wxss 的 .card 只管圆角描边阴影、
+ * 不含内边距，且 .paused-title/.paused-desc 完全没有规则——文字贴着卡片边缘、
+ * 标题和说明一样大。这是业主「为什么交不了钱」时唯一能看到的解释，必须清楚。
+ */
+.paused-tip {
+  margin-top: 26rpx;
+  padding: 30rpx 32rpx;
+}
+
+.paused-title {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #251c38;
+  line-height: 1.35;
+}
+
+.paused-desc {
+  margin-top: 10rpx;
+  font-size: 25rpx;
+  color: #7c7288;
+  line-height: 1.55;
+}
+
+/* 优惠券名称块撑开剩余宽度，右侧勾选标记才会稳定贴右 */
+.coupon-info {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ---------- 优惠券抵扣 ---------- */
 .coupon-card {
   margin-top: 20rpx;

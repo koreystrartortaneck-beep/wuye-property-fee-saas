@@ -95,6 +95,12 @@
   overflow: hidden;
 }
 
+/* 日期靠右且不换行（字号与颜色继承 .fw-foot） */
+.fw-date {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .fw-foot {
   margin-top: auto;
   padding-top: 10rpx;

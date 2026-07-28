@@ -64,6 +64,17 @@
 }
 
 /* 时间线 */
+/* 处理进度时间线容器 */
+.tl {
+  margin-top: 8rpx;
+}
+
+/* 文案块撑开剩余宽度：.tl-row 是 flex，不加则按内容收缩，标签与时间会挤在一起 */
+.tl-body {
+  flex: 1;
+  min-width: 0;
+}
+
 .tl-row {
   display: flex;
   gap: 20rpx;

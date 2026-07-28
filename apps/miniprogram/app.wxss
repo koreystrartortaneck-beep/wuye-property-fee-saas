@@ -86,9 +86,16 @@ button::after {
   letter-spacing: -1rpx;
 }
 
-/* ---- 自定义导航（三个 tab 页共用，标题行与系统胶囊同行对齐） ---- */
+/* ---- 自定义导航（四个 tab 页共用，标题行与系统胶囊同行对齐） ---- */
 .page.has-navbar {
   padding-top: 0;
+  /*
+   * tab 页底部要多留一点，避免最后一张卡片贴着 tabBar。
+   * 原先 index/bill/mine 各自写了一遍 padding-bottom: 48rpx，
+   * 而第四个 tab 页 service-hall 的 .hall-page 规则压根没写（类名却已挂上），
+   * 于是它比另外三个少 8rpx——这类零散差异累积起来就是「整体性差一点」。
+   */
+  padding-bottom: 48rpx;
 }
 
 .nav-row {

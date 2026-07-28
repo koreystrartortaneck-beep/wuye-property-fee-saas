@@ -6,6 +6,14 @@
   padding: 32rpx;
 }
 
+/* 未绑定房屋时的引导说明：原先无规则，与标题同字号同颜色，读起来分不出主次 */
+.v-guide-text {
+  margin-top: 12rpx;
+  font-size: 25rpx;
+  color: #7c7288;
+  line-height: 1.55;
+}
+
 .v-title {
   font-size: 32rpx;
   font-weight: 900;

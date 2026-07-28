@@ -21,8 +21,15 @@ function read(p: string) {
   return fs.readFileSync(path.join(SRC, p), 'utf8');
 }
 
+/**
+ * CSS 里已定义的类名。
+ * 必须先剥掉注释：注释里为了说明来龙去脉常会写出类名（ui.css 的顶部注释就提到
+ * .toolbar/.pager），把注释算作定义会让「悬空类名」检查出现假阴性——删掉真规则
+ * 后测试依然是绿的。小程序那份同类守卫第一版正是栽在这里。
+ */
 function classesIn(css: string): Set<string> {
-  return new Set([...css.matchAll(/\.([a-zA-Z][\w-]*)/g)].map((m) => m[1]));
+  const stripped = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  return new Set([...stripped.matchAll(/\.([a-zA-Z][\w-]*)/g)].map((m) => m[1]));
 }
 
 /** ui.css 顶层声明的共享类（不含伪类/组合选择器里的次要部分） */

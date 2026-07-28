@@ -2,6 +2,15 @@
   padding: 32rpx;
 }
 
+/* 列表容器：末项的 margin-bottom 会在页面底部多出一段空白，这里消掉 */
+.inv-list {
+  margin-top: 8rpx;
+}
+
+.inv-list .inv-item:last-child {
+  margin-bottom: 0;
+}
+
 .inv-item {
   padding: 28rpx 32rpx;
   margin-bottom: 20rpx;
