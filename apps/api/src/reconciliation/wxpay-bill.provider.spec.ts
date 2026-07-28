@@ -116,3 +116,67 @@ describe('对账单渠道按 PAY_MODE 选择', () => {
     expect(() => pick()).toThrow('PAY_MODE');
   });
 });
+
+/**
+ * 真实微信账单末尾带汇总段，且汇总段列名与明细段完全不同。
+ *
+ * 线上实证：接入真实下载后第一次对账（2026-07-22），当天实际只有 1 笔交易，
+ * 却解析出 3 条「渠道记录」，多出来两条的订单号是 `0.00` 和 `申请退款总金额`
+ * ——正是汇总段被当成明细行。原判断 row['商户订单号'] === '总交易单数' 在
+ * columns:true 下永远不成立，因为汇总段是按明细表头映射的，列全部错位。
+ */
+describe('对账单汇总段必须被截掉', () => {
+  const REAL_TRADE_CSV = [
+    '交易时间,公众账号ID,商户号,商户订单号,微信支付订单号,交易状态,应结订单金额,申请退款金额',
+    '`2026-07-22 13:23:00,`wx9e8,`1748438704,`WY20260722813378,`4200002612,`SUCCESS,`0.01,`0.00',
+    '总交易单数,应结订单总金额,退款总金额,充值券退款总金额,手续费总金额,订单总金额,申请退款总金额',
+    '`1,`0.01,`0.00,`0.00,`0.00,`0.01,`0.00',
+  ].join('\n');
+
+  const REAL_REFUND_CSV = [
+    '交易时间,商户订单号,商户退款单号,退款状态,退款金额',
+    '`2026-07-24 23:31:40,`WY20260724751305,`RF-WY20260724751305,`SUCCESS,`0.01',
+    '总退款单数,退款总金额',
+    '`1,`0.01',
+  ].join('\n');
+
+  it('交易账单：只解析出真实明细，不把汇总行当成交易', async () => {
+    const wxpay = { downloadBillCsv: jest.fn().mockResolvedValue(REAL_TRADE_CSV) };
+    const bill = await new WxPayBillProvider(wxpay as never).downloadBill({
+      merchantAccountId: 'a', mchid: '1748438704', appid: 'wx9e8',
+      businessDate: '2026-07-22', billType: 'TRANSACTION',
+    });
+    expect(bill.recordCount).toBe(1);
+    expect(bill.trades.map((t) => t.outTradeNo)).toEqual(['WY20260722813378']);
+    // 这两个是修复前实际出现在生产库里的假「订单号」
+    expect(bill.trades.map((t) => t.outTradeNo)).not.toContain('0.00');
+    expect(bill.trades.map((t) => t.outTradeNo)).not.toContain('申请退款总金额');
+    expect(bill.totalAmountCents).toBe(1);
+  });
+
+  it('退款账单：同样截掉汇总段', async () => {
+    const wxpay = { downloadBillCsv: jest.fn().mockResolvedValue(REAL_REFUND_CSV) };
+    const bill = await new WxPayBillProvider(wxpay as never).downloadBill({
+      merchantAccountId: 'a', mchid: '1748438704', appid: 'wx9e8',
+      businessDate: '2026-07-24', billType: 'REFUND',
+    });
+    expect(bill.recordCount).toBe(1);
+    expect(bill.refunds.map((r) => r.outRefundNo)).toEqual(['RF-WY20260724751305']);
+    expect(bill.totalAmountCents).toBe(1);
+  });
+
+  it('只有表头与汇总段（当天零交易）时返回 0 笔，而不是把汇总行算成交易', async () => {
+    const emptyWithSummary = [
+      '交易时间,公众账号ID,商户号,商户订单号,微信支付订单号,交易状态,应结订单金额',
+      '总交易单数,应结订单总金额,退款总金额,充值券退款总金额,手续费总金额,订单总金额',
+      '`0,`0.00,`0.00,`0.00,`0.00,`0.00',
+    ].join('\n');
+    const wxpay = { downloadBillCsv: jest.fn().mockResolvedValue(emptyWithSummary) };
+    const bill = await new WxPayBillProvider(wxpay as never).downloadBill({
+      merchantAccountId: 'a', mchid: '1', appid: 'w',
+      businessDate: '2026-07-25', billType: 'TRANSACTION',
+    });
+    expect(bill.recordCount).toBe(0);
+    expect(bill.totalAmountCents).toBe(0);
+  });
+});

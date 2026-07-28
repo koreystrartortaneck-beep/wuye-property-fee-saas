@@ -57,15 +57,46 @@ function centsFromYuan(yuan: string): number {
 }
 
 /**
+ * 截掉微信对账单末尾的汇总段。
+ *
+ * 真实账单结构是「明细表头 + 明细行 + 汇总表头 + 汇总行」，汇总段用的是另一套
+ * 列名（总交易单数,总交易额,总退款金额,…），列数与明细段也不同。
+ *
+ * 原实现只判断 `row['商户订单号'] === '总交易单数'`，但用 columns:true 解析时
+ * 汇总段是按**明细表头**映射的，'总交易单数' 会落到「交易时间」那一列上，
+ * 商户订单号列拿到的是 '申请退款总金额' 之类，判断永远不成立。
+ *
+ * 线上后果（接入真实下载后第一次对账就暴露）：2026-07-22 的账单实际只有 1 笔
+ * 交易，却解析出 3 条「渠道记录」，多出来的两条订单号分别是 `0.00` 和
+ * `申请退款总金额`，被登记成 LOCAL_MISSING 假差异。这个 bug 一直没被发现，
+ * 正是因为账单渠道此前是 Mock、永远返回空账期，解析函数从没喂过真实账单。
+ *
+ * 这里在**文本层**按行截断（汇总段起始行的第一个字段是「总交易单数」），
+ * 再交给 CSV 解析器，从根上避免列错位。
+ */
+function stripSummarySection(csv: string): string {
+  const lines = csv.split(/\r?\n/);
+  const end = lines.findIndex((line) => {
+    const firstField = strip((line.split(',')[0] ?? '').trim());
+    return firstField === '总交易单数' || firstField === '总退款单数';
+  });
+  return (end === -1 ? lines : lines.slice(0, end)).join('\n');
+}
+
+/**
  * 微信对账单 CSV 解析（结构化解析，禁用 split(',')）。
  * 交易账单每行以 `` ` `` 前缀防注入；此处按微信标准列解析必要字段，不落敏感明文。
  */
 export function parseTradeBillCsv(csv: string): ChannelTradeRecord[] {
-  const rows = parseCsv(csv, { columns: true, skip_empty_lines: true, relax_column_count: true }) as Record<string, string>[];
+  const rows = parseCsv(stripSummarySection(csv), {
+    columns: true,
+    skip_empty_lines: true,
+    relax_column_count: true,
+  }) as Record<string, string>[];
   const records: ChannelTradeRecord[] = [];
   for (const row of rows) {
     const outTradeNo = strip(row['商户订单号'] ?? row['outTradeNo']);
-    if (!outTradeNo || outTradeNo === '总交易单数') break; // 汇总行
+    if (!outTradeNo) continue;
     records.push({
       outTradeNo,
       transactionId: strip(row['微信支付订单号'] ?? row['transactionId'] ?? ''),
@@ -77,7 +108,11 @@ export function parseTradeBillCsv(csv: string): ChannelTradeRecord[] {
 }
 
 export function parseRefundBillCsv(csv: string): ChannelRefundRecord[] {
-  const rows = parseCsv(csv, { columns: true, skip_empty_lines: true, relax_column_count: true }) as Record<string, string>[];
+  const rows = parseCsv(stripSummarySection(csv), {
+    columns: true,
+    skip_empty_lines: true,
+    relax_column_count: true,
+  }) as Record<string, string>[];
   const records: ChannelRefundRecord[] = [];
   for (const row of rows) {
     const outTradeNo = strip(row['商户订单号'] ?? row['outTradeNo']);
