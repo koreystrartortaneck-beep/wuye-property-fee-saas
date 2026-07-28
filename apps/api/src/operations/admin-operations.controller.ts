@@ -112,6 +112,20 @@ export class AdminOperationsController {
       },
       {
         /*
+         * 投递任务此前默认关闭（要配 OUTBOX_DISPATCH_ENABLED=true 才跑），而生产上
+         * 没配，于是它从未执行过一次——事件只进不出，实测积压 24 条、80 秒纹丝不动，
+         * 后台却没有任何地方提示「投递是关着的」。现已改为默认开启，这里做一层回显，
+         * 万一有人显式关掉也能一眼看到。
+         */
+        name: 'OUTBOX_DISPATCH',
+        healthy: process.env.OUTBOX_DISPATCH_ENABLED !== 'false',
+        detail:
+          process.env.OUTBOX_DISPATCH_ENABLED !== 'false'
+            ? '通知投递任务运行中（每 30 秒一轮）'
+            : '已被 OUTBOX_DISPATCH_ENABLED=false 关闭：通知事件只进不出，业主收不到任何提醒',
+      },
+      {
+        /*
          * 订阅消息模板同样是「静默失效」：模板 ID 没配时账单照发、通知全部
          * FAILED，业主什么也收不到，而唯一线索是通知记录里逐条的失败原因。
          * 生产实测 16 条通知全是 FAILED / SKIPPED。

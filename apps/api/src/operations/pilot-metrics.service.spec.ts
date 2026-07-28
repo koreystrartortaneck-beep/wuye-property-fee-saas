@@ -32,10 +32,9 @@ describe('PilotMetricsService 灰度指标', () => {
          * 「积压」按 availableAt 是否为终态哨兵区分，两者不能混。
          */
         outboxEvent: {
+          // 「已放弃」查询用 OR（终态哨兵 或 超次数），「积压」查询用 attempts < MAX
           count: jest.fn(async ({ where }: any) =>
-            where.status === 'FAILED' && where.availableAt instanceof Date
-              ? (counts.outboxExhausted ?? 0)
-              : (counts.outboxBacklog ?? 0),
+            Array.isArray(where.OR) ? (counts.outboxExhausted ?? 0) : (counts.outboxBacklog ?? 0),
           ),
         },
         notifyLog: { count: jest.fn(async () => counts.notifyFailed ?? 0) },
@@ -116,12 +115,20 @@ describe('PilotMetricsService 灰度指标', () => {
     expect(m.notifyFailedCount).toBe(16);
   });
 
-  it('积压查询必须排除终态哨兵，否则已放弃的事件会被算成待投递', async () => {
+  it('积压查询必须排除终态哨兵，且与领取条件一致地排除超次数事件', async () => {
     const prisma = makePrisma({});
     await make(prisma).metrics({ tenantId: 't1', now });
     const calls = (prisma as any).raw.outboxEvent.count.mock.calls.map((c: any[]) => c[0].where);
     const backlog = calls.find((w: any) => Array.isArray(w.status?.in));
     expect(backlog.availableAt.not).toBeInstanceOf(Date);
     expect(backlog.availableAt.not.getUTCFullYear()).toBe(9999);
+    /*
+     * 领取条件里有 attempts < MAX；积压统计若不带同样限制，超次数却尚未打上终态
+     * 哨兵的事件会被误算成「待投递」，而它们其实永远不会再被领取。
+     */
+    expect(backlog.attempts).toEqual({ lt: 5 });
+
+    const abandoned = calls.find((w: any) => Array.isArray(w.OR));
+    expect(abandoned.OR).toHaveLength(2);
   });
 });

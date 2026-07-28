@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { TERMINAL_AVAILABLE_AT } from '../notify/outbox.service';
+import { DEFAULT_MAX_ATTEMPTS, TERMINAL_AVAILABLE_AT } from '../notify/outbox.service';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -83,10 +83,17 @@ export class PilotMetricsService {
           tenantId: input.tenantId,
           status: { in: ['PENDING', 'FAILED'] },
           availableAt: { lte: now, not: TERMINAL_AVAILABLE_AT },
+          // 与领取条件保持一致；超次数的事件永远不会再被领取，算「已放弃」而非「待投递」
+          attempts: { lt: DEFAULT_MAX_ATTEMPTS },
         },
       }),
       this.prisma.raw.outboxEvent.count({
-        where: { tenantId: input.tenantId, status: 'FAILED', availableAt: TERMINAL_AVAILABLE_AT },
+        where: {
+          tenantId: input.tenantId,
+          status: 'FAILED',
+          // 两种都算已放弃：已打上终态哨兵的，以及超次数但还没来得及打哨兵的
+          OR: [{ availableAt: TERMINAL_AVAILABLE_AT }, { attempts: { gte: DEFAULT_MAX_ATTEMPTS } }],
+        },
       }),
       this.prisma.raw.notifyLog.count({
         where: { tenantId: input.tenantId, status: 'FAILED', sentAt: { gte: since } },

@@ -36,6 +36,10 @@
           <div v-if="!c.healthy && c.name === 'PAY_MODE'" class="ck-hint">
             在云托管环境变量中把 PAY_MODE 设为 wxpay，否则业主的缴费不会真正扣款。
           </div>
+          <div v-if="!c.healthy && c.name === 'OUTBOX_DISPATCH'" class="ck-hint">
+            把云托管环境变量 OUTBOX_DISPATCH_ENABLED 删掉或设为 true 即可恢复。
+            关闭期间产生的通知事件不会丢，恢复后会按退避重试补投。
+          </div>
           <div v-if="!c.healthy && c.name === 'NOTIFY_TEMPLATES'" class="ck-hint">
             到微信公众平台「功能 → 订阅消息」选用模板，把模板 ID 填到云托管环境变量
             WX_TMPL_BILL_CREATED / WX_TMPL_DUE_SOON / WX_TMPL_OVERDUE；
@@ -198,8 +202,17 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { dt } from '../finance';
 
+/**
+ * 后端两种指标形状不同：计数类给 value，比率类给 rate（外加 numerator/denominator）。
+ * 此前这里只声明了 value，「支付技术成功率」「退款完成率」读到 undefined，
+ * 被 pct() 的兜底渲染成「—」——页面上看起来像「暂无数据」，实际值是 100%。
+ * 兜底把 bug 伪装成了正常状态，正是最难发现的一类。
+ */
 interface Gate {
-  value: number | boolean;
+  value?: number | boolean;
+  rate?: number;
+  numerator?: number;
+  denominator?: number;
   threshold?: number;
   pass: boolean;
   prepayUnknown?: number;
@@ -241,6 +254,7 @@ const CHECK_LABEL: Record<string, string> = {
   ALERT_DESTINATION: '异常告警推送地址',
   PAY_MODE: '支付模式',
   RECONCILIATION_CHANNEL: '对账数据来源',
+  OUTBOX_DISPATCH: '通知投递任务',
   NOTIFY_TEMPLATES: '业主通知模板',
 };
 const SEVERITY_LABEL: Record<string, string> = { INFO: '提示', WARNING: '警告', CRITICAL: '严重' };
@@ -291,7 +305,7 @@ const metricCards = computed(() => {
     {
       key: 'pay',
       name: '支付技术成功率',
-      display: pct(m.paymentTechnicalSuccessRate.value),
+      display: pct(m.paymentTechnicalSuccessRate.rate),
       pass: m.paymentTechnicalSuccessRate.pass,
       desc:
         `门槛 ${pct(m.paymentTechnicalSuccessRate.threshold)}` +
@@ -302,28 +316,28 @@ const metricCards = computed(() => {
     {
       key: 'dup',
       name: '重复收款',
-      display: String(m.duplicateChargeCount.value),
+      display: String(m.duplicateChargeCount.value ?? 0),
       pass: m.duplicateChargeCount.pass,
       desc: '同一账单被收多次的笔数，必须为 0',
     },
     {
       key: 'recon',
       name: '未处置对账差异',
-      display: String(m.unresolvedReconciliationDifferences.value),
+      display: String(m.unresolvedReconciliationDifferences.value ?? 0),
       pass: m.unresolvedReconciliationDifferences.pass,
       desc: '与微信支付核对不上且未处理的条目',
     },
     {
       key: 'refund',
       name: '退款完成率',
-      display: pct(m.refundCompletionRate.value),
+      display: pct(m.refundCompletionRate.rate),
       pass: m.refundCompletionRate.pass,
       desc: `门槛 ${pct(m.refundCompletionRate.threshold)}`,
     },
     {
       key: 'incident',
       name: '严重事件',
-      display: String(m.severeIncidentCount.value),
+      display: String(m.severeIncidentCount.value ?? 0),
       pass: m.severeIncidentCount.pass,
       desc: '近期发生的严重级运营事件数',
     },

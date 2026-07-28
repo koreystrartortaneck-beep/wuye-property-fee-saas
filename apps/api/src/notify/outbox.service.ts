@@ -52,7 +52,12 @@ type StoredOutboxEvent = Prisma.OutboxEventGetPayload<Record<string, never>>;
 
 const DEFAULT_BATCH_SIZE = 100;
 const DEFAULT_LEASE_MS = 30_000;
-const DEFAULT_MAX_ATTEMPTS = 5;
+/**
+ * 最大重试次数。导出给监控复用：领取条件里有 `attempts < MAX`，
+ * 若积压统计不带同样的限制，超次数却尚未被标记终态的事件会被误算成「待投递」，
+ * 而它们其实永远不会再被领取。
+ */
+export const DEFAULT_MAX_ATTEMPTS = 5;
 const DEFAULT_BASE_BACKOFF_MS = 30_000;
 const DEFAULT_MAX_BACKOFF_MS = 60 * 60 * 1000;
 /**

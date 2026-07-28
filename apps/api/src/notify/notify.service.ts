@@ -174,10 +174,19 @@ export class NotifyService implements BillNotifier {
     return stats;
   }
 
-  /** 定时投递（默认关闭，OUTBOX_DISPATCH_ENABLED=true 开启）。 */
+  /**
+   * 定时投递（默认**开启**，需显式 OUTBOX_DISPATCH_ENABLED=false 才停）。
+   *
+   * 原来是默认关闭、要配 OUTBOX_DISPATCH_ENABLED=true 才跑。生产上没配这个变量，
+   * 于是这个任务从未执行过一次：事件只进不出，实测积压 24 条、80 秒内纹丝不动，
+   * 而后台没有任何地方提示「投递是关着的」。
+   *
+   * 通知投递是核心链路，不该以「配了才生效」的方式存在。本地开发不想真发消息
+   * 应当靠 WX_MODE=mock 控制，而不是把整条投递管道关掉。
+   */
   @Cron('30 * * * * *')
   async scheduledOutboxDispatch(): Promise<void> {
-    if (process.env.OUTBOX_DISPATCH_ENABLED !== 'true') return;
+    if (process.env.OUTBOX_DISPATCH_ENABLED === 'false') return;
     const workerId = `${process.env.HOSTNAME ?? 'notify'}-${process.pid}`;
     const tenants = await this.prisma.raw.outboxEvent.findMany({
       where: { status: { in: ['PENDING', 'FAILED', 'PROCESSING'] } },
