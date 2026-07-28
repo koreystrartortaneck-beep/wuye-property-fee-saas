@@ -169,7 +169,6 @@ onMounted(load);
 </script>
 
 <style scoped>
-.mb { margin-bottom: 16px; }
 .verify-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .found { font-size: var(--fs-13); }
 .ml { margin-left: 6px; }

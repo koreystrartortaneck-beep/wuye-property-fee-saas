@@ -33,7 +33,11 @@ describe('ReconciliationService 每日对账', () => {
           create: jest.fn().mockResolvedValue({ id: 'run-1', status: 'RUNNING', differenceRecordCount: 0 }),
           updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         },
-        reconciliationItem: { findUnique: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        reconciliationItem: {
+          findUnique: jest.fn(),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
         payment: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
         refund: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
         $transaction: jest.fn(async (cb: (c: typeof tx) => unknown) => cb(tx)),
@@ -167,5 +171,66 @@ describe('ReconciliationService 每日对账', () => {
     );
     // 真正重跑了：下载过对账单
     expect(res.status).not.toBe('FAILED');
+  });
+
+  /*
+   * 强制重跑。
+   *
+   * 需要它的真实场景：账单解析修好之后，历史上用错误逻辑跑出的结论永远无法纠正——
+   * claimRun 见到 COMPLETED 就幂等返回，Cron 与手动触发走同一条路径，只会把错误
+   * 结论再返回一次。生产上就积压了一批「把汇总行当成交易明细」的假差异
+   * （订单号为 `0.00`、`申请退款总金额`）。
+   */
+  describe('强制重跑已完成的账期', () => {
+    function completedRun() {
+      return {
+        id: 'run-done',
+        status: 'COMPLETED',
+        differenceRecordCount: 2,
+        leaseOwner: null,
+        leaseExpiresAt: null,
+      };
+    }
+
+    it('不带 force：COMPLETED 幂等返回，不重新下载账单', async () => {
+      const prisma = makePrisma();
+      prisma.raw.reconciliationRun.findFirst.mockResolvedValue(completedRun());
+      const result = await makeService(prisma).reconcile(baseInput);
+
+      expect(result).toEqual({ runId: 'run-done', status: 'COMPLETED', differenceRecordCount: 2 });
+      expect(billProvider.downloadBill).not.toHaveBeenCalled();
+      expect(prisma.raw.reconciliationItem.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('带 force：重新认领 COMPLETED 并重新下载账单', async () => {
+      const prisma = makePrisma();
+      prisma.raw.reconciliationRun.findFirst.mockResolvedValue(completedRun());
+      billProvider.downloadBill.mockResolvedValue({
+        billType: 'TRANSACTION', businessDate, fileHash: 'h', recordCount: 0,
+        totalAmountCents: 0, trades: [], refunds: [],
+      });
+
+      await makeService(prisma).reconcile({ ...baseInput, force: true });
+
+      expect(billProvider.downloadBill).toHaveBeenCalledTimes(1);
+      // 认领条件必须放宽到含 COMPLETED，否则 updateMany 命中 0 行、被判为 busy 直接返回
+      const claimArgs = prisma.raw.reconciliationRun.updateMany.mock.calls[0][0];
+      expect(claimArgs.where.status.in).toContain('COMPLETED');
+    });
+
+    it('带 force：只删未处置的差异，已人工处置的必须保留（审计痕迹不可抹）', async () => {
+      const prisma = makePrisma();
+      prisma.raw.reconciliationRun.findFirst.mockResolvedValue(completedRun());
+      billProvider.downloadBill.mockResolvedValue({
+        billType: 'TRANSACTION', businessDate, fileHash: 'h', recordCount: 0,
+        totalAmountCents: 0, trades: [], refunds: [],
+      });
+
+      await makeService(prisma).reconcile({ ...baseInput, force: true });
+
+      expect(prisma.raw.reconciliationItem.deleteMany).toHaveBeenCalledWith({
+        where: { runId: 'run-done', handledBy: null },
+      });
+    });
   });
 });

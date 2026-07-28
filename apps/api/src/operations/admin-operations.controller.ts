@@ -70,6 +70,11 @@ export class AdminOperationsController {
     const payMode = process.env.PAY_MODE ?? '(未配置)';
     const isRealPay = payMode === 'wxpay';
 
+    // 三类订阅消息模板缺哪个就发不出哪种提醒，逐个列出而不是笼统说「未配置」
+    const missingTemplates = (['WX_TMPL_BILL_CREATED', 'WX_TMPL_DUE_SOON', 'WX_TMPL_OVERDUE'] as const).filter(
+      (name) => !process.env[name],
+    );
+
     const checks = [
       {
         name: 'ALERT_DESTINATION',
@@ -89,6 +94,19 @@ export class AdminOperationsController {
         detail: isRealPay
           ? '对账会真实下载微信账单并逐笔核对'
           : '对账使用模拟渠道：账期恒为空，本地交易会被全部误判为「微信侧缺失」，真实资金差异无法发现',
+      },
+      {
+        /*
+         * 订阅消息模板同样是「静默失效」：模板 ID 没配时账单照发、通知全部
+         * FAILED，业主什么也收不到，而唯一线索是通知记录里逐条的失败原因。
+         * 生产实测 16 条通知全是 FAILED / SKIPPED。
+         */
+        name: 'NOTIFY_TEMPLATES',
+        healthy: missingTemplates.length === 0,
+        detail:
+          missingTemplates.length === 0
+            ? '订阅消息模板已配置，业主可收到出账/到期/逾期提醒'
+            : `缺少模板环境变量 ${missingTemplates.join('、')}，业主收不到对应提醒`,
       },
     ];
 

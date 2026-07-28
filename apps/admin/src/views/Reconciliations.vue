@@ -258,9 +258,6 @@ async function submitResolve() {
 </script>
 
 <style scoped>
-.mb {
-  margin-bottom: 16px;
-}
 .warn {
   color: var(--danger-text);
   font-weight: 600;

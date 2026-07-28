@@ -11,11 +11,30 @@ import { AdminOperationsController } from './admin-operations.controller';
  * 这些用例锁住：模拟模式下就绪检查必须为不健康，且文案要说清后果。
  */
 describe('运行状况就绪检查：支付与对账模式', () => {
-  const saved = process.env.PAY_MODE;
-  afterEach(() => {
-    if (saved === undefined) delete process.env.PAY_MODE;
-    else process.env.PAY_MODE = saved;
+  /*
+   * 统一存档/还原所有相关环境变量。
+   * 早先各用例自己零散地 delete，一旦某条断言先失败、后面的清理就不会执行，
+   * 于是污染同一进程里后续用例——曾出现「单独跑绿、全量跑红」的偶发失败。
+   * 偶发性测试比没有测试更糟，所以这里一次性兜住。
+   */
+  const KEYS = ['PAY_MODE', 'WX_TMPL_BILL_CREATED', 'WX_TMPL_DUE_SOON', 'WX_TMPL_OVERDUE'] as const;
+  const saved: Record<string, string | undefined> = {};
+  beforeEach(() => {
+    for (const k of KEYS) saved[k] = process.env[k];
   });
+  afterEach(() => {
+    for (const k of KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  /** 把三类订阅消息模板一次配齐 */
+  function setAllTemplates() {
+    process.env.WX_TMPL_BILL_CREATED = 'a';
+    process.env.WX_TMPL_DUE_SOON = 'b';
+    process.env.WX_TMPL_OVERDUE = 'c';
+  }
 
   /** 构造顺序是 (metrics, alerts, incidents)；本用例只需要 alerts.readiness() */
   function controller(destinationConfigured: boolean) {
@@ -33,6 +52,7 @@ describe('运行状况就绪检查：支付与对账模式', () => {
 
   it('wxpay 模式：支付与对账都判为健康', () => {
     process.env.PAY_MODE = 'wxpay';
+    setAllTemplates();
     const r = controller(true).getReadiness(cur) as never as {
       healthy: boolean;
       checks: { name: string; healthy: boolean; detail: string }[];
@@ -63,6 +83,31 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     };
     expect(checkByName(r, 'PAY_MODE').detail).toContain('未配置');
     expect(r.healthy).toBe(false);
+  });
+
+  it('订阅消息模板：缺哪个就列出哪个，业主收不到对应提醒', () => {
+    process.env.PAY_MODE = 'wxpay';
+    delete process.env.WX_TMPL_BILL_CREATED;
+    delete process.env.WX_TMPL_DUE_SOON;
+    process.env.WX_TMPL_OVERDUE = 'tmpl-overdue';
+    const r = controller(true).getReadiness(cur) as never as {
+      checks: { name: string; healthy: boolean; detail: string }[];
+    };
+    const c = checkByName(r as never, 'NOTIFY_TEMPLATES');
+    expect(c.healthy).toBe(false);
+    expect(c.detail).toContain('WX_TMPL_BILL_CREATED');
+    expect(c.detail).toContain('WX_TMPL_DUE_SOON');
+    expect(c.detail).not.toContain('WX_TMPL_OVERDUE');
+  });
+
+  it('三类模板都配齐时判为健康', () => {
+    process.env.PAY_MODE = 'wxpay';
+    setAllTemplates();
+    const r = controller(true).getReadiness(cur) as never as {
+      checks: { name: string; healthy: boolean; detail: string }[];
+    };
+    expect(checkByName(r as never, 'NOTIFY_TEMPLATES').healthy).toBe(true);
+    for (const k of ['WX_TMPL_BILL_CREATED', 'WX_TMPL_DUE_SOON', 'WX_TMPL_OVERDUE']) delete process.env[k];
   });
 
   it('告警目的地未配置时整体也不健康（原有行为不被新检查掩盖）', () => {

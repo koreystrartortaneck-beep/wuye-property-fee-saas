@@ -373,9 +373,6 @@ async function retire(row: { id: string }) {
 </script>
 
 <style scoped>
-.mb {
-  margin-bottom: 16px;
-}
 .sub {
   color: var(--text-secondary);
   font-size: var(--fs-12);

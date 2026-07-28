@@ -241,9 +241,6 @@ function downloadTemplate() {
   font-size: var(--fs-12);
   color: var(--warning-text);
 }
-.mb {
-  margin-bottom: var(--sp-4);
-}
 .tpl {
   margin-top: var(--sp-2);
   font-size: var(--fs-12);

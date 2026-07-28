@@ -406,9 +406,6 @@ async function showRefund(row: Payment) {
 .muted {
   color: var(--text-tertiary);
 }
-.mb {
-  margin-bottom: 16px;
-}
 .json-title {
   margin: 12px 0 6px;
   font-weight: 600;

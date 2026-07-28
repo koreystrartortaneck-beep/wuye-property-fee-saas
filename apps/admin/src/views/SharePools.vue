@@ -6,7 +6,7 @@
       </el-select>
     </div>
 
-    <el-form inline class="mb">
+    <el-form inline class="pool-form">
       <el-form-item label="账期">
         <el-input v-model="period" placeholder="YYYY-MM" style="width: 140px" />
       </el-form-item>
@@ -111,7 +111,9 @@ async function save() {
 </script>
 
 <style scoped>
-.mb {
-  margin-bottom: 8px;
+/* 这张内联表单原本用 .mb（本页把 .mb 定成了 8px），收归共享层后单独保留原间距 */
+.pool-form {
+  margin-bottom: var(--sp-2);
 }
+
 </style>

@@ -1,5 +1,25 @@
 <template>
   <el-card>
+    <!--
+      通知发不出去是「静默失效」的典型：账单照样发布、业主什么也收不到，
+      只有逐条翻「失败原因」才能发现是模板 ID 没配。这里直接顶到页面最上面。
+    -->
+    <el-alert
+      v-if="templateMissing"
+      class="mb"
+      type="warning"
+      :closable="false"
+      show-icon
+      title="业主收不到通知：订阅消息模板未配置"
+    >
+      <template #default>
+        当前有 {{ templateMissing }} 条通知因为缺少模板 ID 而发送失败。到微信公众平台
+        「功能 → 订阅消息」选用模板，把模板 ID 填到云托管环境变量
+        WX_TMPL_BILL_CREATED / WX_TMPL_DUE_SOON / WX_TMPL_OVERDUE，
+        并同步填入小程序 config.js 的 subscribeTmplIds。
+      </template>
+    </el-alert>
+
     <div class="toolbar">
       <el-select v-model="type" placeholder="通知类型" clearable style="width: 160px" @change="reload">
         <el-option label="出账通知" value="BILL_CREATED" />
@@ -19,9 +39,16 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="channel" label="通道" width="130" />
-      <el-table-column prop="billId" label="账单 ID" min-width="200" />
-      <el-table-column prop="error" label="失败原因" min-width="160" />
+      <!-- NOTIFY_CHANNEL_LABEL 早就导入了却没用上，界面一直显示英文枚举 WX_SUBSCRIBE / MOCK -->
+      <el-table-column label="通道" width="130">
+        <template #default="{ row }">{{ NOTIFY_CHANNEL_LABEL[row.channel] || row.channel }}</template>
+      </el-table-column>
+      <el-table-column label="失败原因" min-width="260">
+        <template #default="{ row }">
+          <span v-if="row.error" class="fail-reason">{{ row.error }}</span>
+          <span v-else class="cell-sub">—</span>
+        </template>
+      </el-table-column>
       <el-table-column label="时间" width="160">
         <template #default="{ row }">{{ dt(row.sentAt) }}</template>
       </el-table-column>
@@ -75,12 +102,18 @@ function reload() {
   load();
 }
 
+/** 本页中因「未配置模板」而失败的条数；>0 时顶部给出配置指引 */
+const templateMissing = ref(0);
+
 async function load() {
   loading.value = true;
   try {
     const data = await api<Page<Log>>(`/admin/notify-logs${qs({ type: type.value, page: page.value, pageSize: 20 })}`);
     rows.value = data.list;
     total.value = data.total;
+    templateMissing.value = data.list.filter(
+      (r) => r.status === 'FAILED' && (r.error ?? '').includes('未配置模板'),
+    ).length;
   } finally {
     loading.value = false;
   }
@@ -90,4 +123,9 @@ onMounted(load);
 </script>
 
 <style scoped>
+.fail-reason {
+  color: var(--danger-text);
+  font-size: var(--fs-12);
+  line-height: var(--lh-tight);
+}
 </style>

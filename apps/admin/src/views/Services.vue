@@ -202,6 +202,5 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.mb { margin-bottom: 16px; }
 .card-head { display: flex; justify-content: space-between; align-items: center; }
 </style>

@@ -158,9 +158,6 @@ async function update(row: Reading) {
 </script>
 
 <style scoped>
-.mb {
-  margin-bottom: 16px;
-}
 .ml {
   margin-left: 8px;
 }

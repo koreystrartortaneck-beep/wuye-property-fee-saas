@@ -143,9 +143,6 @@ onMounted(load);
 </script>
 
 <style scoped>
-.mb {
-  margin-bottom: 16px;
-}
 .verify-row {
   display: flex;
   align-items: center;

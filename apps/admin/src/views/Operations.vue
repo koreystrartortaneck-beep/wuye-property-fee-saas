@@ -36,6 +36,12 @@
           <div v-if="!c.healthy && c.name === 'PAY_MODE'" class="ck-hint">
             在云托管环境变量中把 PAY_MODE 设为 wxpay，否则业主的缴费不会真正扣款。
           </div>
+          <div v-if="!c.healthy && c.name === 'NOTIFY_TEMPLATES'" class="ck-hint">
+            到微信公众平台「功能 → 订阅消息」选用模板，把模板 ID 填到云托管环境变量
+            WX_TMPL_BILL_CREATED / WX_TMPL_DUE_SOON / WX_TMPL_OVERDUE；
+            小程序 config.js 的 subscribeTmplIds 也要填同一批，否则业主端不会弹授权。
+            未配置时账单照样发布，但业主收不到任何提醒。
+          </div>
           <div v-if="!c.healthy && c.name === 'RECONCILIATION_CHANNEL'" class="ck-hint">
             对账当前走的是模拟渠道：每天拉到的微信账单恒为空，于是本地每一笔交易
             都会被登记成「微信侧缺失」的假差异，而真实的资金差异（微信扣款成功但
@@ -199,6 +205,7 @@ const CHECK_LABEL: Record<string, string> = {
   ALERT_DESTINATION: '异常告警推送地址',
   PAY_MODE: '支付模式',
   RECONCILIATION_CHANNEL: '对账数据来源',
+  NOTIFY_TEMPLATES: '业主通知模板',
 };
 const SEVERITY_LABEL: Record<string, string> = { INFO: '提示', WARNING: '警告', CRITICAL: '严重' };
 const INCIDENT_STATUS_LABEL: Record<string, string> = {

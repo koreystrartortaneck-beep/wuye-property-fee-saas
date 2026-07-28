@@ -1,6 +1,12 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { ErrorCode, ReconciliationBillType, ReconciliationDifferenceType, ReconciliationItemStatus } from '@pf/shared';
+import {
+  ErrorCode,
+  ReconciliationBillType,
+  ReconciliationDifferenceType,
+  ReconciliationItemStatus,
+  ReconciliationRunStatus,
+} from '@pf/shared';
 import { AuditService } from '../audit/audit.service';
 import { toCents } from '../billing/engine/money';
 import { BizException } from '../common/biz.exception';
@@ -27,6 +33,18 @@ export interface ReconcileInput {
   billType: ReconciliationBillType;
   workerId?: string;
   adminId?: string | null;
+  /**
+   * 强制重跑一个已 COMPLETED 的账期。
+   *
+   * 需要它的真实场景：账单解析逻辑修好之后，历史上用错误逻辑跑出来的对账结果
+   * 永远无法纠正——claimRun 见到 COMPLETED 就幂等返回，每日 Cron 与手动触发
+   * 走同一条路径，都只会把错误结论再返回一次。生产上就积压了一批把汇总行当成
+   * 交易明细的假差异（订单号是 `0.00`、`申请退款总金额`），只能靠这个开关清掉。
+   *
+   * 重跑会删除该批次**尚未处置**的差异项（旧结论已被取代），
+   * 但保留已人工处置的（那是审计痕迹，不能抹掉）。
+   */
+  force?: boolean;
 }
 
 interface DifferenceDraft {
@@ -104,7 +122,8 @@ export class ReconciliationService {
     const now = new Date();
     const leaseExpiresAt = new Date(now.getTime() + LEASE_MS);
     if (existing) {
-      if (existing.status === 'COMPLETED') return { run: existing, done: true as const };
+      // force 时允许重新认领已完成的账期（见 ReconcileInput.force 的说明）
+      if (existing.status === 'COMPLETED' && !input.force) return { run: existing, done: true as const };
       // RUNNING：租约未过期且属于他人 → 跳过。
       if (existing.leaseExpiresAt && existing.leaseExpiresAt > now && existing.leaseOwner !== workerId) {
         return { run: existing, busy: true as const };
@@ -112,8 +131,11 @@ export class ReconciliationService {
       // FAILED 必须可重新认领：下载账单遇到一次瞬时网络故障即置 FAILED，
       // 若只认 RUNNING，该账期该类型的对账将永久缺失——每日 Cron 只跑一次、
       // 管理端手动触发走同一路径也只会空转，资金差异从此无人比对。
+      const claimable = (
+        input.force ? (['RUNNING', 'FAILED', 'COMPLETED'] as const) : (['RUNNING', 'FAILED'] as const)
+      ) as unknown as ReconciliationRunStatus[];
       const claimed = await this.prisma.raw.reconciliationRun.updateMany({
-        where: { id: existing.id, status: { in: ['RUNNING', 'FAILED'] } },
+        where: { id: existing.id, status: { in: claimable } },
         data: {
           leaseOwner: workerId,
           leaseExpiresAt,
@@ -169,6 +191,17 @@ export class ReconciliationService {
         return { runId: claim.run.id, status: claim.run.status, differenceRecordCount: claim.run.differenceRecordCount };
       }
       const run = claim.run;
+
+      if (input.force) {
+        /*
+         * 旧结论已被取代，未处置的差异必须清掉，否则 persist 遇到重复项静默跳过，
+         * 假差异会和新结论混在一起（生产上那两条 `0.00` / `申请退款总金额` 就会赖着不走）。
+         * 已人工处置过的（有 handledBy）保留：那是谁在什么时候怎么判的审计痕迹。
+         */
+        await this.prisma.raw.reconciliationItem.deleteMany({
+          where: { runId: run.id, handledBy: null },
+        });
+      }
 
       try {
         const bill = await this.billProvider.downloadBill({

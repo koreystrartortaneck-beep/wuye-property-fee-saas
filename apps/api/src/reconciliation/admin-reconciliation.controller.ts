@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Injectable, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { IsDate, IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsDate, IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { RECONCILIATION_BILL_TYPES, ReconciliationBillType } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
@@ -32,6 +32,14 @@ class TriggerReconcileDto {
 
   @IsIn(RECONCILIATION_BILL_TYPES as unknown as string[])
   billType!: ReconciliationBillType;
+
+  /**
+   * 强制重跑已完成的账期。用于修正历史上用错误解析逻辑跑出的对账结果。
+   * 会删除该批次尚未处置的差异项，保留已人工处置的。
+   */
+  @IsOptional()
+  @IsBoolean()
+  force?: boolean;
 }
 
 class ResolveItemDto {
@@ -93,6 +101,7 @@ export class AdminReconciliationController {
       tenantId: cur.tenantId as string,
       communityId: dto.communityId ?? null,
       merchantAccountId: dto.merchantAccountId,
+      force: dto.force ?? false,
       mchid: dto.mchid,
       appid: dto.appid,
       businessDate: isoDate(dto.businessDate),

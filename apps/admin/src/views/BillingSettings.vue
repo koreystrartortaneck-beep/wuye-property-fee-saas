@@ -203,9 +203,6 @@ async function submit() {
 </script>
 
 <style scoped>
-.mb {
-  margin-bottom: 16px;
-}
 .acts {
   display: flex;
   gap: 10px;
