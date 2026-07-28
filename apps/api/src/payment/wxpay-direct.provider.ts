@@ -9,6 +9,8 @@ import {
   type KeyObject,
 } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import {
   CreateOrderInput,
@@ -74,6 +76,79 @@ export class WxPayDirectProvider implements PaymentProvider {
 
   assertConfigured(): void {
     this.config();
+  }
+
+  /**
+   * 下载微信支付对账单原始 CSV。
+   *
+   * 两步：
+   *   ① GET /v3/bill/tradebill|fundflowbill 取 download_url + hash_value（SHA1）；
+   *   ② GET download_url 取文件本体。
+   *
+   * 第二步与普通接口有两点关键不同，照普通 request() 走会直接失败：
+   *   - 该响应**不带**应答签名头（Wechatpay-Signature 等），不能做应答验签；
+   *   - 响应体是 CSV 文本（tar_type=GZIP 时是 gzip 字节流），不是 JSON。
+   * 完整性改用第一步返回的 hash_value 校验，这是微信文档规定的方式。
+   *
+   * @param billType TRANSACTION → 交易账单；REFUND → 退款账单（交易账单的 REFUND 类型）
+   * @param billDate 上海时区自然日 YYYY-MM-DD
+   */
+  async downloadBillCsv(billType: 'TRANSACTION' | 'REFUND', billDate: string): Promise<string> {
+    const config = this.config();
+    // 退款账单是交易账单的一种 bill_type，不是独立接口
+    const path = `/v3/bill/tradebill?bill_date=${billDate}&bill_type=${billType === 'REFUND' ? 'REFUND' : 'ALL'}`;
+    const meta = await this.request<{ download_url?: string; hash_type?: string; hash_value?: string }>(
+      'GET',
+      path,
+      undefined,
+      config,
+    );
+    if (!meta.download_url) throw new Error('微信支付未返回对账单下载地址');
+
+    const url = new URL(meta.download_url);
+    const raw = await this.getRawFile(url, config);
+    // tar_type=GZIP 时是 gzip；这里按魔数判断，不依赖请求参数
+    const isGzip = raw.length > 2 && raw[0] === 0x1f && raw[1] === 0x8b;
+    const content = isGzip ? gunzipSync(raw) : raw;
+
+    if (meta.hash_value) {
+      const algorithm = (meta.hash_type || 'SHA1').toLowerCase() === 'sha256' ? 'sha256' : 'sha1';
+      const actual = createHash(algorithm).update(content).digest('hex');
+      if (actual.toLowerCase() !== meta.hash_value.toLowerCase()) {
+        throw new Error(`微信支付对账单摘要校验失败（${algorithm}）：文件可能被截断或篡改`);
+      }
+    }
+    return content.toString('utf8');
+  }
+
+  /** 带 v3 签名的原始文件 GET；不做应答验签（下载接口不返回签名头） */
+  private async getRawFile(url: URL, config: WxPayConfig): Promise<Buffer> {
+    const canonical = `${url.pathname}${url.search}`;
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const nonce = randomBytes(16).toString('hex');
+    const signature = sign(
+      'RSA-SHA256',
+      Buffer.from(`GET\n${canonical}\n${timestamp}\n${nonce}\n\n`),
+      config.privateKey,
+    ).toString('base64');
+    const authorization = 'WECHATPAY2-SHA256-RSA2048 '
+      + `mchid="${config.mchId}",nonce_str="${nonce}",timestamp="${timestamp}",`
+      + `serial_no="${config.merchantSerial}",signature="${signature}"`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: '*/*', Authorization: authorization },
+      // 账单文件可能较大，超时给得比普通接口宽
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!response.ok) {
+      throw new PaymentProviderError(
+        response.status,
+        'BILL_DOWNLOAD_FAILED',
+        `对账单文件下载失败：HTTP ${response.status}`,
+      );
+    }
+    return Buffer.from(await response.arrayBuffer());
   }
 
   private config(): WxPayConfig {

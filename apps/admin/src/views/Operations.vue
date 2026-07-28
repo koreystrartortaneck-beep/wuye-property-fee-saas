@@ -28,6 +28,19 @@
             在云托管环境变量中设置 OPS_ALERT_WEBHOOK（企业微信/钉钉机器人地址），
             回调失败、对账差异等异常才会主动推送给你。
           </div>
+          <!--
+            这两条是「真实还是模拟」的开关。曾经对账单渠道被绑成模拟实现、
+            账期恒为空，把本地全部交易误判为「微信侧缺失」，而界面上没有任何
+            地方能看出来，真金白银跑了一周才发现。所以必须在这里说清后果。
+          -->
+          <div v-if="!c.healthy && c.name === 'PAY_MODE'" class="ck-hint">
+            在云托管环境变量中把 PAY_MODE 设为 wxpay，否则业主的缴费不会真正扣款。
+          </div>
+          <div v-if="!c.healthy && c.name === 'RECONCILIATION_CHANNEL'" class="ck-hint">
+            对账当前走的是模拟渠道：每天拉到的微信账单恒为空，于是本地每一笔交易
+            都会被登记成「微信侧缺失」的假差异，而真实的资金差异（微信扣款成功但
+            本地没记账、金额不一致）一笔也发现不了。它随 PAY_MODE 一同切换。
+          </div>
         </div>
       </div>
     </el-card>
@@ -182,7 +195,11 @@ interface Incident {
   reason: string | null;
 }
 
-const CHECK_LABEL: Record<string, string> = { ALERT_DESTINATION: '异常告警推送地址' };
+const CHECK_LABEL: Record<string, string> = {
+  ALERT_DESTINATION: '异常告警推送地址',
+  PAY_MODE: '支付模式',
+  RECONCILIATION_CHANNEL: '对账数据来源',
+};
 const SEVERITY_LABEL: Record<string, string> = { INFO: '提示', WARNING: '警告', CRITICAL: '严重' };
 const INCIDENT_STATUS_LABEL: Record<string, string> = {
   OPEN: '待处理',

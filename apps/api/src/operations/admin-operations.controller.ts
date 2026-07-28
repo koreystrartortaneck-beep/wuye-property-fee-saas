@@ -57,16 +57,42 @@ export class AdminOperationsController {
   getReadiness(@Current() cur: CurrentAdmin) {
     requireTenant(cur);
     const alertReadiness = this.alerts.readiness();
-    return {
-      healthy: alertReadiness.healthy,
-      checks: [
-        {
-          name: 'ALERT_DESTINATION',
-          healthy: alertReadiness.destinationConfigured,
-          detail: alertReadiness.destinationConfigured ? '告警目的地已配置' : '未配置 OPS_ALERT_WEBHOOK',
-        },
-      ],
-    };
+
+    /*
+     * 支付与对账模式必须能在界面上看见。
+     *
+     * 教训：对账单渠道曾被无条件绑到 Mock（永远返回空账期），生产上每天照跑、
+     * 批次状态写 COMPLETED、把本地全部交易登记成「微信侧缺失」差异。因为没有任何
+     * 地方显示「当前用的是 Mock」，这个问题在真金白银跑了一周之后才被发现——
+     * 只能靠对比 channelFileHash 恒为 SHA256("[]") 才认出来。
+     * 凡是「真实 / 模拟」的开关，都必须在就绪检查里暴露。
+     */
+    const payMode = process.env.PAY_MODE ?? '(未配置)';
+    const isRealPay = payMode === 'wxpay';
+
+    const checks = [
+      {
+        name: 'ALERT_DESTINATION',
+        healthy: alertReadiness.destinationConfigured,
+        detail: alertReadiness.destinationConfigured ? '告警目的地已配置' : '未配置 OPS_ALERT_WEBHOOK',
+      },
+      {
+        name: 'PAY_MODE',
+        healthy: isRealPay,
+        detail: isRealPay
+          ? '真实微信支付（wxpay）'
+          : `当前为 ${payMode}，不会产生真实收款`,
+      },
+      {
+        name: 'RECONCILIATION_CHANNEL',
+        healthy: isRealPay,
+        detail: isRealPay
+          ? '对账会真实下载微信账单并逐笔核对'
+          : '对账使用模拟渠道：账期恒为空，本地交易会被全部误判为「微信侧缺失」，真实资金差异无法发现',
+      },
+    ];
+
+    return { healthy: checks.every((c) => c.healthy), checks };
   }
 
   @Get('incidents')
