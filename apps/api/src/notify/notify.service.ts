@@ -11,6 +11,7 @@ import {
   ReminderType,
 } from './notify.tokens';
 import { OutboxService } from './outbox.service';
+import { buildSubscribeData } from './subscribe-fields';
 
 /** Outbox 事件类型 → 微信订阅模板；未映射的事件（开票/支付/退款）暂无模板，投递时跳过。 */
 const SUBSCRIBE_TEMPLATE_BY_EVENT: Record<string, NotifyType> = {
@@ -72,12 +73,13 @@ export class NotifyService implements BillNotifier {
         .sendSubscribeMessage({
           openid: binding.wxUser.openid,
           templateType: type,
-          data: {
+          // data 的键必须是微信模板字段名（thing1/amount2/…），不是业务语义名，
+          // 否则微信一律判 47003 参数非法。映射集中在 subscribe-fields.ts。
+          data: buildSubscribeData(type, {
             title: bill.title,
             amount: bill.amount.toString(),
-            period: bill.period,
             dueDate: bill.dueDate.toISOString().slice(0, 10),
-          },
+          }),
         })
         .catch((e: Error) => ({ ok: false, error: e.message }));
 
@@ -113,12 +115,11 @@ export class NotifyService implements BillNotifier {
     if (openids.length === 0) return 'SKIPPED';
 
     const payload = (event.payload ?? {}) as Record<string, unknown>;
-    const data = {
+    const data = buildSubscribeData(templateType, {
       title: String(payload.title ?? payload.period ?? ''),
       amount: String(payload.amount ?? ''),
-      period: String(payload.period ?? ''),
       dueDate: String(payload.dueDate ?? ''),
-    };
+    });
 
     let delivered = 0;
     let retryable = false;
