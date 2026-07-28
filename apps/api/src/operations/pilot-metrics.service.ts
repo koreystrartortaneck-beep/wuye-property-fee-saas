@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { TERMINAL_AVAILABLE_AT } from '../notify/outbox.service';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -52,6 +53,9 @@ export class PilotMetricsService {
       refundAbnormal,
       severeIncidents,
       dailyRows,
+      outboxStuck,
+      outboxExhausted,
+      notifyFailed,
     ] = await Promise.all([
       this.prisma.t.payment.count({ where: { status: 'SUCCESS', createdAt: { gte: since }, ...cf } }),
       this.prisma.t.payment.count({ where: { status: { in: ['FAILED'] }, createdAt: { gte: since }, ...cf } }),
@@ -67,6 +71,26 @@ export class PilotMetricsService {
       this.prisma.t.refund.count({ where: { status: 'ABNORMAL', ...cf } }),
       this.prisma.t.incident.count({ where: { severity: 'CRITICAL', openedAt: { gte: since }, ...cf } }),
       this.dailyPaymentSuccess(input.tenantId, input.communityId ?? null, since),
+      /*
+       * Outbox 与通知的健康度此前完全没有被任何监控覆盖：事件重试耗尽后变成
+       * FAILED 永久沉在库里，业主该收到的账单/催缴就这么无声无息地丢了，而后台
+       * 任何页面都看不出异常。这三项把它摆到界面上。
+       *
+       * 「积压」= 待投递或可重试且已到点却还没被投出去（正常应当在 30 秒内清掉）。
+       */
+      this.prisma.raw.outboxEvent.count({
+        where: {
+          tenantId: input.tenantId,
+          status: { in: ['PENDING', 'FAILED'] },
+          availableAt: { lte: now, not: TERMINAL_AVAILABLE_AT },
+        },
+      }),
+      this.prisma.raw.outboxEvent.count({
+        where: { tenantId: input.tenantId, status: 'FAILED', availableAt: TERMINAL_AVAILABLE_AT },
+      }),
+      this.prisma.raw.notifyLog.count({
+        where: { tenantId: input.tenantId, status: 'FAILED', sentAt: { gte: since } },
+      })
     ]);
 
     const duplicateChargeCount = dupGroups.filter((g) => g.billId && g._count._all > 1).length;
@@ -96,6 +120,12 @@ export class PilotMetricsService {
       refundCompletionRate,
       severeIncidentCount,
       moneyLossIndicator,
+      /** 待投递/可重试却积压的通知事件；正常应为 0（投递 Cron 每 30 秒跑一次） */
+      outboxBacklog: outboxStuck,
+      /** 重试耗尽、已永久放弃的通知事件；不为 0 说明有业主该收到的通知彻底丢了 */
+      outboxExhausted,
+      /** 近 30 日发送失败的通知条数 */
+      notifyFailedCount: notifyFailed,
       overallPass,
       daily: dailyRows.map((r) => {
         const success = Number(r.success);

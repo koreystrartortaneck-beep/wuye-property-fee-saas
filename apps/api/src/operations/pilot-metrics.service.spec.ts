@@ -24,7 +24,22 @@ describe('PilotMetricsService 灰度指标', () => {
         reconciliationItem: { count: jest.fn(async () => counts.unresolvedRecon ?? 0) },
         incident: { count: jest.fn(async () => counts.severeIncidents ?? 0) },
       },
-      raw: { $queryRaw: jest.fn(async () => daily) },
+      raw: {
+        $queryRaw: jest.fn(async () => daily),
+        /*
+         * Outbox 与通知健康度：此前完全没有监控覆盖，事件重试耗尽后永久沉在库里，
+         * 业主该收到的账单/催缴无声无息地丢，后台任何页面都看不出异常。
+         * 「积压」按 availableAt 是否为终态哨兵区分，两者不能混。
+         */
+        outboxEvent: {
+          count: jest.fn(async ({ where }: any) =>
+            where.status === 'FAILED' && where.availableAt instanceof Date
+              ? (counts.outboxExhausted ?? 0)
+              : (counts.outboxBacklog ?? 0),
+          ),
+        },
+        notifyLog: { count: jest.fn(async () => counts.notifyFailed ?? 0) },
+      },
     };
   }
 
@@ -91,5 +106,22 @@ describe('PilotMetricsService 灰度指标', () => {
     });
     const m = await make(prisma).metrics({ tenantId: 't1', now });
     expect(m.overallPass).toBe(true);
+  });
+
+  it('Outbox 积压与重试耗尽分别统计，通知失败数取近 30 日', async () => {
+    const prisma = makePrisma({ outboxBacklog: 7, outboxExhausted: 2, notifyFailed: 16 });
+    const m = await make(prisma).metrics({ tenantId: 't1', now });
+    expect(m.outboxBacklog).toBe(7);
+    expect(m.outboxExhausted).toBe(2);
+    expect(m.notifyFailedCount).toBe(16);
+  });
+
+  it('积压查询必须排除终态哨兵，否则已放弃的事件会被算成待投递', async () => {
+    const prisma = makePrisma({});
+    await make(prisma).metrics({ tenantId: 't1', now });
+    const calls = (prisma as any).raw.outboxEvent.count.mock.calls.map((c: any[]) => c[0].where);
+    const backlog = calls.find((w: any) => Array.isArray(w.status?.in));
+    expect(backlog.availableAt.not).toBeInstanceOf(Date);
+    expect(backlog.availableAt.not.getUTCFullYear()).toBe(9999);
   });
 });

@@ -108,3 +108,41 @@ describe('跳转闭环', () => {
     expect(dead).toEqual([]);
   });
 });
+
+/**
+ * 待办角标必须在处理完之后刷新。
+ *
+ * 起因：Bindings 用了 refreshBadges 却没导入（点了审核直接 ReferenceError）；
+ * InvoiceApplications 反过来——导入了却从没调用，于是处理完开票申请，侧栏那个
+ * 数字一直挂着不消，运维会反复点进去看已经处理过的东西。
+ *
+ * badges.ts 统计 bindings / tickets / invoices 三类待办，对应的三个页面在动作
+ * 成功后都必须刷新角标。
+ */
+describe('待办角标刷新', () => {
+  const BADGE_PAGES: Record<string, string> = {
+    bindings: 'views/Bindings.vue',
+    tickets: 'views/Tickets.vue',
+    invoices: 'views/InvoiceApplications.vue',
+  };
+
+  it('badges.ts 统计的每一类待办，对应页面都要调用 refreshBadges', () => {
+    const badges = fs.readFileSync(path.join(SRC, 'badges.ts'), 'utf8');
+    const declared = [...badges.matchAll(/^\s*(bindings|tickets|invoices):/gm)].map((m) => m[1]);
+    expect(new Set(declared)).toEqual(new Set(Object.keys(BADGE_PAGES)));
+
+    const offenders: string[] = [];
+    for (const [key, rel] of Object.entries(BADGE_PAGES)) {
+      const src = fs.readFileSync(path.join(SRC, rel), 'utf8');
+      const imported = /import \{[^}]*refreshBadges[^}]*\} from '\.\.\/badges'/.test(src);
+      // 出现次数 > 1 才算真正调用（1 次只是那行 import）
+      const called = (src.match(/refreshBadges/g) ?? []).length > 1;
+      if (!imported) offenders.push(`${rel}（${key}）未导入 refreshBadges`);
+      else if (!called) offenders.push(`${rel}（${key}）导入了 refreshBadges 但从未调用，角标不会消`);
+    }
+    if (offenders.length) {
+      throw new Error('待办角标不会刷新：\n  ' + offenders.join('\n  '));
+    }
+    expect(offenders).toEqual([]);
+  });
+});

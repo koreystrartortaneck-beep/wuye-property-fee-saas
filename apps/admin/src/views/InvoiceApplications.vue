@@ -179,6 +179,8 @@ async function submitProcess() {
   try {
     await api(`/admin/invoices/${current.value.id}/transition`, { method: 'POST', body });
     ElMessage.success('已处理');
+    // 开票申请数计入侧栏待办角标，处理完必须刷新，否则数字一直挂着不消
+    void refreshBadges();
     dialog.value = false;
     await load();
   } finally {
@@ -196,6 +198,7 @@ async function openReverse(row: Invoice) {
   }
   await api(`/admin/invoices/${row.id}/transition`, { method: 'POST', body: { status: 'REVERSED' } });
   ElMessage.success('已红冲');
+  void refreshBadges();
   await load();
 }
 </script>

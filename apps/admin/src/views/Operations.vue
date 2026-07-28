@@ -216,6 +216,12 @@ interface Metrics {
   moneyLossIndicator: Gate;
   overallPass: boolean;
   daily: { day: string; success: number; total: number; rate: number }[];
+  /** 待投递却积压的通知事件；正常应为 0（投递任务每 30 秒跑一次） */
+  outboxBacklog: number;
+  /** 重试耗尽、已永久放弃的通知事件；不为 0 说明有业主该收到的通知彻底丢了 */
+  outboxExhausted: number;
+  /** 近 30 日发送失败的通知条数 */
+  notifyFailedCount: number;
 }
 interface Readiness {
   healthy: boolean;
@@ -320,6 +326,31 @@ const metricCards = computed(() => {
       display: String(m.severeIncidentCount.value),
       pass: m.severeIncidentCount.pass,
       desc: '近期发生的严重级运营事件数',
+    },
+    /*
+     * 通知投递此前完全没有监控：事件重试耗尽后变成 FAILED 永久沉在库里，
+     * 业主该收到的账单/催缴无声无息地丢了，后台任何页面都看不出异常。
+     */
+    {
+      key: 'outbox',
+      name: '通知积压',
+      display: String(m.outboxBacklog),
+      pass: m.outboxBacklog === 0,
+      desc: '已到点却还没投出去的通知；投递任务每 30 秒一轮，正常应为 0',
+    },
+    {
+      key: 'outboxDead',
+      name: '通知永久丢失',
+      display: String(m.outboxExhausted),
+      pass: m.outboxExhausted === 0,
+      desc: '重试 5 次仍失败被放弃的通知；不为 0 意味着有业主没收到本该收到的账单',
+    },
+    {
+      key: 'notifyFailed',
+      name: '通知发送失败',
+      display: String(m.notifyFailedCount),
+      pass: m.notifyFailedCount === 0,
+      desc: `近 ${m.windowDays} 日失败条数；点「通知记录」可看每条的失败原因`,
     },
     {
       key: 'loss',

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ErrorCode } from '@pf/shared';
 import { Prisma } from '@prisma/client';
 import {
@@ -9,6 +9,7 @@ import {
 import { BizException } from '../common/biz.exception';
 import { hashCanonicalJson } from '../common/idempotency.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AlertService } from '../operations/alert.service';
 
 export interface EnqueueOutboxInput {
   tenantId: string;
@@ -54,7 +55,12 @@ const DEFAULT_LEASE_MS = 30_000;
 const DEFAULT_MAX_ATTEMPTS = 5;
 const DEFAULT_BASE_BACKOFF_MS = 30_000;
 const DEFAULT_MAX_BACKOFF_MS = 60 * 60 * 1000;
-const TERMINAL_AVAILABLE_AT = new Date('9999-12-31T23:59:59.999Z');
+/**
+ * 重试耗尽后的 availableAt 哨兵值：把事件永久排除在领取范围之外。
+ * 导出给监控复用——两处各写一遍这个魔法值，一旦有人改了另一处就会漂移，
+ * 「积压统计」会静默把已放弃的事件算成待投递（或反之）。
+ */
+export const TERMINAL_AVAILABLE_AT = new Date('9999-12-31T23:59:59.999Z');
 
 function positiveInteger(value: number, label: string): number {
   if (!Number.isInteger(value) || value <= 0) {
@@ -113,7 +119,15 @@ async function lockOwnedLease(
 
 @Injectable()
 export class OutboxService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    /*
+     * 告警是可选依赖：Outbox 是基础设施，不能因为运营模块缺失就起不来。
+     * 但一旦可用就必须用——重试耗尽的事件此前永久沉在库里，没有告警、后台也
+     * 看不到，业主该收到的账单/催缴通知就这么无声无息地丢了。
+     */
+    @Optional() private readonly alerts?: AlertService,
+  ) {}
 
   private enqueueClient(transaction?: OutboxTransaction): OutboxTransaction {
     return transaction ?? (this.prisma.t as unknown as OutboxTransaction);
@@ -297,6 +311,12 @@ export class OutboxService {
       'maxBackoffMs',
     );
 
+    /*
+     * 重试耗尽 = 这条通知永久丢了，必须告警。
+     * 告警在事务提交之后发：事务里做网络请求会拖长锁持有时间。
+     */
+    let exhaustedAttempts: number | null = null;
+
     await this.prisma.raw.$transaction(async (transaction) => {
       const client = transaction as unknown as OutboxWorkerTransaction;
       const lease = await lockOwnedLease(client, input);
@@ -329,6 +349,19 @@ export class OutboxService {
       if (result.count !== 1) {
         throw new BizException(ErrorCode.VALIDATION, 'Outbox lease 已被其他 worker 修改');
       }
+      if (terminal) exhaustedAttempts = lease.attempts;
     }, { maxWait: 5_000, timeout: 30_000 });
+
+    if (exhaustedAttempts !== null) {
+      await this.alerts?.safeEmit({
+        tenantId: input.tenantId,
+        alertType: 'OUTBOX_DELIVERY_EXHAUSTED',
+        severity: 'CRITICAL',
+        // 按事件 id 去重，同一条不会反复轰炸
+        dedupKey: `OUTBOX_DELIVERY_EXHAUSTED:${input.eventId}`,
+        title: '通知投递重试耗尽，该条通知已永久丢失',
+        summary: `事件 ${input.eventId} 连续失败 ${exhaustedAttempts} 次后放弃：${redactAndTruncateText(input.error)}`,
+      });
+    }
   }
 }
