@@ -14,14 +14,18 @@ import { NotifyType } from '@pf/shared';
  *   - 同时支持环境变量覆盖（WX_TMPL_FIELD_*），万一线上模板的字段名与预期不同，
  *     不必重新发布就能纠正——这类「名字对不上」的问题只有真实下发才会暴露。
  *
- * 约定使用的关键词（顺序即字段序号）：
- *   1 费用名称  → thing1
- *   2 金额      → amount2
- *   3 到期日期  → date3
- *   4 温馨提示  → thing4
- * 刻意避开「收款类型」：它是常量关键词，只能取审核通过的枚举值，而系统里的
- * 费用名称是自由文本，给不出合法值。也避开「账单日期」：账单只有账期（YYYY-MM），
- * 没有可填进 date 字段的具体日期。
+ * 实际字段名取自公众平台「模板详情」（模板 33214 缴费业务通知，
+ * 类目 物业管理）——注意字段序号并不等于关键词的排列顺序，微信是按
+ * 该公共模板的全量关键词编号的：
+ *   费用名称 → thing12
+ *   金额     → amount4
+ *   到期日期 → time3     （time 类，不是 date 类）
+ *   温馨提示 → thing11
+ * 起初按惯例猜的 thing1 / amount2 / date3 / thing4 四个全错，这类「名字对不上」
+ * 只有拿到模板详情或真实下发才知道。
+ *
+ * 刻意避开两个关键词：「收款类型」是常量关键词，只能取审核通过的枚举值，而系统
+ * 里的费用名称是自由文本；「账单日期」我们只有账期 YYYY-MM，没有具体日期。
  */
 
 /** 业务语义 → 微信模板字段名 */
@@ -30,17 +34,17 @@ export interface SubscribeFieldNames {
   feeName: string;
   /** 金额（amount 类） */
   amount: string;
-  /** 到期日期（date 类） */
+  /** 到期日期（time 类） */
   dueDate: string;
   /** 温馨提示（thing 类，≤20 字） */
   tip: string;
 }
 
 export const DEFAULT_SUBSCRIBE_FIELDS: SubscribeFieldNames = {
-  feeName: 'thing1',
-  amount: 'amount2',
-  dueDate: 'date3',
-  tip: 'thing4',
+  feeName: 'thing12',
+  amount: 'amount4',
+  dueDate: 'time3',
+  tip: 'thing11',
 };
 
 /** 读取字段名，允许用环境变量逐个覆盖 */
@@ -68,22 +72,44 @@ export interface BillFacts {
   title: string;
   /** 金额，元，字符串避免精度丢失 */
   amount: string;
-  /** 到期日期 YYYY-MM-DD */
-  dueDate: string;
+  /** 到期日期；传 Date 或可被解析的字符串，格式化在本模块内完成 */
+  dueDate: string | Date;
 }
 
 /**
- * 组装订阅消息 data（键为微信字段名）。
- *
- * 金额带上「元」：amount 类字段微信要求是金额文本，纯数字也能过，
- * 但带单位在业主端更可读，且与小程序内展示一致。
+ * amount 类字段格式：1 个币种符号 + 10 位以内数字（可带小数）。
+ * 微信自己的示例卡片渲染成「￥100」，这里照同一形态给，避免格式被判非法。
  */
+function formatAmount(yuan: string): string {
+  return `￥${yuan}`;
+}
+
+/**
+ * 到期日期落在 time 类字段上，微信示例渲染为「2021年12月31日」，故用同一形态。
+ *
+ * 必须按上海时区格式化：dueDate 存的是 UTC 时刻，直接 toISOString().slice(0,10)
+ * 会让 16:00Z 这类时间少算一天，业主看到的到期日与账单页不一致。
+ */
+function formatDueDate(value: string | Date): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return typeof value === 'string' ? value : '';
+  const parts = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(date);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return `${get('year')}年${get('month')}月${get('day')}日`;
+}
+
+/** 组装订阅消息 data（键为微信模板字段名） */
 export function buildSubscribeData(type: NotifyType, bill: BillFacts): Record<string, string> {
   const f = subscribeFieldNames();
   return {
     [f.feeName]: bill.title,
-    [f.amount]: `${bill.amount}元`,
-    [f.dueDate]: bill.dueDate,
+    [f.amount]: formatAmount(bill.amount),
+    [f.dueDate]: formatDueDate(bill.dueDate),
     [f.tip]: TIP_BY_TYPE[type] ?? TIP_BY_TYPE.BILL_CREATED,
   };
 }

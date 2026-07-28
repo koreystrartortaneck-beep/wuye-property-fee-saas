@@ -78,7 +78,8 @@ export class NotifyService implements BillNotifier {
           data: buildSubscribeData(type, {
             title: bill.title,
             amount: bill.amount.toString(),
-            dueDate: bill.dueDate.toISOString().slice(0, 10),
+            // 传 Date：到期日期要按上海时区格式化，切 ISO 字符串会少算一天
+            dueDate: bill.dueDate,
           }),
         })
         .catch((e: Error) => ({ ok: false, error: e.message }));

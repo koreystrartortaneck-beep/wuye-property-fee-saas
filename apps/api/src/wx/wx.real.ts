@@ -80,10 +80,19 @@ export class RealWxService implements WxApi {
     }
     try {
       const token = await this.wxCloud.getAccessToken();
-      // WeChat 要求 data 每字段包成 { value }；thing 类字段 ≤20 字，防御性截断
+      /*
+       * 微信要求 data 每字段包成 { value }。
+       *
+       * 截断必须按字段类型区分：thing / phrase 类限 20 字，超了会被判非法，
+       * 所以做防御性截断；但 amount / time / date / character_string 类**绝不能**截断——
+       * 原实现无差别 slice(0, 20)，一旦金额或日期文本偏长就会被静默改写，
+       * 业主收到的金额与账单不一致，而日志只会记一句成功。
+       */
       const data: Record<string, { value: string }> = {};
       for (const [k, v] of Object.entries(msg.data)) {
-        data[k] = { value: String(v ?? '').slice(0, 20) };
+        const text = String(v ?? '');
+        const truncatable = /^(thing|phrase)\d*$/.test(k);
+        data[k] = { value: truncatable ? text.slice(0, 20) : text };
       }
       const res = await fetch(`https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token=${token}`, {
         method: 'POST',
