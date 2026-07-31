@@ -4,11 +4,15 @@
 # 上传 ≠ 提审：本脚本只把代码推成一个「开发版本」，之后要在微信公众平台
 # 「版本管理 → 开发版本 → 提交审核」。
 #
-# 前置两项，都必须在开发者工具的 GUI 里做一次，CLI 无法代替：
-#   1) 设置 → 安全设置 → 开启「服务端口」
-#   2) 扫码登录
+# 前置两项：
+#   1) 服务端口。**在你自己的终端里跑本脚本时，工具会提示
+#      「enter y to confirm enabling CLI capability」，直接输 y 即可开启** ——
+#      不必去 GUI 翻设置。（我在非交互环境里跑不通这一步，因为它要求真实 TTY。）
+#      也可手动开：工具 → 设置 → 安全设置 → 服务端口。
+#   2) 扫码登录。这一步只能用手机扫，无法自动化。
 #
 # 用法：bash upload-miniprogram.sh [版本号]
+#   注意要在**交互式终端**里跑，否则上面第 1 步的 y 确认无法输入。
 set -uo pipefail
 
 CLI="/Applications/wechatwebdevtools.app/Contents/MacOS/cli"
@@ -21,15 +25,28 @@ DESC="时区修复（全站早8小时/访客日期早一天）、加载失败不
 
 # islogin 在服务端口关闭时是**交互式**的（会提示 enter y to confirm），
 # 直接调用会挂住等输入 —— 所以喂一个 EOF 并限时。
-probe() { printf '' | timeout 30 "$CLI" islogin 2>&1 || true; }
-OUT="$(probe)"
+# 交互式跑时不要吞掉 stdin —— 服务端口未开时工具会提示输 y 确认，那正是开启它的方式。
+# 非交互（无 TTY）时喂 EOF 并限时，避免挂死。
+if [ -t 0 ]; then
+  OUT="$(timeout 180 "$CLI" islogin 2>&1 || true)"
+else
+  OUT="$(printf '' | timeout 30 "$CLI" islogin 2>&1 || true)"
+fi
 
 if grep -q "服务端口\|service port disabled" <<<"$OUT"; then
-  cat <<'TIP'
-✗ 开发者工具的「服务端口」未开启，CLI 无法调用工具。
-  打开微信开发者工具 → 右上角「设置」→「安全设置」→ 把「服务端口」打开，
+  if [ -t 0 ]; then
+    cat <<'TIP'
+✗ 服务端口未开启。刚才工具应该提示过 "enter y to confirm enabling CLI capability"，
+  输 y 确认即可开启；若没看到提示，去 工具 → 设置 → 安全设置 → 打开「服务端口」。
   然后重跑本脚本。
 TIP
+  else
+    cat <<'TIP'
+✗ 服务端口未开启，且当前不是交互式终端（无法输入 y 确认）。
+  请在你自己的终端里重跑本脚本，看到 "enter y to confirm" 时输 y；
+  或手动开：工具 → 设置 → 安全设置 → 服务端口。
+TIP
+  fi
   exit 1
 fi
 
