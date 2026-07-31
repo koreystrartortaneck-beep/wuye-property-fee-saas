@@ -104,9 +104,17 @@ describe('A1 公摊重跑：已出账的账期必须拒绝', () => {
       },
       bill: {
         findMany: jest.fn().mockResolvedValue(existingBills),
-        create: jest.fn((args: unknown) => {
-          created.push(args);
-          return Promise.resolve({ id: `b-${created.length}` });
+        /*
+         * 出账改为一次 createMany（原先逐户 create，3000 户 = 3000 次往返；
+         * 每日 cron 对 4 条规则串行跑会占住事件循环 30 余秒）。
+         * 桩把 data 数组摊平进 created，这样原有断言的语义不变。
+         */
+        createMany: jest.fn((args: { data: unknown[] }) => {
+          created.push(...args.data.map((d) => ({ data: d })));
+          return Promise.resolve({ count: args.data.length });
+        }),
+        create: jest.fn(() => {
+          throw new Error('出账不应再逐条 create');
         }),
         aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null }, _count: { _all: 0 } }),
       },
@@ -144,6 +152,8 @@ describe('A1 公摊重跑：已出账的账期必须拒绝', () => {
     const amounts = created.map((c) => (c as { data: { amount: string } }).data.amount);
     const totalCents = amounts.reduce((sum, a) => sum + Math.round(Number(a) * 100), 0);
     expect(totalCents).toBe(30000); // ¥300.00，不多不少
+    // 必须是一次批量写：逐条 create 的桩会直接抛错
+    expect(res.generated).toBe(2);
   });
 
   it('已作废的账单不算存活（作废后应当可以重出）', async () => {
@@ -152,6 +162,22 @@ describe('A1 公摊重跑：已出账的账期必须拒绝', () => {
     const res = await service.generate('r-share', '2026-07');
     expect(res.status).not.toBe('FAILED');
     expect(created).toHaveLength(2);
+  });
+
+  it('重跑补漏时 generated 取实际入库数，不报虚高户数', async () => {
+    /*
+     * skipDuplicates 会跳过已存在的行，所以 createMany 返回的 count 可能小于提交数。
+     * generated 必须取 count 而不是提交数组的长度 —— 否则重跑补漏时出账页会显示
+     * 「本次生成 3000 户」，而实际只补了几户，物业以为重复出账了。
+     *
+     * 这一条是注入验证发现的缺口：把 generated 改成 pending.length 时，
+     * 原有 32 条用例全绿。
+     */
+    const { service, t } = makeService([]);
+    // 模拟提交 2 条、只有 1 条真的入库（另一条撞唯一键被跳过）
+    t.bill.createMany = jest.fn(() => Promise.resolve({ count: 1 })) as never;
+    const res = await service.generate('r-share', '2026-07');
+    expect(res.generated).toBe(1);
   });
 
   it('查询条件限定本规则本账期且排除已作废', async () => {

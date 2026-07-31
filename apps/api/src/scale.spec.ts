@@ -55,9 +55,16 @@ function methodBody(src: string, marker: string, len = 6000): string {
 }
 
 describe('批量写入：不得逐条 create', () => {
+  /*
+   * 出账（bill-run.generate）是补进来的：上一批只改了发布与导入两处，而它还在逐户
+   * create —— 3000 户 = 3000 次往返，每日 cron 对 4 条规则串行跑会占住事件循环
+   * 30 余秒。守卫当时只列了那两处，所以这个漏改没有被发现。
+   * 这条教训值得记：白名单式的守卫只保护它列出的东西，漏列等于没有守卫。
+   */
   const CASES = [
     { file: 'billing/bill-workflow.service.ts', marker: 'async publishBatch', what: '发布批次的 Outbox 事件' },
     { file: 'billing/bill-import.service.ts', marker: 'async confirm', what: '导入的账单行' },
+    { file: 'billing/bill-run.service.ts', marker: 'async generate', what: '规则出账的账单' },
   ];
 
   it('都用 createMany 并带 skipDuplicates（承接原有的幂等语义）', () => {
@@ -75,7 +82,12 @@ describe('批量写入：不得逐条 create', () => {
 
   it('事务显式设 timeout（默认 5s 在几百户/上千行时就会回滚）', () => {
     const offenders: string[] = [];
-    for (const c of CASES) {
+    /*
+     * 出账不在事务里（所以不会 P2028 回滚，只是慢），这一条只适用于事务内的两处。
+     * 刻意显式排除而不是让它「碰巧通过」——后者在出账将来被包进事务时会漏掉。
+     */
+    const TX_CASES = CASES.filter((c) => c.marker !== 'async generate');
+    for (const c of TX_CASES) {
       const body = methodBody(read(c.file), c.marker);
       const m = body.match(/timeout:\s*(\d+)_?(\d*)/);
       if (!m) {

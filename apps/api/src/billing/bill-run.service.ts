@@ -127,31 +127,52 @@ export class BillRunService {
     let generatedCents = 0;
     const skippedDetail: SkipDetail[] = [];
 
-    const createBill = async (houseId: string, cents: number, snapshot: Record<string, unknown>) => {
-      try {
-        await this.prisma.t.bill.create({
-          data: {
-            communityId: rule.communityId,
-            houseId,
-            ruleId: rule.id,
-            billRunId: run.id,
-            batchId: batch.id,
-            source: 'RULE',
-            period,
-            title: `${rule.name} ${period}`,
-            snapshot: snapshot as never,
-            amount: centsToStr(cents),
-            status: 'DRAFT',
-            dueDate,
-          } as never,
-        });
-        generated++;
-        generatedCents += cents;
-      } catch (e) {
-        // P2002 = 撞唯一键，说明该户该期账单已存在 → 幂等跳过
-        if ((e as { code?: string }).code === 'P2002') return;
-        throw e;
-      }
+    /*
+     * 先攒起来，最后一次 createMany 落库。
+     *
+     * 原实现逐户 create，每户 1 次数据库往返：3000 户 = 3000 次 ≈ 9 秒。不在事务里
+     * 所以不会 P2028 回滚，但每日 02:00 的 cron 对 4 条规则串行跑，单小区就占住事件
+     * 循环 30 余秒；手动触发则一个 HTTP 请求挂 9 秒、很可能撞网关超时，而后台仍在
+     * 继续写、前端已认定失败。
+     *
+     * 这一处是上一批规模改造漏掉的：当时只改了「发布批次」与「账单导入」两处，
+     * 而出账本身还在逐条写 —— scale.spec 的守卫也只覆盖了那两处。
+     */
+    const pending: Array<Record<string, unknown>> = [];
+    const stageBill = (houseId: string, cents: number, snapshot: Record<string, unknown>) => {
+      pending.push({
+        communityId: rule.communityId,
+        houseId,
+        ruleId: rule.id,
+        billRunId: run.id,
+        batchId: batch.id,
+        source: 'RULE',
+        period,
+        title: `${rule.name} ${period}`,
+        snapshot: snapshot as never,
+        amount: centsToStr(cents),
+        status: 'DRAFT',
+        dueDate,
+      });
+      generatedCents += cents;
+    };
+
+    /**
+     * 落库。skipDuplicates 承接原来逐条 catch P2002 的幂等语义
+     * （撞 @@unique([ruleId, houseId, period]) 即该户该期已有账单 → 跳过）。
+     *
+     * generated 取 createMany 返回的 count 而不是 pending.length ——
+     * 被跳过的那些不算「本次生成」，否则重跑补漏时会报出虚高的户数。
+     * generatedCents 是本次入库金额的上界，仅用于日志；批次合计另有 aggregate 重算
+     * （见下方注释：重跑时 increment 为 0 会把合计覆盖成 0.00）。
+     */
+    const flushBills = async () => {
+      if (pending.length === 0) return;
+      const res = await this.prisma.t.bill.createMany({
+        data: pending as never,
+        skipDuplicates: true,
+      });
+      generated = res.count;
     };
 
     const failBatchAndRun = async (skippedCount: number, reason: string) => {
@@ -222,7 +243,7 @@ export class BillRunService {
         skippedDetail.push({ houseId, code: house?.code ?? '', reason: 'AREA_MISSING' });
       }
       for (const [houseId, cents] of alloc) {
-        await createBill(houseId, cents, {
+        stageBill(houseId, cents, {
           shareBy,
           poolAmount: pool.totalAmount.toString(),
           houseCount: alloc.size,
@@ -273,9 +294,11 @@ export class BillRunService {
           skippedDetail.push({ houseId: house.id, code: house.code, reason: result.skipReason });
           continue;
         }
-        await createBill(house.id, result.cents, result.snapshot);
+        stageBill(house.id, result.cents, result.snapshot);
       }
     }
+
+    await flushBills();
 
     await this.prisma.t.billRun.update({
       where: { id: run.id },
