@@ -68,11 +68,19 @@
   color: #251c38;
 }
 
+/*
+ * 描述固定占两行高度。
+ *
+ * 只写 line-clamp:2 而不定高，一行的描述与两行的描述会让卡片高度不等 ——
+ * 服务菜单是拿来横向比价的，几张卡高低不齐就不像一份菜单。
+ * 宁可短描述下方留一点空白，也要让这一列对齐。
+ */
 .svc-desc {
   margin-top: 8rpx;
   font-size: 23rpx;
   color: #7c7288;
   line-height: 1.4;
+  min-height: 64rpx; /* 23rpx × 1.4 × 2 行 */
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

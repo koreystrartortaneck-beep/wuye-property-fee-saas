@@ -95,10 +95,17 @@
   overflow: hidden;
 }
 
-/* 日期靠右且不换行（字号与颜色继承 .fw-foot） */
+/*
+ * 日期恒定靠右且不换行。
+ *
+ * 原来靠 .fw-foot 的 space-between 实现「靠右」，但那只在同排还有「共 N 张」时成立：
+ * 张数只有 count > 1 才渲染，于是同一个列表里日期时而在右下、时而跳回左下 ——
+ * 扫一眼过去日期这一列是歪的。margin-left:auto 让它与同排有没有别的元素无关。
+ */
 .fw-date {
   flex-shrink: 0;
   white-space: nowrap;
+  margin-left: auto;
 }
 
 .fw-foot {
@@ -157,6 +164,8 @@
   margin-top: 12rpx;
   font-size: 21rpx;
   color: #a79eb5;
+  /* 与公示卡的日期同列：整个动态列表的日期都在右下角 */
+  text-align: right;
 }
 
 .feed-empty {

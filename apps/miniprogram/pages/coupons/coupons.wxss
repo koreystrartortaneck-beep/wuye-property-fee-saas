@@ -121,17 +121,37 @@
   font-weight: 600;
 }
 
+/*
+ * 有效期 + 剩余张数这一行不允许折行。
+ *
+ * 折行会让这张卡比同列表里其它卡高出一行 —— 三张卡高度不齐、右侧「领取」按钮
+ * 跟着上下错位，列表看着就散了。而这行是补充信息，宁可截断也不该改变卡片高度。
+ */
 .ticket-valid {
   margin-top: 8rpx;
   font-size: 20rpx;
   color: #a79eb5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 剩余张数：跟在操作下方，居中对齐按钮 */
+.ticket-stock {
+  margin-top: 8rpx;
+  font-size: 20rpx;
+  color: #a79eb5;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .ticket-right {
   flex-shrink: 0;
   padding: 0 24rpx;
   display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
 }
 
 .ticket-btn {

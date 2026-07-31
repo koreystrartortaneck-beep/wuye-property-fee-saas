@@ -6,11 +6,26 @@ const STATUS_LABEL = labels.USER_COUPON_STATUS;
 const TYPE_LABEL = labels.COUPON_TYPE;
 
 
+/**
+ * 券面主视觉：大字 + 副标题。
+ *
+ * money 决定要不要显示「¥」—— 模板里原来把 ¥ 写死在大字前面，
+ * 而服务券/礼品券没有面额时大字是「券」，渲染出来就是「**¥券**」，
+ * 一个没有意义的组合。金额与非金额必须在这里就分清楚，
+ * 不能让模板去猜。
+ */
 function fmtValue(c) {
   if (c.type === 'DISCOUNT') {
-    return { big: Number(c.faceValue || 0).toFixed(2), sub: `满${Number(c.threshold || 0).toFixed(2)}可用` };
+    return {
+      big: Number(c.faceValue || 0).toFixed(2),
+      sub: `满${Number(c.threshold || 0).toFixed(2)}可用`,
+      money: true,
+    };
   }
-  return { big: c.faceValue ? Number(c.faceValue).toFixed(2) : '券', sub: TYPE_LABEL[c.type] };
+  if (c.faceValue) {
+    return { big: Number(c.faceValue).toFixed(2), sub: TYPE_LABEL[c.type], money: true };
+  }
+  return { big: '券', sub: TYPE_LABEL[c.type], money: false };
 }
 
 Page({
@@ -69,6 +84,7 @@ Page({
           typeLabel: TYPE_LABEL[c.type],
           big: v.big,
           sub: v.sub,
+          money: v.money,
           desc: c.description || '',
           validTo: fmtDate(c.validTo),
           remaining: c.remaining,
@@ -90,6 +106,7 @@ Page({
           name: uc.coupon.name,
           big: v.big,
           sub: v.sub,
+          money: v.money,
           desc: uc.coupon.description || '',
           validTo: fmtDate(uc.coupon.validTo),
           status: uc.status,

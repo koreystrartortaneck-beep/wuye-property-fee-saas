@@ -28,18 +28,23 @@
       <block wx:for="{{available}}" wx:key="id">
         <view class="ticket {{item.soldOut ? 'ticket-dim' : ''}}">
           <view class="ticket-left">
-            <view class="ticket-value"><text class="tv-cur">¥</text>{{item.big}}</view>
+            <!-- ¥ 只在真有金额时出现：服务券/礼品券没有面额，硬加会渲染成「¥券」 -->
+            <view class="ticket-value"><text wx:if="{{item.money}}" class="tv-cur">¥</text>{{item.big}}</view>
             <view class="ticket-sub">{{item.sub}}</view>
           </view>
           <view class="ticket-mid">
             <view class="ticket-name">{{item.name}}</view>
             <view class="ticket-desc" wx:if="{{item.desc}}">{{item.desc}}</view>
-            <view class="ticket-valid">有效期至 {{item.validTo}} · 剩 {{item.remaining}} 张</view>
+            <!-- 有效期独占一行，不与张数挤在一起：挤在一起放不下，
+                 而整行 ellipsis 会把「剩 120 张」截成「剩 12…」，读起来是 12 张 -->
+            <view class="ticket-valid">有效期至 {{item.validTo}}</view>
           </view>
+          <!-- 剩余张数放在操作旁边：紧缺信息紧邻「领取」，也不用和有效期抢宽度 -->
           <view class="ticket-right">
             <button class="gold-button ticket-btn" wx:if="{{!item.soldOut && item.claimedByMe === 0}}" data-id="{{item.id}}" loading="{{claiming === item.id}}" bindtap="claim">领取</button>
             <view wx:elif="{{item.claimedByMe > 0}}" class="ticket-got">已领取</view>
             <view wx:else class="ticket-out">已领完</view>
+            <view wx:if="{{!item.soldOut}}" class="ticket-stock">剩 {{item.remaining}} 张</view>
           </view>
         </view>
       </block>
@@ -56,7 +61,8 @@
       <block wx:for="{{mine}}" wx:key="id">
         <view class="ticket {{item.status !== 'UNUSED' ? 'ticket-dim' : ''}}">
           <view class="ticket-left">
-            <view class="ticket-value"><text class="tv-cur">¥</text>{{item.big}}</view>
+            <!-- ¥ 只在真有金额时出现：服务券/礼品券没有面额，硬加会渲染成「¥券」 -->
+            <view class="ticket-value"><text wx:if="{{item.money}}" class="tv-cur">¥</text>{{item.big}}</view>
             <view class="ticket-sub">{{item.sub}}</view>
           </view>
           <view class="ticket-mid">
