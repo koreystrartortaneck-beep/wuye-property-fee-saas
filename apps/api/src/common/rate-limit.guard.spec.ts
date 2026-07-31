@@ -62,16 +62,34 @@ describe('RateLimitGuard', () => {
   });
 
   it('窗口过期后重新放行', () => {
+    /*
+     * 用 mock 时钟而不是真实等待。
+     *
+     * 原实现是「打两次 → setTimeout(60ms) → 再打一次」，窗口只有 30ms ——
+     * 两次同步调用之间只要被调度出去超过 30ms，第二次就开了个新窗口、不再抛异常，
+     * 断言随机失败。63 个套件并行时这完全可能，而且它**只是偶尔**红一次：
+     * 不稳定的测试比失败的测试更糟，因为下一次绿灯会让人以为问题不存在。
+     *
+     * 我确实撞到过一次（611 里 1 条失败，随后 6 次全绿复现不了），
+     * 顺着「依赖真实墙钟的断言」找过来的。
+     */
     const guard = makeGuard({ limit: 1, windowMs: 30 });
-    expect(guard.canActivate(ctx('1.1.1.1'))).toBe(true);
-    expect(() => guard.canActivate(ctx('1.1.1.1'))).toThrow();
-    // 用真实等待而不是改系统时间：守卫内部用 Date.now()，窗口只有 30ms
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        expect(guard.canActivate(ctx('1.1.1.1'))).toBe(true);
-        resolve();
-      }, 60);
-    });
+    const t0 = 1_700_000_000_000;
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(t0);
+    try {
+      expect(guard.canActivate(ctx('1.1.1.1'))).toBe(true);
+      expect(() => guard.canActivate(ctx('1.1.1.1'))).toThrow();
+
+      // 边界：正好到 resetAt 时仍算在窗口内（守卫的判定是 resetAt < now）
+      clock.mockReturnValue(t0 + 30);
+      expect(() => guard.canActivate(ctx('1.1.1.1'))).toThrow();
+
+      // 过了边界才放行
+      clock.mockReturnValue(t0 + 31);
+      expect(guard.canActivate(ctx('1.1.1.1'))).toBe(true);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('拿不到 IP 时放行，而不是一律拒绝', () => {
