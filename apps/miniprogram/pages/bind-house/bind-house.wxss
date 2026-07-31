@@ -11,7 +11,7 @@
 .bind-card-desc {
   margin-top: 8rpx;
   font-size: 24rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
 }
 
 .phone-row {
@@ -62,7 +62,7 @@
   flex-shrink: 0;
   font-size: 48rpx;
   line-height: 1;
-  color: #c9a66b;
+  color: var(--gold, #c9a66b);
 }
 
 .option-main {
@@ -73,13 +73,13 @@
 .option-sub {
   margin-top: 6rpx;
   font-size: 22rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
 }
 
 .picked-line {
   margin-top: 24rpx;
   font-size: 26rpx;
-  color: #5a4680;
+  color: var(--plum-2, #5a4680);
   font-weight: 700;
 }
 
@@ -97,7 +97,7 @@
 }
 
 .house-option-active {
-  background: linear-gradient(145deg, #fff1c8, #c9a66b);
+  background: linear-gradient(145deg, var(--note, #fff1c8), var(--gold, #c9a66b));
   font-weight: 800;
 }
 
@@ -111,7 +111,7 @@
 .form-label {
   width: 170rpx;
   font-size: 26rpx;
-  color: #55496b;
+  color: var(--text-2, #55496b);
 }
 
 .form-input {

@@ -10,7 +10,7 @@
 .v-guide-text {
   margin-top: 12rpx;
   font-size: 25rpx;
-  color: #7c7288;
+  color: var(--text-3, #7c7288);
   line-height: 1.55;
 }
 
@@ -30,7 +30,7 @@
 .v-label {
   width: 150rpx;
   font-size: 26rpx;
-  color: #55496b;
+  color: var(--text-2, #55496b);
   flex-shrink: 0;
 }
 
@@ -80,7 +80,7 @@
   font-size: 44rpx;
   font-weight: 900;
   letter-spacing: 4rpx;
-  color: #9b743a;
+  color: var(--gold-ink, #9b743a);
 }
 
 .pass-info {
@@ -96,7 +96,7 @@
 .pass-meta {
   margin-top: 8rpx;
   font-size: 22rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
 }
 
 .pass-side {
@@ -109,13 +109,13 @@
   font-weight: 700;
 }
 
-.ps-ACTIVE { color: #3f7d5d; }
-.ps-USED { color: #9a92a3; }
-.ps-EXPIRED { color: #b8862f; }
-.ps-CANCELED { color: #c45656; }
+.ps-ACTIVE { color: var(--success, #3f7d5d); }
+.ps-USED { color: var(--text-6, #9a92a3); }
+.ps-EXPIRED { color: var(--gold-deep, #b8862f); }
+.ps-CANCELED { color: var(--danger, #c45656); }
 
 .pass-cancel {
   margin-top: 10rpx;
   font-size: 22rpx;
-  color: #c45656;
+  color: var(--danger, #c45656);
 }

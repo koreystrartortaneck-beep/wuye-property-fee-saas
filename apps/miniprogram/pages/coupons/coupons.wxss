@@ -17,12 +17,12 @@
   justify-content: center;
   font-size: 26rpx;
   font-weight: 700;
-  color: #7c7288;
+  color: var(--text-3, #7c7288);
 }
 
 .tab-on {
-  color: #251c38;
-  background: linear-gradient(145deg, #fff1c8, #ead0a0);
+  color: var(--text, #251c38);
+  background: linear-gradient(145deg, var(--note, #fff1c8), var(--gold-pale, #ead0a0));
 }
 
 .cpn-list {
@@ -54,8 +54,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  background: radial-gradient(circle at 80% 0%, rgba(232, 207, 160, 0.4), transparent 40%), linear-gradient(150deg, #2b2145, #3b2b57);
+  color: var(--white, #fff);
+  background: radial-gradient(circle at 80% 0%, rgba(232, 207, 160, 0.4), transparent 40%), linear-gradient(150deg, #2b2145, var(--plum, #3b2b57));
   position: relative;
 }
 
@@ -101,13 +101,13 @@
 .ticket-name {
   font-size: 28rpx;
   font-weight: 800;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 .ticket-desc {
   margin-top: 8rpx;
   font-size: 22rpx;
-  color: #7c7288;
+  color: var(--text-3, #7c7288);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
@@ -117,7 +117,7 @@
 .ticket-code {
   margin-top: 8rpx;
   font-size: 22rpx;
-  color: #9b743a;
+  color: var(--gold-ink, #9b743a);
   font-weight: 600;
 }
 
@@ -130,7 +130,7 @@
 .ticket-valid {
   margin-top: 8rpx;
   font-size: 20rpx;
-  color: #a79eb5;
+  color: var(--text-5, #a79eb5);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -140,7 +140,7 @@
 .ticket-stock {
   margin-top: 8rpx;
   font-size: 20rpx;
-  color: #a79eb5;
+  color: var(--text-5, #a79eb5);
   text-align: center;
   white-space: nowrap;
 }
@@ -162,13 +162,13 @@
 
 .ticket-got {
   font-size: 23rpx;
-  color: #3f7d5d;
+  color: var(--success, #3f7d5d);
   font-weight: 700;
 }
 
 .ticket-out {
   font-size: 23rpx;
-  color: #a79eb5;
+  color: var(--text-5, #a79eb5);
 }
 
 .ticket-status {
@@ -176,9 +176,9 @@
   font-weight: 800;
 }
 
-.ts-UNUSED { color: #9b743a; }
-.ts-USED { color: #9a92a3; }
-.ts-EXPIRED { color: #b8862f; }
+.ts-UNUSED { color: var(--gold-ink, #9b743a); }
+.ts-USED { color: var(--text-6, #9a92a3); }
+.ts-EXPIRED { color: var(--gold-deep, #b8862f); }
 
 .cpn-empty {
   padding: 60rpx 40rpx;
@@ -188,13 +188,13 @@
 .ce-title {
   font-size: 30rpx;
   font-weight: 800;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 .ce-desc {
   margin-top: 14rpx;
   font-size: 24rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
   line-height: 1.5;
 }
 
@@ -207,12 +207,12 @@
 .cs-title {
   font-size: 30rpx;
   font-weight: 700;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 .cs-desc {
   margin-top: 10rpx;
   font-size: 24rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
   line-height: 1.6;
 }
 .cs-btn {

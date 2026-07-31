@@ -9,14 +9,14 @@
 .bh-name {
   font-size: 34rpx;
   font-weight: 900;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 .bh-price {
   margin-top: 14rpx;
   font-size: 48rpx;
   font-weight: 900;
-  color: #9b743a;
+  color: var(--gold-ink, #9b743a);
   font-family: DIN Alternate, sans-serif;
 }
 
@@ -26,14 +26,14 @@
 
 .bh-unit {
   font-size: 24rpx;
-  color: #a79eb5;
+  color: var(--text-5, #a79eb5);
   font-weight: 500;
 }
 
 .bh-desc {
   margin-top: 14rpx;
   font-size: 25rpx;
-  color: #7c7288;
+  color: var(--text-3, #7c7288);
   line-height: 1.5;
 }
 
@@ -63,7 +63,7 @@
   width: 140rpx;
   flex-shrink: 0;
   font-size: 27rpx;
-  color: #55496b;
+  color: var(--text-2, #55496b);
   font-weight: 600;
 }
 
@@ -73,7 +73,7 @@
 }
 
 .picker-v {
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 .bf-textarea {
@@ -91,5 +91,5 @@
   margin-top: 20rpx;
   text-align: center;
   font-size: 22rpx;
-  color: #a79eb5;
+  color: var(--text-5, #a79eb5);
 }

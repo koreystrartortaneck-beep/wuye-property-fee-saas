@@ -12,7 +12,7 @@
   border-radius: 999rpx;
   font-size: 22rpx;
   font-weight: 800;
-  color: #9b743a;
+  color: var(--gold-ink, #9b743a);
   background: rgba(201, 166, 107, 0.16);
 }
 
@@ -20,13 +20,13 @@
   margin-top: 18rpx;
   font-size: 36rpx;
   font-weight: 900;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 .wd-meta {
   margin-top: 12rpx;
   font-size: 22rpx;
-  color: #a79eb5;
+  color: var(--text-5, #a79eb5);
 }
 
 .wd-desc {

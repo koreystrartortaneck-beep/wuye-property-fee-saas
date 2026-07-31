@@ -14,24 +14,24 @@
   font-size: 24rpx;
   font-weight: 700;
   background: rgba(230, 162, 60, 0.14);
-  color: #b8862f;
+  color: var(--gold-deep, #b8862f);
 }
 
 .detail-status.ok {
   background: rgba(63, 125, 93, 0.12);
-  color: #3f7d5d;
+  color: var(--success, #3f7d5d);
 }
 
 .detail-status.bad {
   background: rgba(196, 86, 86, 0.12);
-  color: #c45656;
+  color: var(--danger, #c45656);
 }
 
 .detail-amount {
   margin-top: 26rpx;
   font-size: 72rpx;
   font-weight: 800;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 .detail-title {
@@ -43,7 +43,7 @@
 .detail-house {
   margin-top: 8rpx;
   font-size: 24rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
 }
 
 .calc-card {
@@ -70,18 +70,18 @@
 }
 
 .calc-label {
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
 }
 
 .calc-value {
-  color: #251c38;
+  color: var(--text, #251c38);
   font-weight: 600;
   text-align: right;
   max-width: 420rpx;
 }
 
 .text-bad {
-  color: #c45656;
+  color: var(--danger, #c45656);
 }
 
 .pay-now {

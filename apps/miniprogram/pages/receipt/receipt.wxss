@@ -17,14 +17,14 @@
   font-size: 38rpx;
   font-weight: 900;
   letter-spacing: 10rpx;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 .rc-sub {
   margin-top: 6rpx;
   font-size: 20rpx;
   letter-spacing: 6rpx;
-  color: #a79eb5;
+  color: var(--text-5, #a79eb5);
 }
 
 .rc-amount-block {
@@ -34,14 +34,14 @@
 
 .rc-amount-label {
   font-size: 22rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
 }
 
 .rc-amount {
   margin-top: 10rpx;
   font-size: 64rpx;
   font-weight: 900;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 .rc-divider {
@@ -58,11 +58,11 @@
 }
 
 .rc-item {
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
 }
 
 .rc-val {
-  color: #251c38;
+  color: var(--text, #251c38);
   font-weight: 600;
   max-width: 420rpx;
   text-align: right;
@@ -108,7 +108,7 @@
   margin-top: 20rpx;
   text-align: center;
   font-size: 22rpx;
-  color: #a79eb5;
+  color: var(--text-5, #a79eb5);
 }
 
 .rc-save {
@@ -140,7 +140,7 @@
 .rc-state-text {
   margin-top: 24rpx;
   font-size: 26rpx;
-  color: #a79eb5;
+  color: var(--text-5, #a79eb5);
 }
 
 .rc-retry {
@@ -149,7 +149,7 @@
   height: 68rpx;
   line-height: 68rpx;
   font-size: 26rpx;
-  color: #251c38;
+  color: var(--text, #251c38);
   background: rgba(176, 141, 87, 0.14);
   border-radius: 40rpx;
 }

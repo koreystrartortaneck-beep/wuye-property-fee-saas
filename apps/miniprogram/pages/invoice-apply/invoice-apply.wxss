@@ -16,7 +16,7 @@
   margin-top: 12rpx;
   font-size: 64rpx;
   font-weight: 700;
-  color: #2e1a47;
+  color: var(--ink-deep, #2e1a47);
 }
 
 .head-order {
@@ -41,13 +41,13 @@
 
 .field-label {
   font-size: 26rpx;
-  color: #55496b;
+  color: var(--text-2, #55496b);
   margin-bottom: 14rpx;
 }
 
 .field-input {
   font-size: 30rpx;
-  color: #2e1a47;
+  color: var(--ink-deep, #2e1a47);
 }
 
 .seg {
@@ -66,8 +66,8 @@
 }
 
 .seg-item.active {
-  background: #9b743a;
-  color: #fff;
+  background: var(--gold-ink, #9b743a);
+  color: var(--white, #fff);
 }
 
 .tip {

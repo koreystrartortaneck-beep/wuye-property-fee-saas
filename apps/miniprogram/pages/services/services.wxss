@@ -17,12 +17,12 @@
   justify-content: center;
   font-size: 26rpx;
   font-weight: 700;
-  color: #7c7288;
+  color: var(--text-3, #7c7288);
 }
 
 .tab-on {
-  color: #251c38;
-  background: linear-gradient(145deg, #fff1c8, #ead0a0);
+  color: var(--text, #251c38);
+  background: linear-gradient(145deg, var(--note, #fff1c8), var(--gold-pale, #ead0a0));
 }
 
 .svc-list {
@@ -51,7 +51,7 @@
   justify-content: center;
   font-size: 56rpx;
   font-weight: 900;
-  color: #c9a66b;
+  color: var(--gold, #c9a66b);
   background: linear-gradient(145deg, #fbf0db, #fffaf2);
 }
 
@@ -65,7 +65,7 @@
 .svc-name {
   font-size: 30rpx;
   font-weight: 800;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 /*
@@ -78,7 +78,7 @@
 .svc-desc {
   margin-top: 8rpx;
   font-size: 23rpx;
-  color: #7c7288;
+  color: var(--text-3, #7c7288);
   line-height: 1.4;
   min-height: 64rpx; /* 23rpx × 1.4 × 2 行 */
   display: -webkit-box;
@@ -98,7 +98,7 @@
 .svc-price {
   font-size: 40rpx;
   font-weight: 900;
-  color: #9b743a;
+  color: var(--gold-ink, #9b743a);
   font-family: DIN Alternate, sans-serif;
 }
 
@@ -108,7 +108,7 @@
 
 .svc-unit {
   font-size: 22rpx;
-  color: #a79eb5;
+  color: var(--text-5, #a79eb5);
   font-weight: 500;
 }
 
@@ -132,7 +132,7 @@
 .order-name {
   font-size: 29rpx;
   font-weight: 800;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 .order-status {
@@ -140,27 +140,27 @@
   font-weight: 700;
 }
 
-.s-PENDING { color: #b8862f; }
-.s-ACCEPTED { color: #5a4680; }
-.s-DONE { color: #3f7d5d; }
-.s-CANCELED { color: #9a92a3; }
+.s-PENDING { color: var(--gold-deep, #b8862f); }
+.s-ACCEPTED { color: var(--plum-2, #5a4680); }
+.s-DONE { color: var(--success, #3f7d5d); }
+.s-CANCELED { color: var(--text-6, #9a92a3); }
 
 .order-meta {
   margin-top: 14rpx;
   font-size: 24rpx;
-  color: #7c7288;
+  color: var(--text-3, #7c7288);
 }
 
 .order-remark {
   margin-top: 8rpx;
   font-size: 23rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
 }
 
 .order-cancel {
   margin-top: 16rpx;
   font-size: 23rpx;
-  color: #c45656;
+  color: var(--danger, #c45656);
 }
 
 .svc-empty {
@@ -171,12 +171,12 @@
 .se-title {
   font-size: 30rpx;
   font-weight: 800;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 .se-desc {
   margin-top: 14rpx;
   font-size: 24rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
   line-height: 1.5;
 }

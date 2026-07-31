@@ -7,8 +7,8 @@
   display: flex;
   align-items: center;
   gap: 26rpx;
-  color: #fff;
-  background: radial-gradient(circle at 88% 0%, rgba(201, 166, 107, 0.34), transparent 30%), linear-gradient(150deg, #2b2145 0%, #251c38 55%, #3b2b57 100%);
+  color: var(--white, #fff);
+  background: radial-gradient(circle at 88% 0%, rgba(201, 166, 107, 0.34), transparent 30%), linear-gradient(150deg, #2b2145 0%, var(--text, #251c38) 55%, var(--plum, #3b2b57) 100%);
   box-shadow: 0 34rpx 80rpx rgba(37, 28, 56, 0.24);
 }
 
@@ -19,10 +19,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #251c38;
+  color: var(--text, #251c38);
   font-size: 40rpx;
   font-weight: 900;
-  background: linear-gradient(145deg, #fff1c8, #c9a66b);
+  background: linear-gradient(145deg, var(--note, #fff1c8), var(--gold, #c9a66b));
 }
 
 .profile-name {
@@ -58,7 +58,7 @@
 
 .house-community {
   font-size: 22rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
 }
 
 .ch-title-row {
@@ -82,7 +82,7 @@
   display: inline-flex;
   padding: 6rpx 16rpx;
   border-radius: 999rpx;
-  color: #9b743a;
+  color: var(--gold-ink, #9b743a);
   font-size: 21rpx;
   font-weight: 800;
   background: rgba(201, 166, 107, 0.16);
@@ -95,14 +95,14 @@
 
 .ch-count {
   font-size: 21rpx;
-  color: #a79eb5;
+  color: var(--text-5, #a79eb5);
 }
 
 .ch-switch {
   margin-top: 6rpx;
   font-size: 24rpx;
   font-weight: 800;
-  color: #9b743a;
+  color: var(--gold-ink, #9b743a);
 }
 
 /* 申请进度细行 */
@@ -129,7 +129,7 @@
 }
 
 .dot-rejected {
-  background: #c45656;
+  background: var(--danger, #c45656);
 }
 
 /*
@@ -137,7 +137,7 @@
  * 只把圆点变红是不够的 —— 圆点 8rpx，在一行 23rpx 的淡灰文字旁边等于没有。
  */
 .pending-line-rejected .pending-text {
-  color: #c45656;
+  color: var(--danger, #c45656);
   font-weight: 600;
 }
 
@@ -146,12 +146,12 @@
   margin-left: 12rpx;
   font-size: 23rpx;
   font-weight: 700;
-  color: #c45656;
+  color: var(--danger, #c45656);
 }
 
 .pending-text {
   font-size: 23rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -184,12 +184,12 @@
 
 .menu-desc {
   margin-top: 8rpx;
-  color: #7c7288;
+  color: var(--text-3, #7c7288);
   font-size: 24rpx;
 }
 
 .arrow {
-  color: #c9a66b;
+  color: var(--gold, #c9a66b);
   font-size: 48rpx;
   line-height: 1;
 }
@@ -200,11 +200,11 @@
 }
 
 .tag-pending {
-  color: #b8862f;
+  color: var(--gold-deep, #b8862f);
 }
 
 .tag-rejected {
-  color: #c45656;
+  color: var(--danger, #c45656);
 }
 
 /* ---------- 注销账号（危险操作，视觉与普通菜单区分）---------- */
@@ -212,5 +212,5 @@
   border-top: none;
 }
 .danger-name {
-  color: #c45656;
+  color: var(--danger, #c45656);
 }

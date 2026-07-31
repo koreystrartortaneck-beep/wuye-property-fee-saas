@@ -18,7 +18,7 @@
   border-radius: 999rpx;
   font-size: 22rpx;
   font-weight: 800;
-  color: #9b743a;
+  color: var(--gold-ink, #9b743a);
   background: rgba(201, 166, 107, 0.16);
 }
 
@@ -27,16 +27,16 @@
   font-weight: 800;
 }
 
-.s-PENDING { color: #b8862f; }
-.s-PROCESSING { color: #5a4680; }
-.s-DONE { color: #3f7d5d; }
-.s-CLOSED { color: #9a92a3; }
+.s-PENDING { color: var(--gold-deep, #b8862f); }
+.s-PROCESSING { color: var(--plum-2, #5a4680); }
+.s-DONE { color: var(--success, #3f7d5d); }
+.s-CLOSED { color: var(--text-6, #9a92a3); }
 
 .td-content {
   margin-top: 20rpx;
   font-size: 29rpx;
   line-height: 1.6;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 .td-imgs {
@@ -54,7 +54,7 @@
 .td-meta {
   margin-top: 20rpx;
   font-size: 22rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
 }
 
 .td-title {
@@ -102,23 +102,23 @@
 }
 
 .tl-on {
-  background: linear-gradient(145deg, #e3bd7d, #9b743a);
+  background: linear-gradient(145deg, #e3bd7d, var(--gold-ink, #9b743a));
 }
 
 .tl-label {
   font-size: 27rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
 }
 
 .tl-label-on {
-  color: #251c38;
+  color: var(--text, #251c38);
   font-weight: 700;
 }
 
 .tl-time {
   margin-top: 6rpx;
   font-size: 22rpx;
-  color: #a79eb5;
+  color: var(--text-5, #a79eb5);
 }
 
 .td-reply {
@@ -131,14 +131,14 @@
 .td-reply-head {
   font-size: 24rpx;
   font-weight: 800;
-  color: #9b743a;
+  color: var(--gold-ink, #9b743a);
 }
 
 .td-reply-body {
   margin-top: 10rpx;
   font-size: 27rpx;
   line-height: 1.6;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 /* 评分 */
@@ -159,7 +159,7 @@
 .rate-comment {
   margin-top: 14rpx;
   font-size: 26rpx;
-  color: #7c7288;
+  color: var(--text-3, #7c7288);
 }
 
 .rate-input {

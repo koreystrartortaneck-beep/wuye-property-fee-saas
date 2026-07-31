@@ -26,24 +26,24 @@
   font-weight: 800;
 }
 
-.t-repair { color: #9b743a; background: rgba(201, 166, 107, 0.16); }
-.t-complaint { color: #c45656; background: rgba(196, 86, 86, 0.12); }
-.t-suggest { color: #5a4680; background: rgba(90, 70, 128, 0.12); }
+.t-repair { color: var(--gold-ink, #9b743a); background: rgba(201, 166, 107, 0.16); }
+.t-complaint { color: var(--danger, #c45656); background: rgba(196, 86, 86, 0.12); }
+.t-suggest { color: var(--plum-2, #5a4680); background: rgba(90, 70, 128, 0.12); }
 
 .ticket-status {
   font-size: 23rpx;
   font-weight: 700;
 }
 
-.s-PENDING { color: #b8862f; }
-.s-PROCESSING { color: #5a4680; }
-.s-DONE { color: #3f7d5d; }
-.s-CLOSED { color: #9a92a3; }
+.s-PENDING { color: var(--gold-deep, #b8862f); }
+.s-PROCESSING { color: var(--plum-2, #5a4680); }
+.s-DONE { color: var(--success, #3f7d5d); }
+.s-CLOSED { color: var(--text-6, #9a92a3); }
 
 .ticket-content {
   margin-top: 18rpx;
   font-size: 28rpx;
-  color: #251c38;
+  color: var(--text, #251c38);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -56,7 +56,7 @@
   display: flex;
   justify-content: space-between;
   font-size: 22rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
 }
 
 .fab-btn {

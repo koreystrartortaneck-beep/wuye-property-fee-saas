@@ -2,7 +2,7 @@
   margin: 34rpx 4rpx 20rpx;
   font-size: 30rpx;
   font-weight: 900;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 .hall-grid {
@@ -24,13 +24,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--white, #fff);
   font-size: 32rpx;
   font-weight: 900;
 }
 
-.hall-icon.amber { background: linear-gradient(145deg, #ddbd76, #9b743a); }
-.hall-icon.plum { background: linear-gradient(145deg, #6d5b93, #3b2b57); }
+.hall-icon.amber { background: linear-gradient(145deg, #ddbd76, var(--gold-ink, #9b743a)); }
+.hall-icon.plum { background: linear-gradient(145deg, #6d5b93, var(--plum, #3b2b57)); }
 .hall-icon.emerald { background: linear-gradient(145deg, #6f9795, #315f63); }
 .hall-icon.sapphire { background: linear-gradient(145deg, #514271, #2a2144); }
 
@@ -38,13 +38,13 @@
   margin-top: 22rpx;
   font-size: 30rpx;
   font-weight: 800;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 .hall-desc {
   margin-top: 8rpx;
   font-size: 23rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
 }
 
 .manager-card {
@@ -62,10 +62,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #251c38;
+  color: var(--text, #251c38);
   font-size: 30rpx;
   font-weight: 900;
-  background: linear-gradient(145deg, #fff1c8, #c9a66b);
+  background: linear-gradient(145deg, var(--note, #fff1c8), var(--gold, #c9a66b));
 }
 
 .manager-body {
@@ -75,13 +75,13 @@
 .manager-title {
   font-size: 30rpx;
   font-weight: 800;
-  color: #251c38;
+  color: var(--text, #251c38);
 }
 
 .manager-desc {
   margin-top: 8rpx;
   font-size: 23rpx;
-  color: #8b8199;
+  color: var(--text-4, #8b8199);
 }
 
 .manager-arrow {

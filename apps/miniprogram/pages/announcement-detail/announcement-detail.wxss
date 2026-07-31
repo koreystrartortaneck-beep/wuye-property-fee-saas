@@ -9,14 +9,14 @@
 .annd-title {
   font-size: 36rpx;
   font-weight: 900;
-  color: #251c38;
+  color: var(--text, #251c38);
   line-height: 1.4;
 }
 
 .annd-date {
   margin-top: 14rpx;
   font-size: 22rpx;
-  color: #a79eb5;
+  color: var(--text-5, #a79eb5);
 }
 
 .annd-divider {

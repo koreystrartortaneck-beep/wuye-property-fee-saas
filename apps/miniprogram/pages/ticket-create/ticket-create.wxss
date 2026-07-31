@@ -15,14 +15,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #7c7288;
+  color: var(--text-3, #7c7288);
   font-size: 27rpx;
   font-weight: 700;
 }
 
 .type-on {
-  color: #251c38;
-  background: linear-gradient(145deg, #fff1c8, #ead0a0);
+  color: var(--text, #251c38);
+  background: linear-gradient(145deg, var(--note, #fff1c8), var(--gold-pale, #ead0a0));
 }
 
 .form-card {
@@ -33,7 +33,7 @@
 .form-label {
   font-size: 26rpx;
   font-weight: 800;
-  color: #251c38;
+  color: var(--text, #251c38);
   margin: 26rpx 0 16rpx;
 }
 
@@ -86,7 +86,7 @@
   height: 44rpx;
   border-radius: 0 0 0 18rpx;
   background: rgba(37, 28, 56, 0.65);
-  color: #fff;
+  color: var(--white, #fff);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -102,7 +102,7 @@
   align-items: center;
   justify-content: center;
   font-size: 52rpx;
-  color: #c9a66b;
+  color: var(--gold, #c9a66b);
 }
 
 .submit-btn {
