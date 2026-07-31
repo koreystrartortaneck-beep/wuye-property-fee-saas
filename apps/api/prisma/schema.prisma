@@ -527,7 +527,11 @@ model Bill {
   publishedAt    DateTime?
   publishedBy    String?
   paidAt         DateTime?
-  paymentId      String?
+  /// 占用/成交该账单的支付。唯一约束是资金侧的兜底：当前模型是「单账单单支付」
+  /// （createPayment 明确拒绝数组入参），两处写入都是按 id 单条更新 + count 校验。
+  /// 加上唯一索引后，万一将来有代码把两张账单指向同一笔支付，会在写入时立刻失败，
+  /// 而不是静默产生一笔钱销两张账单的脏数据。可空列的唯一索引在 MySQL 允许多个 NULL。
+  paymentId      String?    @unique
   canceledAt     DateTime?
   canceledBy     String?
   cancelReason   String?

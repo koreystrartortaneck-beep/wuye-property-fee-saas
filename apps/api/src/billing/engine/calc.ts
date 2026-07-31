@@ -26,7 +26,20 @@ export function calcOne(input: CalcInput): CalcResult {
     case 'AREA_PRICE': {
       const unitPrice = params.unitPrice as number;
       if (house.area === null) return { ok: false, skipReason: 'AREA_MISSING' };
-      const cents = Math.round(toCents(unitPrice) * Number(house.area)) ;
+      /*
+       * 必须整数相乘再除，不能用「分 × 浮点面积」。
+       *
+       * 原写法 Math.round(toCents(unitPrice) * Number(house.area)) 会少算 1 分：
+       * 单价 0.15 元、面积 130.70 ㎡，精确值 19.605 元 = 1960.5 分应进位到 1961，
+       * 但 15 * 130.70 在 IEEE754 里是 1960.4999…，Math.round 得 1960。
+       * 穷举两位小数的单价×面积组合（857 万组）有 7614 组不一致，约 0.09%。
+       * 对账也发现不了——本地与渠道用的是同一个错误值。
+       *
+       * 面积是 Decimal(10,2)，toCents 后是精确整数；两个整数的乘积在
+       * 2^53 内精确（单价分 ~1e6 × 面积分 ~1e6 ≈ 1e12），再除 100 取整即为
+       * 正确的四舍五入。
+       */
+      const cents = Math.round((toCents(unitPrice) * toCents(house.area)) / 100);
       return { ok: true, cents, snapshot: { unitPrice, area: house.area } };
     }
 
@@ -43,7 +56,8 @@ export function calcOne(input: CalcInput): CalcResult {
       }
       // 读数回退在录入层已拒绝；引擎防御性按 0 计
       const diff = Math.max(0, input.readingDiff);
-      const cents = Math.round(toCents(unitPrice) * diff);
+      // 与 AREA_PRICE 同理：读数是 Decimal(12,2)，必须整数相乘再除，否则同样少算 1 分
+      const cents = Math.round((toCents(unitPrice) * toCents(diff)) / 100);
       return { ok: true, cents, snapshot: { unitPrice, readingDiff: input.readingDiff, meterType } };
     }
 

@@ -328,6 +328,27 @@ export class RefundService {
         where: { paymentId: refund.paymentId, status: { in: ['REFUNDING', 'PAID'] } },
         data: { status: 'REFUNDED' },
       });
+      /*
+       * 退款成功等于这笔交易被撤销，当时抵扣的优惠券必须退还业主。
+       *
+       * releaseCouponFor 的注释本来就写着「订单未成交**或已退款**时」，但它只在
+       * finishUnpaidPayment（关闭/失败）里被调用过，退款路径漏了——业主用券付款后
+       * 被退款，钱退回来了、券却永久没收。而物业退款多半是因为账单开错，重开后
+       * 业主要再付一次，那张券已经没了。
+       *
+       * 放在本事务内保证与退款终态原子；条件 status: 'USED' 保证幂等
+       * （重复调用不会把业主已重新用掉的券再改回 UNUSED）。
+       */
+      const paid = await tx.payment.findUnique({
+        where: { id: refund.paymentId },
+        select: { userCouponId: true },
+      });
+      if (paid?.userCouponId) {
+        await tx.userCoupon.updateMany({
+          where: { id: paid.userCouponId, status: 'USED' },
+          data: { status: 'UNUSED', usedAt: null },
+        });
+      }
       // 退款成功联动开票：未开票申请置 CANCELED，已开票生成冲红任务（同事务原子）。
       if (this.invoiceLink) {
         await this.invoiceLink.onPaymentRefunded(tx, refund.tenantId, refund.paymentId);

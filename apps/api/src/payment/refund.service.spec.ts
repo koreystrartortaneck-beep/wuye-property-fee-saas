@@ -35,7 +35,12 @@ describe('RefundService 微信全额退款闭环', () => {
     return {
       refund: { create: jest.fn().mockResolvedValue(refundRow), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      payment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      payment: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        // 退款成功时要读订单上的 userCouponId 以退还抵扣券
+        findUnique: jest.fn().mockResolvedValue({ userCouponId: null }),
+      },
+      userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       paymentEvent: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({}) },
     };
   }
@@ -209,6 +214,38 @@ describe('RefundService 微信全额退款闭环', () => {
       data: expect.objectContaining({ type: 'REFUNDED', refundId: 'refund-1' }),
     }));
     expect(tx.payment.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'REFUNDED' } }));
+  });
+
+  /*
+   * releaseCouponFor 的注释本来就写着「订单未成交**或已退款**时」退还券，但它只在
+   * finishUnpaidPayment（关闭/失败）里被调用，退款路径漏了——业主用券付款后被退款，
+   * 钱退回来了、券却永久没收。而物业退款多半是账单开错，重开后业主要再付一次，
+   * 那张券已经没了。这两条把行为钉住。
+   */
+  it('退款成功时把抵扣券退还业主，且与退款终态同事务', async () => {
+    const tx = makeTx();
+    tx.payment.findUnique.mockResolvedValue({ userCouponId: 'uc-9' });
+    const prisma = makePrisma(tx);
+    prisma.raw.refund.findUnique.mockResolvedValue({ ...refundRow, status: 'PROCESSING' });
+
+    await makeService(prisma).handleRefundNotification(refundResult());
+
+    expect(tx.userCoupon.updateMany).toHaveBeenCalledWith({
+      // 条件 status: 'USED' 保证幂等：不会把业主已重新用掉的券再改回 UNUSED
+      where: { id: 'uc-9', status: 'USED' },
+      data: { status: 'UNUSED', usedAt: null },
+    });
+  });
+
+  it('订单未用券时不做任何券写入', async () => {
+    const tx = makeTx();
+    tx.payment.findUnique.mockResolvedValue({ userCouponId: null });
+    const prisma = makePrisma(tx);
+    prisma.raw.refund.findUnique.mockResolvedValue({ ...refundRow, status: 'PROCESSING' });
+
+    await makeService(prisma).handleRefundNotification(refundResult());
+
+    expect(tx.userCoupon.updateMany).not.toHaveBeenCalled();
   });
 
   it('退款回调金额不一致时拒绝', async () => {
