@@ -90,17 +90,29 @@ export class OwnerHousesService {
         data: { status: 'PENDING', relation: dto.relation, applicantName: dto.applicantName, source: 'APPLY', rejectReason: null },
       });
     }
-    return this.prisma.raw.houseBinding.create({
-      data: {
-        tenantId: house.tenantId,
-        wxUserId: ownerId,
-        houseId: dto.houseId,
-        relation: dto.relation,
-        applicantName: dto.applicantName,
-        source: 'APPLY',
-        status: 'PENDING',
-      },
-    });
+    try {
+      return await this.prisma.raw.houseBinding.create({
+        data: {
+          tenantId: house.tenantId,
+          wxUserId: ownerId,
+          houseId: dto.houseId,
+          relation: dto.relation,
+          applicantName: dto.applicantName,
+          source: 'APPLY',
+          status: 'PENDING',
+        },
+      });
+    } catch (e) {
+      /*
+       * 唯一约束 (wxUserId, houseId) 已经保证不会真重复，所以这里不是补漏洞，
+       * 而是把错误说清楚：双击「提交申请」时并发的那一次会撞 P2002，
+       * 原本直接抛出去 → 业主看到「服务器内部错误」，会以为没提交成功而反复重试。
+       */
+      if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002') {
+        throw new BizException(ErrorCode.BINDING_EXISTS);
+      }
+      throw e;
+    }
   }
 
   /** 本人全部绑定（含审核中/已驳回，供「我的」页展示进度） */
