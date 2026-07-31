@@ -14,6 +14,14 @@ export const ErrorCode = {
   UNAUTHORIZED: { code: 40100, message: '未登录或登录已过期' },
   FORBIDDEN: { code: 40300, message: '无权限访问' },
   NOT_FOUND: { code: 40400, message: '资源不存在' },
+  /*
+   * 平台账号带的 X-Tenant-Id 指向一个不存在的物业公司。
+   *
+   * 单独一个码而不是复用 40400：前端要据此**清掉本地选中的租户并回到平台视角**，
+   * 否则会锁死 —— 租户列表接口也带这个头，一起失败的话操作者换不回去。
+   * 复用 40400 就分不清「这条记录没有」和「你的视角选错了」。
+   */
+  TENANT_VIEW_INVALID: { code: 40401, message: '所选物业公司不存在，已切回平台视角' },
 
   // 41xxx 用户与绑定
   NO_BINDING: { code: 41001, message: '未绑定该房屋' },

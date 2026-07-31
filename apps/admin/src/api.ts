@@ -43,6 +43,19 @@ export async function api<T = unknown>(
     store.logout();
     location.hash = '#/login';
   }
+  if (json.code === 40401) {
+    /*
+     * 选中的物业公司已不存在（被删除，或本地缓存过期）。
+     *
+     * 必须在这里自动清掉并回到平台视角 —— 否则会锁死：
+     * 租户列表接口也带 X-Tenant-Id，它同样失败的话，操作者没有任何入口换回去，
+     * 只能手工清 localStorage。
+     */
+    store.setActingTenant('');
+    ElMessage.warning(json.message || '所选物业公司不存在，已切回平台视角');
+    location.reload();
+    throw Object.assign(new Error(json.message), { code: json.code });
+  }
   if (!options.silent) ElMessage.error(json.message || '请求失败');
   throw Object.assign(new Error(json.message), { code: json.code });
 }

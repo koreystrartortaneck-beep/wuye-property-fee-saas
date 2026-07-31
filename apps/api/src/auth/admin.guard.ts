@@ -33,10 +33,18 @@ export class AdminGuard implements CanActivate {
       throw new BizException(ErrorCode.UNAUTHORIZED, '登录状态已失效，请重新登录');
     }
 
-    // 受限会话：必须先改初始密码时，仅放行改密端点
+    /*
+     * 受限会话：必须先改初始密码时，仅放行改密端点。
+     *
+     * 用 endsWith 精确匹配而不是 includes：includes 的判据是「路径里出现过这个串」，
+     * 而 req.path 取不到时回退的 req.url **带查询串** ——
+     * `/admin/tenants?next=/admin/auth/change-password` 就会被放行。
+     * Express 下 req.path 始终有值，所以这不是已存在的漏洞；
+     * 但一个「靠上游恰好总有值」才安全的判据，不该留在鉴权路径里。
+     */
     if (admin.mustChangePassword) {
-      const path = req.path || req.url || '';
-      if (!path.includes('/admin/auth/change-password')) {
+      const rawPath = (req.path || req.url || '').split('?')[0];
+      if (!rawPath.endsWith('/admin/auth/change-password')) {
         throw new BizException(ErrorCode.UNAUTHORIZED, '请先修改初始密码');
       }
     }
@@ -49,6 +57,24 @@ export class AdminGuard implements CanActivate {
     if (payload.role === 'SUPER_ADMIN' || payload.role === 'PLATFORM_READONLY') {
       const header = req.headers['x-tenant-id'];
       tenantId = typeof header === 'string' && header ? header : null;
+      /*
+       * 必须校验这个租户真的存在。
+       *
+       * 不校验的话，选了一个已删除（或本地缓存里过期）的租户之后，
+       * prisma.t 会按一个不存在的 tenantId 过滤 —— **整个后台静默全空**：
+       * 没有报错、没有提示，运营只看到「什么数据都没有」，
+       * 根本想不到是视角选错了。
+       *
+       * 用专门的错误码而不是 40400：前端据此清掉本地选中的租户、切回平台视角，
+       * 否则会锁死（租户列表接口也带这个头，一起失败就换不回去了）。
+       */
+      if (tenantId) {
+        const tenant = await this.prisma.raw.tenant.findUnique({
+          where: { id: tenantId },
+          select: { id: true },
+        });
+        if (!tenant) throw new BizException(ErrorCode.TENANT_VIEW_INVALID);
+      }
     }
 
     req.current = { adminId: payload.sub, tenantId, role: payload.role };
