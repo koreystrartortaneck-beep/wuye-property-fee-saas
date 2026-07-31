@@ -81,79 +81,153 @@ export class ArrearsService {
     @Optional() @Inject(BILL_NOTIFIER) private readonly notifier: BillNotifier | null = null,
   ) {}
 
-  async list(q: ArrearsQuery): Promise<{ list: ArrearsRow[]; totalAmount: string; totalHouses: number }> {
+  /** 明细列表最多返回多少户。超出时 truncated 为 true，合计仍是全量真值。 */
+  private static readonly LIST_CAP = 500;
+
+  async list(q: ArrearsQuery): Promise<{
+    list: ArrearsRow[];
+    totalAmount: string;
+    totalHouses: number;
+    /** 其中已逾期的户数（全量真值，不受明细截断影响） */
+    overdueHouses: number;
+    truncated: boolean;
+  }> {
     const today = shanghaiTodayStart();
-    const bills = await this.prisma.t.bill.findMany({
-      where: {
-        status: 'UNPAID',
-        ...(q.communityId ? { communityId: q.communityId } : {}),
-      },
-      select: {
-        houseId: true,
-        communityId: true,
-        amount: true,
-        period: true,
-        dueDate: true,
-        house: { select: { code: true, displayName: true, ownerName: true, ownerPhone: true } },
-      },
-      take: 5000,
+    const where = {
+      status: 'UNPAID' as const,
+      ...(q.communityId ? { communityId: q.communityId } : {}),
+    };
+
+    /*
+     * 按户聚合下推到 SQL，不再把账单整表拉进内存。
+     *
+     * 原实现 findMany({ take: 5000 }) 之后在 JS 里 reduce 求 totalAmount、
+     * 用去重后的房屋数当 totalHouses。3000 户小区 × 4 条计费规则 = 单月 12000 张
+     * 未缴账单，加上历史欠费更多，于是 take 只拿到不足一半，而那个 reduce 把这
+     * 5000 行当成全量：**「本小区欠费 ¥X」这个数字直接是错的，且没有任何截断提示**。
+     * 收费员拿它对账、导出报表。这不是慢，是算错。
+     *
+     * groupBy 每户一行（3000 行而不是 12000+ 行），且没有 take，因此合计是真值。
+     */
+    const grouped = await this.prisma.t.bill.groupBy({
+      by: ['houseId'],
+      where,
+      _sum: { amount: true },
+      _count: { _all: true },
+      _min: { dueDate: true },
     });
 
-    const byHouse = new Map<string, ArrearsRow>();
-    for (const b of bills) {
-      let row = byHouse.get(b.houseId);
-      if (!row) {
-        row = {
-          houseId: b.houseId,
-          code: b.house?.code ?? '',
-          displayName: b.house?.displayName ?? '',
-          communityId: b.communityId,
-          ownerName: b.house?.ownerName ?? null,
-          ownerPhone: b.house?.ownerPhone ?? null,
-          unpaidCount: 0,
-          unpaidAmount: '0.00',
-          earliestDueDate: null,
-          overdueDays: 0,
-          periods: [],
-        };
-        byHouse.set(b.houseId, row);
-      }
-      row.unpaidCount += 1;
-      row.unpaidAmount = centsToStr(toCents(row.unpaidAmount) + toCents(b.amount.toString()));
-      if (b.dueDate && (!row.earliestDueDate || b.dueDate < row.earliestDueDate)) {
-        row.earliestDueDate = b.dueDate;
-      }
-      if (!row.periods.includes(b.period)) row.periods.push(b.period);
-    }
+    /*
+     * 逾期天数由该户最早到期日派生。这个过滤只能在聚合后做：它是「户」的属性
+     * 而不是「账单」的属性。但过滤发生在**全量**聚合结果上，所以过滤后的合计
+     * 依然是真值。
+     */
+    const overdueDaysOf = (earliest: Date | null): number => {
+      if (!earliest) return 0;
+      const diff = Math.floor((today.getTime() - earliest.getTime()) / 86_400_000);
+      return diff > 0 ? diff : 0;
+    };
 
-    let rows = [...byHouse.values()].map((r) => {
-      r.periods.sort();
-      if (r.earliestDueDate) {
-        const diff = Math.floor((today.getTime() - r.earliestDueDate.getTime()) / 86_400_000);
-        r.overdueDays = diff > 0 ? diff : 0;
-      }
-      return r;
-    });
+    let houses = grouped.map((g) => ({
+      houseId: g.houseId,
+      unpaidCount: g._count._all,
+      unpaidAmount: centsToStr(toCents((g._sum.amount ?? 0).toString())),
+      earliestDueDate: g._min.dueDate ?? null,
+      overdueDays: overdueDaysOf(g._min.dueDate ?? null),
+    }));
 
     if (q.overdueDays !== undefined) {
-      rows = rows.filter((r) => r.overdueDays >= (q.overdueDays as number));
+      houses = houses.filter((h) => h.overdueDays >= (q.overdueDays as number));
     }
-    rows.sort((a, b) =>
+
+    houses.sort((a, b) =>
       q.sort === 'days'
         ? b.overdueDays - a.overdueDays || toCents(b.unpaidAmount) - toCents(a.unpaidAmount)
         : toCents(b.unpaidAmount) - toCents(a.unpaidAmount) || b.overdueDays - a.overdueDays,
     );
 
-    const totalCents = rows.reduce((sum, r) => sum + toCents(r.unpaidAmount), 0);
-    return { list: rows, totalAmount: centsToStr(totalCents), totalHouses: rows.length };
+    // 合计取自全量聚合（过滤后），与明细是否截断无关
+    const totalCents = houses.reduce((sum, h) => sum + toCents(h.unpaidAmount), 0);
+    const totalHouses = houses.length;
+    /*
+     * 「其中已逾期」也必须在服务端算。管理端原先用 rows.filter(overdueDays > 0)，
+     * 而 rows 是截断后的明细，于是这个数字同样少报。
+     */
+    const overdueHouses = houses.filter((h) => h.overdueDays > 0).length;
+
+    const page = houses.slice(0, ArrearsService.LIST_CAP);
+    const pageIds = page.map((h) => h.houseId);
+
+    // 房屋信息与账期明细只为要返回的那几百户取
+    const [houseRows, periodRows] = pageIds.length
+      ? await Promise.all([
+          this.prisma.t.house.findMany({
+            where: { id: { in: pageIds } },
+            select: { id: true, code: true, displayName: true, communityId: true, ownerName: true, ownerPhone: true },
+          }),
+          this.prisma.t.bill.findMany({
+            where: { ...where, houseId: { in: pageIds } },
+            select: { houseId: true, period: true },
+          }),
+        ])
+      : [[], []];
+
+    const houseById = new Map(houseRows.map((h) => [h.id, h]));
+    const periodsByHouse = new Map<string, string[]>();
+    for (const r of periodRows) {
+      const list = periodsByHouse.get(r.houseId) ?? [];
+      if (!list.includes(r.period)) list.push(r.period);
+      periodsByHouse.set(r.houseId, list);
+    }
+
+    const list: ArrearsRow[] = page.map((h) => {
+      const house = houseById.get(h.houseId);
+      return {
+        houseId: h.houseId,
+        code: house?.code ?? '',
+        displayName: house?.displayName ?? '',
+        communityId: house?.communityId ?? '',
+        ownerName: house?.ownerName ?? null,
+        ownerPhone: house?.ownerPhone ?? null,
+        unpaidCount: h.unpaidCount,
+        unpaidAmount: h.unpaidAmount,
+        earliestDueDate: h.earliestDueDate,
+        overdueDays: h.overdueDays,
+        periods: (periodsByHouse.get(h.houseId) ?? []).sort(),
+      };
+    });
+
+    return {
+      list,
+      totalAmount: centsToStr(totalCents),
+      totalHouses,
+      overdueHouses,
+      truncated: totalHouses > list.length,
+    };
   }
 
-  /** 批量催缴：对选中房屋的未缴账单逐笔触发逾期提醒（幂等） */
+  /**
+   * 批量催缴：把提醒**排入 Outbox 队列**，由投递任务发送（幂等）。
+   *
+   * 原实现在请求内串行发送：循环的是账单而不是房屋，每张账单经 notifier.onReminder →
+   * 1 次 NotifyLog 去重查询 + 1 次 HouseBinding 查询 + 每个绑定人 1 次微信 HTTP +
+   * 1 次 NotifyLog 写入。500 户 × 4 条规则 × 约 1.5 个欠费账期 ≈ 3000 张账单：
+   *   数据库往返 ≈ 9600 次
+   *   微信 API 调用 ≈ 3600 次串行，按 200ms/次 = **720 秒**
+   * 云托管网关远早于此就切断请求，而幂等记录停在 PROCESSING，管理端此后一直报
+   * 「催缴正在处理中，请稍候」——这个按钮从此再也点不动。同时这 12 分钟里单实例的
+   * 事件循环被 3600 个 await 串起来，业主端缴费一起变慢。
+   *
+   * 改为一次 createMany 落事件，30 秒内由 dispatch 任务发出。dedupKey 用
+   * `bill.<类型>:<billId>`，skipDuplicates 天然承接「每张账单每类提醒最多一次」的
+   * 原有语义；投递路径与出账通知共用同一份实现（notify.service 的 send()），
+   * 因此 NotifyLog 留痕、未订阅跳过、网络失败重试的行为完全一致。
+   */
   async dun(
     adminId: string,
     tenantId: string,
     body: DunBody,
-  ): Promise<{ notified: number; houses: number; skipped: number }> {
+  ): Promise<{ queued: number; houses: number; skipped: number }> {
     if (!body.houseIds?.length) throw new BizException(ErrorCode.VALIDATION, '请选择要催缴的房屋');
     if (body.houseIds.length > 500) {
       throw new BizException(ErrorCode.VALIDATION, '单次催缴最多 500 户，请分批处理');
@@ -168,7 +242,7 @@ export class ArrearsService {
       payload: { houseIds: [...body.houseIds].sort() },
     });
     if (reservation.outcome === 'REPLAY') {
-      return reservation.responseBody as { notified: number; houses: number; skipped: number };
+      return reservation.responseBody as { queued: number; houses: number; skipped: number };
     }
     if (reservation.outcome === 'IN_PROGRESS') {
       throw new BizException(ErrorCode.VALIDATION, '催缴正在处理中，请稍候');
@@ -180,9 +254,8 @@ export class ArrearsService {
     try {
       const bills = await this.prisma.t.bill.findMany({
         where: { status: 'UNPAID', houseId: { in: body.houseIds } },
+        select: { id: true, houseId: true, communityId: true, period: true, amount: true, dueDate: true },
       });
-      let notified = 0;
-      let skipped = 0;
       /*
        * 通知类型必须按账单**实际**是否逾期来选，不能一律发 OVERDUE。
        *
@@ -194,21 +267,34 @@ export class ArrearsService {
        * runReminders 里 `dueDate: { lt: now }` 的判定保持一致。
        */
       const now = new Date();
-      for (const bill of bills) {
-        if (!this.notifier) {
-          skipped += 1;
-          continue;
-        }
-        try {
-          const overdue = bill.dueDate.getTime() < now.getTime();
-          await this.notifier.onReminder(bill as never, overdue ? 'OVERDUE' : 'DUE_SOON');
-          notified += 1;
-        } catch {
-          // 单笔失败不阻断整批（通知本就是尽力而为）
-          skipped += 1;
-        }
-      }
-      const result = { notified, houses: new Set(bills.map((b) => b.houseId)).size, skipped };
+      const events = bills.map((bill) => {
+        const overdue = bill.dueDate.getTime() < now.getTime();
+        const eventType = overdue ? 'bill.overdue' : 'bill.due_soon';
+        return {
+          tenantId,
+          communityId: bill.communityId,
+          aggregateType: 'Bill',
+          aggregateId: bill.id,
+          eventType,
+          dedupKey: `${eventType}:${bill.id}`,
+          payload: {
+            billId: bill.id,
+            houseId: bill.houseId,
+            period: bill.period,
+            amount: String(bill.amount),
+          },
+          status: 'PENDING' as const,
+          attempts: 0,
+          availableAt: now,
+        };
+      });
+      const written = events.length
+        ? await this.prisma.raw.outboxEvent.createMany({ data: events, skipDuplicates: true })
+        : { count: 0 };
+      const queued = written.count;
+      // 撞 dedupKey 被跳过的：这张账单这一类提醒已经排过/发过了
+      const skipped = events.length - queued;
+      const result = { queued, houses: new Set(bills.map((b) => b.houseId)).size, skipped };
       await this.idempotency.complete({
         tenantId,
         recordId: reservation.recordId,

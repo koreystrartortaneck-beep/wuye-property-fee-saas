@@ -15,17 +15,31 @@
     </div>
   </div>
 
+  <!--
+    明细被截断时必须说清楚。上方三个数字是全量真值（服务端按户聚合得出），
+    但下面的表格与导出只有前 500 户——不说明的话，收费员会以为导出的就是全部。
+  -->
+  <el-alert
+    v-if="truncated"
+    type="warning"
+    show-icon
+    :closable="false"
+    class="mb"
+    title="欠费户数较多，下方明细与导出只包含欠费金额最高的前 500 户"
+    :description="`上方「欠费合计 ¥${totalAmount}」与「欠费户数 ${totalHouses}」是全量数字，不受此限制。需要完整名单请按小区分别导出。`"
+  />
+
   <el-card>
     <div class="toolbar">
       <div v-if="communities.length > 1" class="field">
         <label>小区</label>
-        <el-select v-model="filter.communityId" placeholder="全部小区" clearable style="width: 150px" @change="load">
+        <el-select v-model="filter.communityId" placeholder="全部小区" clearable style="width: 150px" @change="reload">
           <el-option v-for="c in communities" :key="c.id" :label="c.name" :value="c.id" />
         </el-select>
       </div>
       <div class="field">
         <label>逾期天数</label>
-        <el-select v-model="filter.overdueDays" style="width: 140px" @change="load">
+        <el-select v-model="filter.overdueDays" style="width: 140px" @change="reload">
           <el-option label="全部欠费" :value="undefined" />
           <el-option label="已逾期" :value="1" />
           <el-option label="逾期超 15 天" :value="15" />
@@ -35,7 +49,7 @@
       </div>
       <div class="field">
         <label>排序</label>
-        <el-select v-model="filter.sort" style="width: 130px" @change="load">
+        <el-select v-model="filter.sort" style="width: 130px" @change="reload">
           <el-option label="欠费金额" value="amount" />
           <el-option label="逾期天数" value="days" />
         </el-select>
@@ -52,6 +66,7 @@
     </div>
 
     <el-table
+      ref="selectionRef"
       v-loading="loading"
       :data="rows"
       row-key="houseId"
@@ -119,7 +134,7 @@
 
 <script setup lang="ts">
 import EmptyState from '../components/EmptyState.vue';
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs } from '../api';
@@ -153,8 +168,33 @@ const totalHouses = ref(0);
 const loading = ref(false);
 const selected = ref<Row[]>([]);
 const dunning = ref(false);
+/** 表格实例：催缴成功后要清掉 reserve-selection 保留的勾选 */
+const selectionRef = ref<{ clearSelection(): void } | null>(null);
+/** 本次催缴的幂等键，成功后清空 */
+let dunRequestId = '';
 
-const overdueHouses = computed(() => rows.value.filter((r) => r.overdueDays > 0).length);
+/*
+ * 三个概览数字全部取自服务端的全量聚合。
+ * 原先「其中已逾期」用 rows.value.filter(...) 现算，而 rows 是截断后的明细，
+ * 于是这个数字会随明细一起少报。
+ */
+const overdueHouses = ref(0);
+const truncated = ref(false);
+
+/**
+ * 换筛选条件时必须先清掉勾选。
+ *
+ * 表格开了 reserve-selection（按 row-key 跨数据刷新保留勾选），这本是为了翻页时
+ * 不丢选择；但配上「筛选后直接 load」就有真实后果：勾了 A 小区的 20 户，切到
+ * B 小区，那 20 户仍在 selected 里，点「批量催缴」会给已经不在视野里的住户发提醒，
+ * 而操作者以为自己发的是当前列表。
+ */
+async function reload() {
+  selectionRef.value?.clearSelection();
+  selected.value = [];
+  dunRequestId = '';
+  await load();
+}
 
 /** 空状态里的「清除筛选」：只清逾期天数（小区不是筛选，是必选维度） */
 function clearFilter() {
@@ -165,7 +205,13 @@ function clearFilter() {
 async function load() {
   loading.value = true;
   try {
-    const res = await api<{ list: Row[]; totalAmount: string; totalHouses: number }>(
+    const res = await api<{
+      list: Row[];
+      totalAmount: string;
+      totalHouses: number;
+      overdueHouses: number;
+      truncated: boolean;
+    }>(
       `/admin/arrears${qs({
         communityId: filter.value.communityId || undefined,
         overdueDays: filter.value.overdueDays,
@@ -175,6 +221,8 @@ async function load() {
     rows.value = res.list ?? [];
     totalAmount.value = res.totalAmount ?? '0.00';
     totalHouses.value = res.totalHouses ?? 0;
+    overdueHouses.value = res.overdueHouses ?? 0;
+    truncated.value = !!res.truncated;
   } finally {
     loading.value = false;
   }
@@ -201,15 +249,31 @@ async function dun() {
     return;
   }
   dunning.value = true;
+  // 幂等键在这一次操作内固定：原先在 body 里现调 genRequestId，网络重试会换键，
+  // 于是同一批催缴被当成两次不同的请求。
+  if (!dunRequestId) dunRequestId = genRequestId('dun');
   try {
-    const res = await api<{ notified: number; houses: number; skipped: number }>('/admin/arrears/dun', {
+    const res = await api<{ queued: number; houses: number; skipped: number }>('/admin/arrears/dun', {
       method: 'POST',
-      body: { houseIds, requestId: genRequestId('dun') },
+      body: { houseIds, requestId: dunRequestId },
     });
+    /*
+     * 文案必须说「已排入队列」而不是「已发送」。
+     * 后端改为落 Outbox 事件、由投递任务在 30 秒内发出（原先请求内串行发 3600 次
+     * 微信调用需要约 720 秒，网关早就超时，而幂等记录停在 PROCESSING，这个按钮
+     * 此后永远显示「催缴正在处理中」）。此刻消息还没真的发出去，说「已发送」是假话。
+     */
     ElMessage.success(
-      `已向 ${res.houses} 户发送 ${res.notified} 条催缴提醒` +
-        (res.skipped > 0 ? `，${res.skipped} 条未发出（业主未订阅提醒）` : ''),
+      `已为 ${res.houses} 户排入 ${res.queued} 条催缴提醒，约 30 秒内发出` +
+        (res.skipped > 0 ? `；${res.skipped} 条跳过（这些账单的同类提醒已发过）` : '') +
+        '。发送结果可在「通知记录」查看。',
     );
+    // 发完就清掉选择并重新加载：不清的话勾选会跨筛选保留（reserve-selection），
+    // 下一次点催缴可能把已经被筛掉的住户又发一遍。
+    selectionRef.value?.clearSelection();
+    selected.value = [];
+    dunRequestId = '';
+    await load();
   } finally {
     dunning.value = false;
   }

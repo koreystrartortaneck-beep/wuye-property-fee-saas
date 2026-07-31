@@ -13,6 +13,22 @@ import path from 'node:path';
 
 const SRC = __dirname;
 
+/** 递归收集 .vue 文件（与 styles.spec.ts 同名工具，两处各自持有一份以免互相耦合） */
+function vueFiles(dir: string, out: string[] = []): string[] {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) vueFiles(p, out);
+    else if (e.name.endsWith('.vue')) out.push(p);
+  }
+  return out;
+}
+
+/** 去掉注释——注释里提到 clearSelection / query 参数名都会让断言失效 */
+function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
+
+
 interface Push {
   from: string;
   path: string;
@@ -152,6 +168,76 @@ describe('待办角标刷新', () => {
     }
     if (offenders.length) {
       throw new Error('待办角标不会刷新：\n  ' + offenders.join('\n  '));
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * 带批量操作的表格：换筛选条件必须先清掉勾选。
+ *
+ * Element Plus 的 reserve-selection 按 row-key 跨数据刷新保留勾选——翻页时不丢选择
+ * 是它的本意，但配上「筛选后直接 load」就有真实后果：勾了 A 小区的 20 户，切到
+ * B 小区，那 20 户仍在 selected 里，点「批量催缴」会给已经不在视野里的住户发提醒，
+ * 而操作者以为自己发的是当前列表。欠费页正是这个组合。
+ */
+describe('批量操作的选择态', () => {
+  const files = vueFiles(SRC).filter((f) => {
+    const src = fs.readFileSync(f, 'utf8');
+    return src.includes('reserve-selection');
+  });
+
+  it('存在开了 reserve-selection 的页面（否则本条空转）', () => {
+    expect(files.length).toBeGreaterThan(0);
+  });
+
+  it('筛选器的变更处理函数会清掉勾选', () => {
+    const offenders: string[] = [];
+    for (const file of files) {
+      const src = stripComments(fs.readFileSync(file, 'utf8'));
+      const rel = path.relative(SRC, file);
+      // 收集所有 @change="fn" 的处理函数名
+      const handlers = [...src.matchAll(/@change="(\w+)"/g)].map((m) => m[1]);
+      if (handlers.length === 0) continue;
+      for (const fn of new Set(handlers)) {
+        // 该函数体里必须出现 clearSelection
+        const at = src.search(new RegExp(`(?:async\\s+)?function\\s+${fn}\\s*\\(`));
+        if (at === -1) continue; // 内联箭头等写法跳过
+        const body = src.slice(at, src.indexOf('\n}', at));
+        if (!body.includes('clearSelection')) {
+          offenders.push(`${rel} → @change="${fn}"（函数体里没有 clearSelection）`);
+        }
+      }
+    }
+    if (offenders.length) {
+      throw new Error(
+        '以下页面开了 reserve-selection，但换筛选条件时不清勾选，批量操作会作用到被筛掉的行：\n  ' +
+          offenders.join('\n  ') +
+          '\n请让筛选的 @change 走一个先 clearSelection 再 load 的函数。',
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('批量操作成功后清掉勾选并重新加载', () => {
+    const offenders: string[] = [];
+    for (const file of files) {
+      const src = stripComments(fs.readFileSync(file, 'utf8'));
+      const rel = path.relative(SRC, file);
+      // 只看真正发起批量动作的函数：体内有 ElMessage.success 且有 selected
+      for (const m of src.matchAll(/async function (\w+)\(\)\s*\{/g)) {
+        const at = m.index as number;
+        const body = src.slice(at, src.indexOf('\n}', at));
+        if (!body.includes('selected.value') || !body.includes('ElMessage.success')) continue;
+        if (!body.includes('clearSelection')) {
+          offenders.push(`${rel} → ${m[1]}() 成功后没有 clearSelection`);
+        }
+      }
+    }
+    if (offenders.length) {
+      throw new Error(
+        '批量操作成功后必须清掉勾选，否则再点一次会对同一批重复操作：\n  ' + offenders.join('\n  '),
+      );
     }
     expect(offenders).toEqual([]);
   });
