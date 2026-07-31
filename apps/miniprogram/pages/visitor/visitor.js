@@ -17,8 +17,16 @@ Page({
     houseIndex: 0,
     visitorName: '',
     plateNo: '',
-    visitDate: '',
-    todayStr: '',
+    /*
+     * 初值直接给今天，不要留空。
+     *
+     * onShow 里确实会设成今天，但那次 setData 排在 await loginReady 与
+     * loadMyHouses() 之后 —— 首帧渲染用的是这里的初值。留空的话，
+     * 慢网下业主看到的是「到访日期  ›」一个空格子：既没有值也没有占位提示，
+     * 而同一张表单里「车牌号」有占位、「到访房屋」有值，只有它是空的。
+     */
+    visitDate: todayStr(),
+    todayStr: todayStr(),
     list: [],
     submitting: false,
     noHouse: false,

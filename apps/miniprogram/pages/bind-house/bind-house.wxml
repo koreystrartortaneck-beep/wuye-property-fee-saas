@@ -28,10 +28,19 @@
     </view>
 
     <view wx:if="{{communities.length > 0 && !selectedCommunity}}" class="option-list">
+      <!--
+        小区行必须看得出可点。
+        原来只有内边距 + 一条底线，看着就是两行说明文字 ——
+        而这是新业主绑定房屋的第一步，认不出可点就卡在这里。
+        用与「我的」页菜单行一致的 › 箭头。
+      -->
       <view class="option-item" wx:for="{{communities}}" wx:key="id"
-            data-index="{{index}}" bindtap="pickCommunity">
-        <view class="option-main">{{item.name}}</view>
-        <view class="option-sub">{{item.tenantName}} {{item.address || ''}}</view>
+            data-index="{{index}}" bindtap="pickCommunity" hover-class="option-item-hover">
+        <view class="option-text">
+          <view class="option-main">{{item.name}}</view>
+          <view class="option-sub">{{item.tenantName}} {{item.address || ''}}</view>
+        </view>
+        <view class="option-arrow">›</view>
       </view>
     </view>
 
