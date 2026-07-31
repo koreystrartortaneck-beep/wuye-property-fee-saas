@@ -108,3 +108,39 @@ test('导航分组名与其子项用词不矛盾', () => {
   const bad = groups.filter((g) => TERMS.some((t) => t.ban.some((b) => g.includes(b))));
   assert.deepStrictEqual(bad, [], `导航分组名用了被弃用的词：${bad.join('、')}`);
 });
+
+test('业主端一律用敬语「您」', () => {
+  /*
+   * 小程序 9 个文件用「您」、13 处；而 mine.js 一个文件用「你」、8 处——
+   * 而 mine.js 恰好是注销、隐私、订阅设置这些高敏场景，敬语更稳。
+   * 后端 payment.service 也有一处「优惠券不存在或不属于你」会原样 toast 给业主。
+   *
+   * 只查业主可见文案：管理端对内说「你」是可以的（Operations 里就有「推送给你」）。
+   */
+  const offenders = [];
+  for (const f of walk(MINI, ['.js', '.wxml'])) {
+    const src = code(f);
+    // 「你」作为第二人称代词；排除「其他」这类不含代词义的组合
+    for (const m of src.matchAll(/.{0,12}你.{0,12}/g)) {
+      offenders.push(`${path.relative(MINI, f)}：…${m[0].trim()}…`);
+    }
+  }
+  assert.deepStrictEqual(offenders, [], '\n  ' + offenders.join('\n  '));
+});
+
+test('后端给业主看的提示也用「您」', () => {
+  /*
+   * 业主端 utils/request.js 把后端 message 原样 toast，所以业主可达路径上的
+   * BizException 文案是逐字上屏的。
+   */
+  const API = path.join(ROOT, 'apps', 'api', 'src');
+  const offenders = [];
+  for (const f of walk(API, ['.ts'])) {
+    if (f.endsWith('.spec.ts')) continue;
+    const src = code(f);
+    for (const m of src.matchAll(/'[^']*不属于你[^']*'|'[^']*你的[^']*'/g)) {
+      offenders.push(`${path.relative(API, f)}：${m[0]}`);
+    }
+  }
+  assert.deepStrictEqual(offenders, [], '\n  ' + offenders.join('\n  '));
+});

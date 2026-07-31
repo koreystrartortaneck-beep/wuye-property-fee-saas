@@ -77,7 +77,7 @@ export class PaymentService {
       where: { id: input.userCouponId, wxUserId: input.ownerId, tenantId: input.tenantId },
       include: { coupon: true },
     });
-    if (!uc) throw new BizException(ErrorCode.NOT_FOUND, '优惠券不存在或不属于你');
+    if (!uc) throw new BizException(ErrorCode.NOT_FOUND, '优惠券不存在或不属于您');
     if (uc.status !== 'UNUSED') throw new BizException(ErrorCode.VALIDATION, '该优惠券已使用或已过期');
 
     const coupon = uc.coupon;

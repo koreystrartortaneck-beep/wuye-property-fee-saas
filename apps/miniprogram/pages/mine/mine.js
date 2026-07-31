@@ -35,7 +35,7 @@ Page({
        * 一处请求授权，于是从没缴过费的业主永远没有额度、永远收不到出账与催缴通知
        * ——而最需要催缴的恰恰是这批人。这里给一个主动开启的入口。
        */
-      { key: 'notify', title: '缴费提醒', desc: '开启后账单生成与到期前微信提醒你' },  // desc 会在 refreshNotifyState 里按真实状态改写
+      { key: 'notify', title: '缴费提醒', desc: '开启后账单生成与到期前微信提醒您' },  // desc 会在 refreshNotifyState 里按真实状态改写
     ],
   },
 
@@ -165,11 +165,11 @@ Page({
   async refreshNotifyState() {
     const state = await getSubscribeState();
     const desc = {
-      accept: '已开启，账单生成与到期前会微信提醒你',
-      reject: '你之前拒绝过，点此重新开启',
+      accept: '已开启，账单生成与到期前会微信提醒您',
+      reject: '您之前拒绝过，点此重新开启',
       ban: '已在微信设置里关闭，需从右上角 ··· → 设置 → 订阅消息 开启',
-      unknown: '开启后账单生成与到期前微信提醒你',
-    }[state] || '开启后账单生成与到期前微信提醒你';
+      unknown: '开启后账单生成与到期前微信提醒您',
+    }[state] || '开启后账单生成与到期前微信提醒您';
     const menus = this.data.menus.map((m) => (m.key === 'notify' ? { ...m, desc } : m));
     this.setData({ menus, notifyState: state });
   },
@@ -179,7 +179,7 @@ Page({
     if (this.data.notifyState === 'ban') {
       wx.showModal({
         title: '需在微信设置里开启',
-        content: '你在微信里关闭了本小程序的订阅消息总开关。请点右上角 ··· → 设置 → 订阅消息，把「缴费业务通知」打开。',
+        content: '您在微信里关闭了本小程序的订阅消息总开关。请点右上角 ··· → 设置 → 订阅消息，把「缴费业务通知」打开。',
         showCancel: false,
         confirmText: '知道了',
       });
@@ -225,8 +225,15 @@ Page({
       wx.showModal({
         title: '注销账号',
         content:
-          '注销后将解除你名下全部房屋绑定，并清除昵称、手机号等个人信息，且无法恢复。' +
-          '已产生的缴费记录会按法规保留。' +
+          /*
+           * 文案必须与后端实际清除的范围一致，否则本身就是一个合规问题。
+           * 后端 owner-account.service 现在清的是：昵称/手机号/openid、
+           * 绑定申请人姓名、上门服务联系人、访客姓名手机号车牌、报修照片；
+           * 报修文字与缴费凭证保留（凭证里的付款人姓名改存「张*」）。
+           */
+          '注销后将解除您名下全部房屋绑定，并清除昵称、手机号、姓名、访客与上门服务的联系信息、' +
+          '报修照片，且无法恢复。' +
+          '已产生的缴费与开票凭证会按法规保留，其中付款人姓名会脱敏保存（如「张*」）。' +
           unpaidHint,
         confirmText: '继续注销',
         confirmColor: '#c45656',
@@ -269,7 +276,7 @@ Page({
       await new Promise((resolve) =>
         wx.showModal({
           title: '已注销',
-          content: '你的账号已注销。如需继续使用，可重新授权登录并绑定房屋。',
+          content: '您的账号已注销。如需继续使用，可重新授权登录并绑定房屋。',
           showCancel: false,
           complete: resolve,
         }),
