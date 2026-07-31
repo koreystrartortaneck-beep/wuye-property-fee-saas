@@ -104,6 +104,77 @@ describe('PaymentService', () => {
       await expect(service.createPayment('owner-1', 'bill-1', '')).rejects.toMatchObject({ code: 40000 });
     });
 
+    /*
+     * 资金安全（真实路径断言）。
+     *
+     * 事故链：Payment.totalAmount 落库的是券抵扣后的金额，而 provider.createOrder
+     * 传的是账单原额。业主一用券，微信就按原价扣款成功，回调带回原额与本地记录不符，
+     * handleWxPayNotification 判「支付回调金额不一致」抛错，微信重试仍失败，
+     * queryAndReconcile 有同样校验也救不回来——业主付了原价、账单永远停在未缴。
+     *
+     * 此前 coupon-deduction.spec 只测了抵扣算术，从没断言下单金额，所以完全没拦住。
+     * 这两条直接在 createPayment 上断言：给微信的分值必须等于落库金额换算出的分值。
+     */
+    it('向微信下单的金额必须等于落库的实付金额（不用券）', async () => {
+      const tx = createTx();
+      const prisma = createPrisma(tx);
+      (provider.createOrder as jest.Mock).mockResolvedValue({ mock: true });
+
+      await makeService(prisma).createPayment('owner-1', 'bill-1', 'req-amount-1');
+
+      // 账单 1.00 元、未用券 → 落库 totalAmount '1.00' → 应向微信收 100 分
+      expect(provider.createOrder).toHaveBeenCalledWith(
+        expect.objectContaining({ orderNo: 'WY202607220001', totalCents: 100 }),
+      );
+    });
+
+    it('用券后向微信下单的金额是抵扣后的实付额，绝不是账单原额', async () => {
+      // 账单 250.00 元，券抵 30.00 元 → 落库 220.00 → 应向微信收 22000 分
+      const bigBill = { ...bill, amount: { toString: () => '250.00' } };
+      const tx = createTx({
+        payment: {
+          create: jest.fn().mockResolvedValue({
+            id: 'payment-1',
+            orderNo: 'WY202607220001',
+            totalAmount: '220.00',
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        userCoupon: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'uc1',
+            status: 'UNUSED',
+            coupon: {
+              enabled: true,
+              communityId: null,
+              faceValue: { toString: () => '30.00' },
+              threshold: null,
+              validFrom: new Date(Date.now() - 86_400_000),
+              validTo: new Date(Date.now() + 86_400_000),
+            },
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+      });
+      const prisma = createPrisma(tx, {
+        raw: {
+          ...createPrisma(tx).raw,
+          bill: { findUnique: jest.fn().mockResolvedValue(bigBill) },
+        },
+      });
+      (provider.createOrder as jest.Mock).mockResolvedValue({ mock: true });
+
+      await makeService(prisma).createPayment('owner-1', 'bill-1', 'req-amount-2', 'uc1');
+
+      expect(provider.createOrder).toHaveBeenCalledWith(
+        expect.objectContaining({ totalCents: 22000 }),
+      );
+      // 25000 分正是修复前实际发给微信的错误值
+      expect(provider.createOrder).not.toHaveBeenCalledWith(
+        expect.objectContaining({ totalCents: 25000 }),
+      );
+    });
+
     it('以单账单创建订单：写入 billId/communityId、事务内审计、预占账单并保留 PaymentBill', async () => {
       const tx = createTx();
       const prisma = createPrisma(tx);

@@ -64,9 +64,23 @@ describe('PaymentService 优惠券抵扣', () => {
     );
   });
 
-  it('抵扣不超过账单金额（不产生负数应付、不退差额）', async () => {
+  /*
+   * 这条原先断言的是 resolves.toBe(300)——即允许把 3 元账单全额抵扣、实付 0 元。
+   * 那正是 bug 行为：微信不接受 0 元订单，provider 抛的是普通 Error 而非
+   * PaymentProviderError，isExplicitPrepayReject 判 false，订单被转成 PREPAY_UNKNOWN，
+   * 账单保持预占、券已置 USED，而微信侧压根没有这笔订单——业主既付不了这张账单、
+   * 券也回不来。现在改为在事务内拒绝，让券与账单预占一起回滚。
+   */
+  it('券面额覆盖账单全额时拒绝，避免 0 元订单把账单和券一起卡死', async () => {
     const tx = makeTx({ id: 'uc1', status: 'UNUSED', coupon: coupon({ threshold: null, faceValue: { toString: () => '50.00' } }) });
-    await expect(consume(service, tx, 300)).resolves.toBe(300);
+    await expect(consume(service, tx, 300)).rejects.toThrow('已覆盖本单全部金额');
+    // 关键：拒绝必须发生在置 USED 之前，否则券白白消耗
+    expect(tx.userCoupon.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('抵扣不超过账单金额：面额小于账单时按面额抵，实付为正', async () => {
+    const tx = makeTx({ id: 'uc1', status: 'UNUSED', coupon: coupon({ threshold: null, faceValue: { toString: () => '2.99' } }) });
+    await expect(consume(service, tx, 300)).resolves.toBe(299);
   });
 
   it('不满门槛拒绝', async () => {

@@ -100,8 +100,25 @@ export class PaymentService {
       );
     }
 
-    // 抵扣上限为账单金额：不允许出现 0 元以下应付，也不退还差额
+    /*
+     * 抵扣上限为账单金额，且**不允许把应付降到 0**。
+     *
+     * 微信不接受 0 元订单（provider 校验 totalCents > 0）。而那个错误是普通 Error
+     * 不是 PaymentProviderError，isExplicitPrepayReject 判 false，于是订单被转成
+     * PREPAY_UNKNOWN：账单保持预占、券已在本事务内置为 USED，而微信侧压根没有这笔
+     * 订单——业主从此既付不了这张账单、券也回不来，只能人工介入。
+     *
+     * 在事务内抛错让一切回滚（券不消耗、账单不占用），并明确告诉业主换一张账单用，
+     * 而不是给一个「点了就卡死」的入口。零元核销是另一条资金路径，需要单独设计
+     * （生成收据、审计、对账口径），不适合在这里顺手加。
+     */
     const discount = Math.min(face, input.billCents);
+    if (discount >= input.billCents) {
+      throw new BizException(
+        ErrorCode.VALIDATION,
+        `该券可抵 ${(face / 100).toFixed(2)} 元，已覆盖本单全部金额，暂不支持零元支付；请用于金额更高的账单`,
+      );
+    }
 
     const used = await tx.userCoupon.updateMany({
       where: { id: uc.id, status: 'UNUSED' },
@@ -282,9 +299,22 @@ export class PaymentService {
 
       // 预下单放在事务外，避免网络耗时占用数据库连接。
       try {
+        /*
+         * 必须用**实付**金额向微信下单，而不是账单原额。
+         *
+         * 原实现传的是 totalCents（账单原额），而 Payment.totalAmount 落库的是
+         * 抵扣后金额（payableCents）。业主一用券就会：微信按原价扣款成功 → 回调带回
+         * 原额 → handleWxPayNotification 里 `transaction.amount.total !== expectedCents`
+         * 判定「支付回调金额不一致」抛错 → 微信重试仍然失败 → queryAndReconcile
+         * 有同样校验也救不回来。最终业主付了原价、账单永远停在未缴、系统不知道钱在哪。
+         *
+         * 这里刻意从 payment.totalAmount 反算，而不是把 payableCents 带出事务：
+         * 下单金额与回调校验金额从此取自**同一个字段**，结构上就不可能再对不上。
+         */
+        const payableCents = toCents(String(payment.totalAmount));
         const payParams = await this.provider.createOrder({
           orderNo: payment.orderNo,
-          totalCents,
+          totalCents: payableCents,
           description: bill.title.slice(0, 100),
           payerOpenid: user?.openid ?? '',
           tenantId,
