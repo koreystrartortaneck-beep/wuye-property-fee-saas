@@ -1315,10 +1315,14 @@ model UserCoupon {
   status    UserCouponStatus @default(UNUSED)
   claimedAt DateTime         @default(now())
   usedAt    DateTime?
+  /// 这是该用户对该券领的第几张（从 0 起）。配合下面的唯一约束把「每人限领」
+  /// 变成插入冲突 —— 应用层的 count 校验挡不住并发（TOCTOU），而券是钱。
+  claimSeq  Int              @default(0)
 
   coupon Coupon @relation(fields: [couponId], references: [id])
 
   @@unique([tenantId, code])
+  @@unique([couponId, wxUserId, claimSeq])
   @@index([tenantId])
   @@index([wxUserId])
 }

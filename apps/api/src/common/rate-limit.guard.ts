@@ -18,6 +18,8 @@ import { BizException } from './biz.exception';
  *   POST /admin/cloud-files/urls       每次向微信换一批 2 小时有效的下载链接
  *   POST /payment/wxpay/notify         验签在限流之后，可被用来消耗 RSA 验签的 CPU
  *   POST /payment/wxpay/refund-notify  同上
+ *   POST /owner/coupons/:id/claim      每次写库并生成核销码；脚本连打会白占库存名额、
+ *                                      刷掉别人能领的份额（超发本身由唯一约束挡住）
  *
  * 上面这份清单不是说明文字，是被测试核对的契约（rate-limit.guard.spec.ts）：
  * 列进来却没标 @RateLimit 会让测试失败。加这条守卫是因为清单里的

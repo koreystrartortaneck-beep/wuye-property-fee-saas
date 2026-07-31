@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { ErrorCode } from '@pf/shared';
 import { BizException } from '../common/biz.exception';
@@ -7,6 +8,11 @@ import { PrismaService } from '../prisma/prisma.service';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉易混字符
 
+/** Prisma 的唯一约束冲突。不用 instanceof：测试里的模拟错误也要能被识别 */
+function isUniqueViolation(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002';
+}
+
 /** 卡券：物业自发券（物业费抵扣/服务券/礼品券），业主领取生成核销码，物业核销 */
 @Injectable()
 export class CouponsService {
@@ -15,10 +21,18 @@ export class CouponsService {
     private readonly houses: OwnerHousesService,
   ) {}
 
+  /**
+   * 生成核销码。
+   *
+   * 用 crypto.randomInt 而不是 Math.random：核销只凭码、不校验持有人身份
+   * （物业扫到码就发货），而 V8 的 Math.random 是 xorshift128+，
+   * 看到自己的若干个码就能反推内部状态、进而预测别人的码 —— 拿别人的礼品券去兑。
+   * 概率上难做，但换个函数就没这个面，没有不换的理由。
+   */
   private async genCode(tenantId: string): Promise<string> {
     for (let i = 0; i < 12; i++) {
       let code = '';
-      for (let j = 0; j < 8; j++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+      for (let j = 0; j < 8; j++) code += CODE_CHARS[randomInt(CODE_CHARS.length)];
       const exists = await this.prisma.raw.userCoupon.findFirst({ where: { tenantId, code } });
       if (!exists) return code;
     }
@@ -67,21 +81,42 @@ export class CouponsService {
     });
     if (!binding) throw new BizException(ErrorCode.NO_BINDING);
 
-    const mine = await this.prisma.raw.userCoupon.count({ where: { couponId, wxUserId: ownerId } });
-    if (mine >= coupon.perUserLimit) throw new BizException(ErrorCode.COUPON_LIMIT_REACHED);
-
-    const code = await this.genCode(coupon.tenantId);
-    // 事务：库存 +1 且不超发，再建领取记录
-    return this.prisma.raw.$transaction(async (tx) => {
-      const upd = await tx.coupon.updateMany({
-        where: { id: couponId, claimedQty: { lt: coupon.totalQty } },
-        data: { claimedQty: { increment: 1 } },
-      });
-      if (upd.count === 0) throw new BizException(ErrorCode.COUPON_SOLD_OUT);
-      return tx.userCoupon.create({
-        data: { tenantId: coupon.tenantId, couponId, wxUserId: ownerId, code },
-      });
-    });
+    /*
+     * 限领的**硬保证在数据库**：UserCoupon 上有 @@unique([couponId, wxUserId, claimSeq])。
+     *
+     * 原实现是事务外 count 一次再进事务 —— 典型的 TOCTOU：
+     * 同一用户并发两次领取都读到 count=0（limit=1），都通过校验，各自建一条记录，
+     * 拿到超额的券。而每张券都是实打实的抵扣金额。
+     * 库存那道本来就有原子保证（claimedQty < totalQty 的条件 updateMany），
+     * 唯独限领这道靠读后写，是全链路里最弱的一环。
+     *
+     * 现在按 claimSeq = 0..perUserLimit-1 逐个尝试插入，撞唯一约束就换下一个序号；
+     * 全部占满才报「已达上限」。并发时必有一方拿到 P2002，无法超发。
+     */
+    for (let seq = 0; seq < coupon.perUserLimit; seq++) {
+      const code = await this.genCode(coupon.tenantId);
+      try {
+        return await this.prisma.raw.$transaction(async (tx) => {
+          const upd = await tx.coupon.updateMany({
+            where: { id: couponId, claimedQty: { lt: coupon.totalQty } },
+            data: { claimedQty: { increment: 1 } },
+          });
+          if (upd.count === 0) throw new BizException(ErrorCode.COUPON_SOLD_OUT);
+          return tx.userCoupon.create({
+            data: { tenantId: coupon.tenantId, couponId, wxUserId: ownerId, code, claimSeq: seq },
+          });
+        });
+      } catch (e) {
+        /*
+         * P2002 = 唯一约束冲突。两种可能：这个序号已被自己占了（顺延即可），
+         * 或核销码撞了（极低概率，同样顺延重生成）。
+         * 库存不足抛的是 BizException，不能被这里吞掉 —— 必须原样抛出，
+         * 否则「售完」会被误报成「已达上限」，业主看到的原因是错的。
+         */
+        if (!isUniqueViolation(e)) throw e;
+      }
+    }
+    throw new BizException(ErrorCode.COUPON_LIMIT_REACHED);
   }
 
   async myCoupons(ownerId: string, q: PageQuery) {
@@ -125,13 +160,30 @@ export class CouponsService {
     return pageResult(list, total, q);
   }
 
-  /** 按核销码核销 */
+  /**
+   * 按核销码核销。
+   *
+   * 状态流转用条件 updateMany + count 校验，不能「先查 UNUSED 再 update」——
+   * 那是读后写：两个收银台同时扫同一张礼品券，两次都查到 UNUSED、两次都 update 成功，
+   * 东西发两份。支付侧的 consumeCouponInTx 本来就是这么做的（乐观锁），
+   * 这里漏了同一份保护。
+   */
   async verify(code: string) {
     const uc = await this.prisma.t.userCoupon.findFirst({ where: { code }, include: { coupon: true } });
     if (!uc) throw new BizException(ErrorCode.NOT_FOUND, '未找到该券');
     if (uc.status === 'USED') throw new BizException(ErrorCode.COUPON_STATE_INVALID, '该券已核销');
     if (uc.coupon.validTo < new Date()) throw new BizException(ErrorCode.COUPON_STATE_INVALID, '该券已过期');
-    return this.prisma.t.userCoupon.update({ where: { id: uc.id }, data: { status: 'USED', usedAt: new Date() } });
+
+    const now = new Date();
+    const done = await this.prisma.t.userCoupon.updateMany({
+      where: { id: uc.id, status: 'UNUSED' },
+      data: { status: 'USED', usedAt: now },
+    });
+    if (done.count !== 1) {
+      // 与支付侧同一套文案口径：告诉物业「刚刚被核销了」，而不是含糊的「操作失败」
+      throw new BizException(ErrorCode.COUPON_STATE_INVALID, '该券刚刚已被核销，请刷新后重试');
+    }
+    return { ...uc, status: 'USED' as const, usedAt: now };
   }
 
   async findByCode(code: string) {
