@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Prisma } from '@prisma/client';
+import { BadRequestException } from '@nestjs/common';
 import { GlobalExceptionFilter } from './common/http-exception.filter';
 
 /**
@@ -183,5 +184,55 @@ describe('全局过滤器翻译 Prisma 错误', () => {
 
   it('非 Prisma 的未知异常仍是 500', () => {
     expect(run(new Error('unexpected')).code).toBe(50000);
+  });
+});
+
+describe('请求体不是合法 JSON 时不泄漏解析器细节', () => {
+  function run(error: unknown) {
+    const captured: { code?: number; message?: string } = {};
+    const res = {
+      status: () => res,
+      json: (body: { code?: number; message?: string }) => {
+        Object.assign(captured, body);
+        return res;
+      },
+    };
+    const host = {
+      switchToHttp: () => ({ getResponse: () => res, getRequest: () => ({ url: '/x', method: 'POST' }) }),
+    };
+    new GlobalExceptionFilter().catch(error, host as never);
+    return captured;
+  }
+
+  /*
+   * 实测生产：POST 一段非法 JSON，接口原样返回
+   *   "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+   * ——既不可读，也把解析器行为与字符位置暴露给了调用方。
+   * 这类错误由 body-parser 抛出，同样是 BadRequestException，但不是
+   * class-validator 的提示，所以 humanizeValidation 认不出、直接透传。
+   */
+  it('JSON 解析失败 → 中文提示，不含解析器原文', () => {
+    const r = run(
+      new BadRequestException({
+        message: "Expected property name or '}' in JSON at position 1 (line 1 column 2)",
+      }),
+    );
+    expect(r.code).toBe(40000);
+    expect(r.message).toContain('格式不正确');
+    expect(r.message).not.toContain('JSON at position');
+    expect(r.message).not.toContain('Expected');
+  });
+
+  it('Unexpected token 这类变体同样收敛', () => {
+    const r = run(new BadRequestException({ message: 'Unexpected token b in JSON at position 1' }));
+    expect(r.message).toContain('格式不正确');
+    expect(r.message).not.toContain('Unexpected token');
+  });
+
+  it('class-validator 的正常校验提示不受影响，仍译成中文', () => {
+    const r = run(new BadRequestException({ message: ['name must be shorter than or equal to 100 characters'] }));
+    expect(r.code).toBe(40000);
+    expect(r.message).toContain('名称');
+    expect(r.message).not.toContain('格式不正确');
   });
 });

@@ -99,6 +99,22 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       // "houseType must be one of the following values: ..." 直接抛给收费员
       const body = exception.getResponse() as { message?: string | string[] };
       const detail = Array.isArray(body.message) ? body.message[0] : body.message;
+
+      /*
+       * 请求体不是合法 JSON 时，Nest 的 body-parser 也抛 BadRequestException，
+       * 但 message 是解析器的英文原文，例如
+       *   "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+       * humanizeValidation 认不出它，于是原样透传——既不可读，也把内部实现细节
+       * （解析器行为、字符位置）暴露给了调用方。实测生产就是这样返回的。
+       */
+      if (typeof detail === 'string' && /JSON at position|Unexpected token|Unexpected end of JSON/i.test(detail)) {
+        this.logger.warn(`请求体 JSON 解析失败：${detail.slice(0, 120)}`);
+        res.status(200).json({
+          code: ErrorCode.VALIDATION.code,
+          message: '请求内容格式不正确，请重试；若反复出现请联系技术支持',
+        });
+        return;
+      }
       res.status(200).json({
         code: ErrorCode.VALIDATION.code,
         message: humanizeValidation(detail) || ErrorCode.VALIDATION.message,
