@@ -54,7 +54,53 @@ export class MeterService {
         `上期(${prev.period})读数 ${prev.value}`,
       );
     }
-    return this.prisma.t.meterReading.upsert({
+    /*
+     * 后一期的读数必须一并校验与刷新，否则乱序补录/修正上期会重复计费。
+     *
+     * getDiff 用的是「本期 value − 本期 prevValue 快照」。prevValue 只在 create
+     * 时按当时的上一期写入一次，之后无人维护。于是：
+     *
+     *  · 补录中间账期：已有 1 月=100、3 月=300（prevValue=100，用量 200）。
+     *    补录 2 月=200 → 它自己 prevValue=100、用量 100；而 3 月的 prevValue 仍是
+     *    100、用量仍按 200 算。合计计费 300，而 100→300 的真实用量只有 200，
+     *    业主被重复收了 100 个单位。
+     *  · 修正上期读数：把 2 月从 200 改成 250，3 月的 prevValue 仍停在旧值，
+     *    差额同样落空。而 update 分支原本只改 value，连这一点都没顾。
+     *
+     * 处理原则：本期读数不得大于后一期读数（否则后一期用量为负）；写入后把后一期的
+     * prevValue 同步成本期值。若后一期已经出过账，则拒绝改动——账单已经发给业主，
+     * 静默改快照并不能修正已出的账，必须让物业先作废那张账单。
+     */
+    const next = await this.prisma.t.meterReading.findFirst({
+      where: { houseId: dto.houseId, meterType: dto.meterType, period: { gt: dto.period } },
+      orderBy: { period: 'asc' },
+    });
+    if (next) {
+      if (dto.value > Number(next.value)) {
+        throw new BizException(
+          ErrorCode.METER_READING_BACKWARD,
+          `本期读数 ${dto.value} 大于后一期(${next.period})的 ${next.value}，请先核对`,
+        );
+      }
+      const billedNext = await this.prisma.t.bill.findFirst({
+        where: {
+          houseId: dto.houseId,
+          period: next.period,
+          status: { notIn: ['CANCELED'] },
+          rule: { ruleType: 'METER', params: { path: '$.meterType', equals: dto.meterType } },
+        },
+        select: { id: true, title: true, status: true },
+      });
+      if (billedNext) {
+        throw new BizException(
+          ErrorCode.VALIDATION,
+          `后一期(${next.period})的「${billedNext.title}」已出账，改动本期读数会让该账单的用量算错。` +
+            '请先作废那张账单，再修改读数。',
+        );
+      }
+    }
+
+    const saved = await this.prisma.t.meterReading.upsert({
       where: {
         houseId_meterType_period: { houseId: dto.houseId, meterType: dto.meterType, period: dto.period },
       },
@@ -68,6 +114,15 @@ export class MeterService {
       } as never,
       update: { value: dto.value, createdBy: adminId },
     });
+
+    // 后一期的上期快照跟着本期走，用量才不会重复或缺失
+    if (next) {
+      await this.prisma.t.meterReading.update({
+        where: { id: next.id },
+        data: { prevValue: saved.value },
+      });
+    }
+    return saved;
   }
 
   /**

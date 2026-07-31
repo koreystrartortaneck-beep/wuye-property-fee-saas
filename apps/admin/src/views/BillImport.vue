@@ -62,6 +62,9 @@
         <span v-if="preview.summary.invalid > 0" class="chk bad">
           ✕ 有问题 <b class="num">{{ preview.summary.invalid }}</b> 行（将被跳过）
         </span>
+        <span v-if="preview.summary.needsReview" class="chk warn">
+          ⚠ 需确认 <b class="num">{{ preview.summary.needsReview }}</b> 行（本期已有待缴账单）
+        </span>
         <span class="chk">合计 <b class="num">¥{{ preview.summary.totalAmount }}</b></span>
       </div>
 
@@ -80,8 +83,17 @@
         </el-table-column>
         <el-table-column label="检查结果" min-width="200">
           <template #default="{ row }">
-            <span v-if="row.valid" class="ok-text">✓ 可导入</span>
-            <span v-else class="bad-text">✕ {{ row.issues.map((i: Issue) => i.message).join('；') }}</span>
+            <!--
+              warn 与 error 必须分开显示：warn 行是**可以导入**的，只是存在重复
+              收款风险，需要人判断；混在一起显示成 ✕ 会让物业以为这一行被跳过了。
+            -->
+            <span v-if="row.issues.some((i: Issue) => (i.severity ?? 'error') === 'error')" class="bad-text">
+              ✕ {{ row.issues.filter((i: Issue) => (i.severity ?? 'error') === 'error').map((i: Issue) => i.message).join('；') }}
+            </span>
+            <span v-else-if="row.needsReview" class="warn-text">
+              ⚠ {{ row.issues.filter((i: Issue) => i.severity === 'warn').map((i: Issue) => i.message).join('；') }}
+            </span>
+            <span v-else class="ok-text">✓ 可导入</span>
           </template>
         </el-table-column>
               <template #empty>
@@ -112,6 +124,7 @@ import { currentMonth, useCommunities } from '../composables';
 import { genRequestId } from '../finance';
 
 interface Issue {
+  severity?: 'error' | 'warn';
   code: string;
   message: string;
 }
@@ -122,9 +135,10 @@ interface PreviewRow {
   amount: string;
   valid: boolean;
   issues: Issue[];
+  needsReview?: boolean;
 }
 interface Preview {
-  summary: { total: number; valid: number; invalid: number; totalAmount: string };
+  summary: { total: number; valid: number; invalid: number; needsReview: number; totalAmount: string };
   rows: PreviewRow[];
 }
 
@@ -287,6 +301,10 @@ function downloadTemplate() {
 .chk.bad {
   color: var(--danger-text);
 }
+/* 警示态：可导入但有重复收款风险，与「被跳过」的红色区分开 */
+.chk.warn {
+  color: var(--warning-text);
+}
 .check-table {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -298,6 +316,11 @@ function downloadTemplate() {
 .bad-text {
   color: var(--danger-text);
   font-size: var(--fs-12);
+}
+.warn-text {
+  color: var(--warning-text);
+  font-size: var(--fs-12);
+  line-height: 1.5;
 }
 .confirm-row {
   margin-top: var(--sp-4);

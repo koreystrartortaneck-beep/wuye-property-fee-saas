@@ -77,7 +77,10 @@ describe('BillImportService 导入解析与校验', () => {
     const csv = 'houseCode,amount,title\nA1,100,物业费\nA1,100,物业费\nA9,100,物业费\nA2,-5,物业费\nA3,100,物业费\n';
     const { prisma } = makePrisma();
     // A3 本期已缴
-    prisma.raw.bill.findMany.mockResolvedValue([{ houseId: 'house-3' }]);
+    // 查询改为「本期全部非作废账单」后要按 status 区分已缴/未缴，桩数据需带上
+    prisma.raw.bill.findMany.mockResolvedValue([
+      { houseId: 'house-3', title: '物业费 2026-07', amount: '100.00', status: 'PAID' },
+    ]);
     const service = makeService(prisma);
     const preview = await service.preview(input(Buffer.from(csv)));
 

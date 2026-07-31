@@ -273,22 +273,54 @@ export class BillWorkflowService {
         dueDate.setDate(dueDate.getDate() + 15);
         dueDate.setHours(23, 59, 59, 0);
         const created = await this.prisma.raw.$transaction(async (tx) => {
-          // 重复守卫：一张账单只允许有一张存活的替代账单。
-          // 因新账单 ruleId 置空、MySQL 唯一键对 NULL 不去重，
-          // 若仅依赖幂等键（前端曾每次点击都换键）就会复制出第二张同期待缴账单，
-          // 业主两张都能支付，形成真实重复收款。
-          const alive = await tx.bill.findFirst({
+          /*
+           * 重复守卫：同一房屋 + 同一账期 + 同一费用项，只允许有一张存活账单。
+           *
+           * 原守卫的维度是 { replacesBillId: bill.id }，即「一张原账单只能有一张
+           * 存活的替代账单」。这挡不住链式重开：
+           *   A 作废 → 重开得 B → B 作废 → 重开 B 得 C（查 replacesBillId=B，无存活）
+           *   → 再重开 A（查 replacesBillId=A，只有 B 而 B 已 CANCELED，被 notIn 排除）
+           *   → 得 D
+           * 于是 C 与 D 同为 UNPAID、同房同期同费用项，业主两张都能付 —— 正是这个
+           * 守卫要防的重复收款，只是换了条路径进来。
+           *
+           * 维度必须是「费用项」而不是「账期」：同房同期本来就允许多张账单
+           * （物业费、占位费、水费各一张，唯一键 @@unique([ruleId,houseId,period])
+           * 就是按费用项去重的）。按账期去重会直接打断多费项计费。
+           *
+           * 重开时 ruleId 置空（规避与原账单撞唯一键），原 ruleId 落在
+           * snapshot.originalRuleId，所以要按「有效费用项」比对；两边都没有规则
+           * （手工/导入账单）时退回按标题比对。
+           *
+           * 存活口径 notIn [CANCELED, REFUNDED]：REFUNDED 是「钱已退回」的终态，
+           * 不构成待收，且它本身可被重开——若算作存活，重开 REFUNDED 账单会被
+           * 自己挡住。
+           */
+          const effectiveRuleOf = (b: { ruleId: string | null; snapshot: unknown }): string | null => {
+            if (b.ruleId) return b.ruleId;
+            const snap = b.snapshot as { originalRuleId?: unknown } | null;
+            return typeof snap?.originalRuleId === 'string' ? snap.originalRuleId : null;
+          };
+          const targetRule = effectiveRuleOf(bill);
+          const siblings = await tx.bill.findMany({
             where: {
               tenantId,
-              replacesBillId: bill.id,
-              status: { notIn: ['CANCELED'] },
+              houseId: bill.houseId,
+              period: bill.period,
+              status: { notIn: ['CANCELED', 'REFUNDED'] },
             },
-            select: { id: true },
+            select: { id: true, ruleId: true, snapshot: true, title: true, status: true },
           });
-          if (alive) {
+          const clash = siblings.find((s) =>
+            targetRule === null && effectiveRuleOf(s) === null
+              ? s.title === bill.title
+              : effectiveRuleOf(s) === targetRule,
+          );
+          if (clash) {
             throw new BizException(
               ErrorCode.VALIDATION,
-              '该账单已重开过，请先作废已重开的账单再操作，避免业主重复缴费',
+              `该房屋本期的「${clash.title}」已存在一张${clash.status === 'PAID' ? '已缴' : '待缴'}账单，` +
+                '请先作废它再重开，避免业主重复缴费',
             );
           }
           // ruleId 置空以规避 (ruleId, houseId, period) 唯一键与原账单冲突；规则信息进快照。

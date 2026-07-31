@@ -37,7 +37,6 @@ describe('BillWorkflowService 草稿发布 / 作废 / 重开', () => {
       billBatch: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       bill: {
         findMany: jest.fn().mockResolvedValue([draftBill]),
-        // 重开守卫：默认无存活的替代账单
         findFirst: jest.fn().mockResolvedValue(null),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn().mockResolvedValue({ id: 'bill-new', status: 'UNPAID' }),
@@ -179,6 +178,9 @@ describe('BillWorkflowService 草稿发布 / 作废 / 重开', () => {
     const tx = makeTx();
     const prisma = makePrisma(tx);
     prisma.raw.bill.findUnique.mockResolvedValue({ ...draftBill, status: 'CANCELED' });
+    // 重开守卫按「同房+同期+同费用项」查同期存活账单；这里没有冲突。
+    // （findMany 的默认桩返回 [draftBill] 是给发布用例用的，两者共用同一个 mock。）
+    tx.bill.findMany = jest.fn().mockResolvedValue([]);
     const service = makeService(prisma);
     const res = await service.reissueBill({ billId: 'bill-1', adminId: 'admin-1', actingTenantId: 'tenant-1', reason: '重新出账', requestId: 'req-6' });
     expect(res).toMatchObject({ replacesBillId: 'bill-1', status: 'UNPAID' });
@@ -199,8 +201,17 @@ describe('BillWorkflowService 草稿发布 / 作废 / 重开', () => {
 
   it('重开守卫：已存在存活的替代账单时拒绝再次重开，避免业主重复缴费', async () => {
     const tx = makeTx();
-    // 模拟该账单已重开过一张仍待缴的新账单
-    tx.bill.findFirst = jest.fn().mockResolvedValue({ id: 'bill-already-reissued' });
+    /*
+     * 维度是「房+期+费用项」而不是「原账单」。原守卫查 replacesBillId，被链式重开
+     * 绕过：A 作废→重开得 B；B 作废→重开 B 得 C；再重开 A（B 已 CANCELED 被
+     * notIn 排除）→ 得 D。C 与 D 同房同期同费用项且都是 UNPAID，业主两张都能付。
+     *
+     * draftBill 是导入账单（ruleId 为 null、snapshot 里也没有 originalRuleId），
+     * 两边都没有规则时按标题比对——这正是生产上那两户的情形。
+     */
+    tx.bill.findMany = jest.fn().mockResolvedValue([
+      { id: 'bill-already-reissued', ruleId: null, snapshot: {}, title: '物业费', status: 'UNPAID' },
+    ]);
     const prisma = makePrisma(tx);
     prisma.raw.bill.findUnique = jest.fn().mockResolvedValue({ ...draftBill, status: 'CANCELED' });
     const service = makeService(prisma);
@@ -213,7 +224,45 @@ describe('BillWorkflowService 草稿发布 / 作废 / 重开', () => {
         reason: '重新出账',
         requestId: 'req-dup',
       }),
-    ).rejects.toThrow(/已重开过/);
+    ).rejects.toThrow(/已存在一张待缴账单/);
     expect(tx.bill.create).not.toHaveBeenCalled();
+  });
+
+  it('重开守卫：规则账单按 snapshot.originalRuleId 认出同一费用项', async () => {
+    const tx = makeTx();
+    // 被重开的是规则账单（ruleId=rule-1）；已存在的替代账单 ruleId 置空、
+    // 原规则落在 snapshot.originalRuleId —— 这是重开链上的常态。
+    tx.bill.findMany = jest.fn().mockResolvedValue([
+      { id: 'bill-c', ruleId: null, snapshot: { originalRuleId: 'rule-1' }, title: '住宅物业费 2026-07', status: 'UNPAID' },
+    ]);
+    const prisma = makePrisma(tx);
+    prisma.raw.bill.findUnique = jest.fn().mockResolvedValue({ ...draftBill, ruleId: 'rule-1', status: 'REFUNDED' });
+    const service = makeService(prisma);
+
+    await expect(
+      service.reissueBill({
+        billId: 'bill-1', adminId: 'admin-1', actingTenantId: 'tenant-1',
+        reason: '重新出账', requestId: 'req-chain',
+      }),
+    ).rejects.toThrow(/已存在一张待缴账单/);
+    expect(tx.bill.create).not.toHaveBeenCalled();
+  });
+
+  it('重开守卫：同房同期的**其它费用项**不阻断（多费项计费必须可用）', async () => {
+    const tx = makeTx();
+    // 同房同期已有占位费待缴，重开物业费不应被它挡住
+    tx.bill.findMany = jest.fn().mockResolvedValue([
+      { id: 'bill-park', ruleId: 'rule-parking', snapshot: {}, title: '占位费用 2026-07', status: 'UNPAID' },
+    ]);
+    const prisma = makePrisma(tx);
+    prisma.raw.bill.findUnique = jest.fn().mockResolvedValue({ ...draftBill, ruleId: 'rule-1', status: 'CANCELED' });
+    const service = makeService(prisma);
+
+    const res = await service.reissueBill({
+      billId: 'bill-1', adminId: 'admin-1', actingTenantId: 'tenant-1',
+      reason: '重新出账', requestId: 'req-other-fee',
+    });
+    expect(res).toMatchObject({ status: 'UNPAID' });
+    expect(tx.bill.create).toHaveBeenCalled();
   });
 });

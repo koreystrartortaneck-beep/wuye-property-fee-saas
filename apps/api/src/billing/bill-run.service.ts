@@ -147,6 +147,36 @@ export class BillRunService {
         await failBatchAndRun(houses.length, 'SHARE_POOL_MISSING');
         return { batchId: batch.id, status: 'FAILED', generated: 0, skipped: houses.length };
       }
+      /*
+       * 公摊规则不允许在已出过账的账期上重跑。
+       *
+       * allocateShare 按「当前」房屋集合把池子分完。重跑时房屋集合若变了（新交付
+       * 一栋楼、某户改成停用、房屋类型调整），已存在的账单会撞
+       * @@unique([ruleId,houseId,period]) 被幂等跳过、金额保持旧的分摊结果，而新增
+       * 的房屋按新分摊拿到金额 —— 两套分摊叠加，账单合计超过池子：
+       *   池 ¥300 / 4 户 → 每户 ¥75；新增第 5 户后重跑 → 新分摊每户 ¥60，
+       *   前 4 户保持 ¥75、第 5 户拿 ¥60 → 合计 ¥360，比池子多收 ¥60。
+       * 户数越多超收越大，且完全静默——出账页只会显示「跳过 4 户」。
+       *
+       * 这里不做「按剩余池子给新户分摊」的补救：那样新老户单价不同，业主一对账
+       * 就是纠纷。正确做法是让物业先作废该账期的批次，再整批重出。
+       */
+      const existing = await this.prisma.t.bill.findMany({
+        where: { ruleId, period, status: { notIn: ['CANCELED'] } },
+        select: { id: true, status: true },
+      });
+      if (existing.length > 0) {
+        const paid = existing.filter((b) => b.status !== 'DRAFT' && b.status !== 'UNPAID').length;
+        await failBatchAndRun(
+          houses.length,
+          `SHARE_ALREADY_GENERATED:该账期已出过 ${existing.length} 张公摊账单` +
+            (paid > 0 ? `（其中 ${paid} 张已产生收款）` : '') +
+            '。公摊是把总额按当前房屋分完，重跑会与已有账单叠加、合计超过分摊池，' +
+            '请先作废该账期的批次再整批重出。',
+        );
+        return { batchId: batch.id, status: 'FAILED', generated: 0, skipped: houses.length };
+      }
+
       const shareBy = (rule.params as { shareBy: ShareBy }).shareBy;
       const { alloc, skipped: shareSkipped } = allocateShare(
         toCents(pool.totalAmount.toString()),

@@ -9,11 +9,26 @@ import { toCents, centsToStr } from './engine/money';
 import { PrismaService } from '../prisma/prisma.service';
 import { runWithTenant } from '../tenant/tenant-cls';
 
-export type RowIssueCode = 'DUPLICATE' | 'HOUSE_NOT_FOUND' | 'INVALID_AMOUNT' | 'PAID_CONFLICT';
+export type RowIssueCode =
+  | 'DUPLICATE'
+  | 'HOUSE_NOT_FOUND'
+  | 'INVALID_AMOUNT'
+  | 'PAID_CONFLICT'
+  | 'UNPAID_EXISTS';
 
+/**
+ * severity 决定这一行还能不能导入：
+ *   'error'（默认）—— 阻断该行；
+ *   'warn'         —— 允许导入但必须在预览里显眼提示，由物业判断。
+ *
+ * 需要 warn 这一档的原因：同房同期存在多张账单本身是合法的（物业费、水费、
+ * 车位费各一张），所以「已有一张未缴账单」不能一律阻断，否则正常的多费项导入
+ * 全都做不了；但它也确实是重复收款的高发点，不能像现在这样一声不响。
+ */
 export interface RowIssue {
   code: RowIssueCode;
   message: string;
+  severity?: 'error' | 'warn';
 }
 
 export interface ParsedRow {
@@ -27,13 +42,18 @@ export interface ValidatedRow extends ParsedRow {
   rowKey: string;
   houseId: string | null;
   issues: RowIssue[];
+  /** 无 error 级问题即可导入（warn 不阻断） */
   valid: boolean;
+  /** 有 warn 级问题：可导入，但需要物业确认 */
+  needsReview: boolean;
 }
 
 export interface ImportSummary {
   total: number;
   valid: number;
   invalid: number;
+  /** 可导入但存在重复风险、需物业确认的行数 */
+  needsReview: number;
   totalAmount: string;
 }
 
@@ -158,13 +178,39 @@ export class BillImportService {
       : [];
     const codeToId = new Map(houses.map((h) => [h.code, h.id]));
     const houseIds = houses.map((h) => h.id);
-    const paidBills = houseIds.length
+    /*
+     * 除「已缴」外，还要看同房同期是否已有**未缴**账单。
+     *
+     * 原实现只查 PAID_LIKE_STATUSES（PAID/REFUNDING/REFUNDED），DRAFT/UNPAID 一声不响。
+     * 而导入的账单 ruleId 为 null，MySQL 唯一键对 NULL 不去重，
+     * @@unique([ruleId,houseId,period]) 形同不存在；行键唯一约束是
+     * @@unique([tenantId,batchId,sourceRowKey])，只在**同一批次内**去重，跨批次无效。
+     * 于是同一份表格换个批次再导一次，或规则已出账后又导一遍，就会多出一张待缴账单。
+     *
+     * 这不是理论问题：生产库里两户各有两张 2026-07 物业费同时待缴
+     * （「2026年07月物业费」¥0.01 与「住宅物业费 2026-07」¥222.50），业主都能付。
+     *
+     * 按 warn 而非 error 处理：标题不同的多费项导入是合法的（水费 + 物业费），
+     * 而规则生成的标题（「住宅物业费 2026-07」）与导入的默认标题
+     * （「2026年07月物业费」）本来就不一样，靠标题精确比对反而抓不住真实情况。
+     * 所以一律提示，把判断交给看得懂业务的人。
+     */
+    const sameperiodBills = houseIds.length
       ? await this.prisma.raw.bill.findMany({
-          where: { houseId: { in: houseIds }, period, status: { in: PAID_LIKE_STATUSES } },
-          select: { houseId: true },
+          where: { houseId: { in: houseIds }, period, status: { notIn: ['CANCELED'] } },
+          select: { houseId: true, title: true, amount: true, status: true },
         })
       : [];
-    const paidHouseIds = new Set(paidBills.map((b) => b.houseId));
+    const paidHouseIds = new Set(
+      sameperiodBills.filter((b) => PAID_LIKE_STATUSES.includes(b.status)).map((b) => b.houseId),
+    );
+    const unpaidByHouse = new Map<string, Array<{ title: string; amount: string }>>();
+    for (const b of sameperiodBills) {
+      if (b.status !== 'DRAFT' && b.status !== 'UNPAID') continue;
+      const list = unpaidByHouse.get(b.houseId) ?? [];
+      list.push({ title: b.title, amount: String(b.amount) });
+      unpaidByHouse.set(b.houseId, list);
+    }
 
     const seen = new Map<string, number>();
     for (const row of rows) if (row.houseCode) seen.set(row.houseCode, (seen.get(row.houseCode) ?? 0) + 1);
@@ -184,8 +230,19 @@ export class BillImportService {
         amountValid = true;
       }
       if (houseId && paidHouseIds.has(houseId)) {
-        issues.push({ code: 'PAID_CONFLICT', message: '该房屋本期已存在已缴账单' });
+        issues.push({ code: 'PAID_CONFLICT', message: '该房屋本期已存在已缴账单', severity: 'error' });
       }
+      const unpaid = houseId ? unpaidByHouse.get(houseId) : undefined;
+      if (unpaid?.length) {
+        issues.push({
+          code: 'UNPAID_EXISTS',
+          severity: 'warn',
+          message:
+            `该房屋本期已有待缴账单：${unpaid.map((b) => `${b.title} ¥${b.amount}`).join('、')}。` +
+            '若与本行是同一笔费用，导入后业主会看到两张、可能重复缴费',
+        });
+      }
+      const errors = issues.filter((i) => (i.severity ?? 'error') === 'error');
       return {
         ...row,
         rowKey: row.houseCode || `row-${row.rowNo}`,
@@ -193,7 +250,8 @@ export class BillImportService {
         amount: amountValid ? centsToStr(toCents(numeric)) : row.amount,
         title: row.title || defaultTitle,
         issues,
-        valid: issues.length === 0,
+        valid: errors.length === 0,
+        needsReview: issues.some((i) => i.severity === 'warn'),
       };
     });
   }
@@ -201,7 +259,13 @@ export class BillImportService {
   private summarize(rows: ValidatedRow[]): ImportSummary {
     const valid = rows.filter((r) => r.valid);
     const totalCents = valid.reduce((sum, r) => sum + toCents(r.amount), 0);
-    return { total: rows.length, valid: valid.length, invalid: rows.length - valid.length, totalAmount: centsToStr(totalCents) };
+    return {
+      total: rows.length,
+      valid: valid.length,
+      invalid: rows.length - valid.length,
+      needsReview: rows.filter((r) => r.needsReview).length,
+      totalAmount: centsToStr(totalCents),
+    };
   }
 
   async preview(input: ImportInput): Promise<PreviewResult> {
@@ -244,7 +308,15 @@ export class BillImportService {
       return {
         batchId: existing.id,
         status: existing.status,
-        summary: { total: existing.totalRows, valid: existing.validRows, invalid: existing.invalidRows, totalAmount: String(existing.totalAmount) },
+        // needsReview 是逐行校验的产物，批次表里没有这一列；重复上传走幂等分支时
+        // 不再重新校验，故记 0（此时账单已落库，提示已在首次预览时给过）。
+        summary: {
+          total: existing.totalRows,
+          valid: existing.validRows,
+          invalid: existing.invalidRows,
+          needsReview: 0,
+          totalAmount: String(existing.totalAmount),
+        },
       };
     }
 
@@ -340,7 +412,14 @@ export class BillImportService {
             return {
               batchId: raced.id,
               status: raced.status,
-              summary: { total: raced.totalRows, valid: raced.validRows, invalid: raced.invalidRows, totalAmount: String(raced.totalAmount) },
+              // 同上：needsReview 是逐行校验的产物，批次表无此列，竞态分支记 0
+              summary: {
+                total: raced.totalRows,
+                valid: raced.validRows,
+                invalid: raced.invalidRows,
+                needsReview: 0,
+                totalAmount: String(raced.totalAmount),
+              },
             };
           }
         }
