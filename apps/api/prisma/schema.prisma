@@ -226,6 +226,7 @@ enum BindingSource {
 
 enum AdminRole {
   SUPER_ADMIN
+  PLATFORM_READONLY
   TENANT_ADMIN
   STAFF
 }

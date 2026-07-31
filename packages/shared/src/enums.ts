@@ -132,7 +132,21 @@ export type BindingRelation = (typeof BINDING_RELATIONS)[number];
 export const BINDING_SOURCES = ['PHONE_MATCH', 'APPLY'] as const;
 export type BindingSource = (typeof BINDING_SOURCES)[number];
 
-export const ADMIN_ROLES = ['SUPER_ADMIN', 'TENANT_ADMIN', 'STAFF'] as const;
+/*
+ * PLATFORM_READONLY：只读平台管理员。
+ *
+ * 为什么需要它：SUPER_ADMIN 是「平台视角 + 全权」的合体——RolesGuard 对它无条件放行、
+ * 租户隔离扩展对它不设过滤（tenantId 为 null 即看全部），所以日常的平台巡检、
+ * 排查业主投诉、给客户演示都只能用这个全权账号，而它一旦被盗即为全系统沦陷
+ * （能退款、能冲正、能暂停收款、能读全部业主手机号）。
+ *
+ * 只读角色让「平台侧看数据」这件日常动作不必再动用全权账号。
+ * 它的读范围与超管一致（可跨租户），但**任何非 GET 请求一律拒绝**——
+ * 这一点必须按 HTTP 方法拦截而不是靠 @Roles 注解：RolesGuard 的规则是
+ * 「没标 @Roles 就放行任何已登录管理员」，而管理端 53 个写端点里有 45 个没标注解。
+ * 靠注解等于默认放行，靠方法才是 fail-closed。
+ */
+export const ADMIN_ROLES = ['SUPER_ADMIN', 'PLATFORM_READONLY', 'TENANT_ADMIN', 'STAFF'] as const;
 export type AdminRole = (typeof ADMIN_ROLES)[number];
 
 export const NOTIFY_TYPES = ['BILL_CREATED', 'DUE_SOON', 'OVERDUE'] as const;

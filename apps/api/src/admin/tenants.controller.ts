@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Injectable, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Injectable, Logger, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import * as bcrypt from 'bcryptjs';
 import { ErrorCode } from '@pf/shared';
@@ -64,8 +64,25 @@ class UpdateTenantDto {
   status?: 'ACTIVE' | 'DISABLED';
 }
 
+/** 创建只读平台账号。口令由服务端生成，不由调用方指定。 */
+class CreatePlatformReadonlyDto {
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(4)
+  @MaxLength(64)
+  username!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  name!: string;
+}
+
+
 @Injectable()
 export class TenantsService {
+  private readonly logger = new Logger('Tenants');
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -141,6 +158,56 @@ export class TenantsService {
   }
 
   /**
+   * 创建只读平台账号，返回一次性初始口令。
+   *
+   * 没有这个入口的话 PLATFORM_READONLY 只是一个枚举值 —— 角色实现了但没人能拥有它，
+   * 于是平台侧看数据仍然只能动用全权超管。这与「后门长期存在是因为缺少合法通道」
+   * 是同一类问题：能力和入口必须一起给。
+   *
+   * tenantId 为 null（平台账号不属于任何租户），口令与重置流程一致：服务端随机生成、
+   * 强制首次改密、只返回一次、不写进审计。
+   */
+  async createPlatformReadonly(
+    username: string,
+    name: string,
+    operatorId: string,
+  ): Promise<{ username: string; password: string }> {
+    const exists = await this.prisma.raw.adminUser.findUnique({ where: { username } });
+    if (exists) throw new BizException(ErrorCode.VALIDATION, `账号 ${username} 已存在`);
+
+    const password = generateInitialPassword();
+    assertStrongPassword(password);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
+
+    const created = await this.prisma.raw.adminUser.create({
+      data: {
+        // 平台账号不属于任何租户：落到某个租户下会让 AdminGuard 用 payload.tenantId
+        // 而不是 X-Tenant-Id，这个账号就只能看那一个租户，「平台只读」名不副实
+        tenantId: null,
+        username,
+        passwordHash,
+        name,
+        role: 'PLATFORM_READONLY',
+        mustChangePassword: true,
+      },
+    });
+    /*
+     * 这一条刻意**不写 AuditLog**。
+     *
+     * AuditLog.tenantId 是 NOT NULL，且 assertTenantAccess 会校验它与当前租户上下文
+     * 一致 —— 这是审计表的设计前提（每条留痕都归属某个租户，DB 层还有 append-only
+     * 触发器和 ON DELETE RESTRICT 的外键）。而「创建平台账号」这个动作没有租户维度，
+     * 硬塞一个租户 ID 会让那个租户的审计流里出现一条与它无关的记录，比不写更糟。
+     *
+     * 折中：记应用日志（已过脱敏器），口令不入日志。平台级动作的审计需要一张
+     * 独立的 PlatformAuditLog 表，那是另一件事，不该在这里凑。
+     */
+    this.logger.log(`创建只读平台账号 username=${username} id=${created.id} by=${operatorId}`);
+
+    return { username, password };
+  }
+
+  /**
    * 重置某租户管理员的密码，返回一次性初始口令。
    *
    * 为什么必须有这个端点：管理员忘记密码时，此前唯一的出路是直连数据库改哈希，
@@ -208,6 +275,11 @@ export class TenantsService {
 @Roles('SUPER_ADMIN')
 export class TenantsController {
   constructor(private readonly service: TenantsService) {}
+
+  @Post('platform-readonly')
+  createPlatformReadonly(@Current() cur: CurrentAdmin, @Body() dto: CreatePlatformReadonlyDto) {
+    return this.service.createPlatformReadonly(dto.username, dto.name, cur.adminId);
+  }
 
   @Post(':tenantId/admins/:adminId/reset-password')
   resetAdminPassword(

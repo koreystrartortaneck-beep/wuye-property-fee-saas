@@ -176,3 +176,68 @@ describe('新建租户管理员必须强制首次改密', () => {
     expect(BCRYPT_COST).toBeGreaterThanOrEqual(12);
   });
 });
+
+describe('创建只读平台账号', () => {
+  /*
+   * 没有这个入口的话 PLATFORM_READONLY 只是一个枚举值——角色实现了但没人能拥有它，
+   * 平台侧看数据仍然只能动用全权超管。这与「后门长期存在是因为缺少合法通道」
+   * 是同一类问题：能力和入口必须一起给。
+   */
+  function make(existing: unknown = null) {
+    // 不再用事务：只有一次 create，且不写 AuditLog（见下方用例的理由）
+    const tx = {
+      adminUser: { create: jest.fn().mockResolvedValue({ id: 'ro-1' }) },
+    };
+    const prisma = {
+      raw: {
+        adminUser: {
+          findUnique: jest.fn().mockResolvedValue(existing),
+          create: tx.adminUser.create,
+        },
+        $transaction: jest.fn(async (cb: (c: typeof tx) => unknown) => cb(tx)),
+      },
+    };
+    const audit = { append: jest.fn().mockResolvedValue(undefined) };
+    return { service: new TenantsService(prisma as never, audit as never), tx, audit };
+  }
+
+  it('落库角色是 PLATFORM_READONLY，且 tenantId 为 null（平台账号不属于任何租户）', async () => {
+    const { service, tx } = make();
+    await service.createPlatformReadonly('platform-ro', '平台只读', 'super-1');
+    const data = tx.adminUser.create.mock.calls[0][0].data;
+    expect(data.role).toBe('PLATFORM_READONLY');
+    /*
+     * tenantId 必须是 null。若落到某个租户下，AdminGuard 会用 payload.tenantId 而不是
+     * X-Tenant-Id，这个账号就只能看那一个租户——「平台只读」名不副实。
+     */
+    expect(data.tenantId).toBeNull();
+  });
+
+  it('强制首次改密，口令由服务端生成且满足强口令策略', async () => {
+    const { service, tx } = make();
+    const res = await service.createPlatformReadonly('platform-ro', '平台只读', 'super-1');
+    const data = tx.adminUser.create.mock.calls[0][0].data;
+    expect(data.mustChangePassword).toBe(true);
+    expect(() => assertStrongPassword(res.password)).not.toThrow();
+    expect(data.passwordHash.split('$')[2]).toBe('12');
+    expect(await bcrypt.compare(res.password, data.passwordHash)).toBe(true);
+  });
+
+  it('不写 AuditLog（该表要求 tenantId 非空，平台动作没有租户维度）', async () => {
+    /*
+     * AuditLog.tenantId 是 NOT NULL，且 assertTenantAccess 会校验它与当前租户上下文
+     * 一致——这是审计表的设计前提（DB 层还有 append-only 触发器与 ON DELETE RESTRICT
+     * 外键）。硬塞一个租户 ID 会让那个租户的审计流里出现一条与它无关的记录，比不写更糟。
+     * 平台级审计需要一张独立的表，那是另一件事。
+     */
+    const { service, audit } = make();
+    await service.createPlatformReadonly('platform-ro', '平台只读', 'super-1');
+    expect(audit.append).not.toHaveBeenCalled();
+  });
+
+  it('账号名重复时拒绝，不创建', async () => {
+    const { service, tx } = make({ id: 'exists' });
+    await expect(service.createPlatformReadonly('dup', '重复', 'super-1')).rejects.toMatchObject({ code: 40000 });
+    expect(tx.adminUser.create).not.toHaveBeenCalled();
+  });
+});

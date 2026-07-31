@@ -42,7 +42,11 @@ export class AdminGuard implements CanActivate {
     }
 
     let tenantId = payload.tenantId;
-    if (payload.role === 'SUPER_ADMIN') {
+    /*
+     * 平台视角（可跨租户读）。只读角色与超管享有同样的读范围——它的用途正是
+     * 「平台侧看数据」；写操作由 RolesGuard 按 HTTP 方法一律拒绝。
+     */
+    if (payload.role === 'SUPER_ADMIN' || payload.role === 'PLATFORM_READONLY') {
       const header = req.headers['x-tenant-id'];
       tenantId = typeof header === 'string' && header ? header : null;
     }
