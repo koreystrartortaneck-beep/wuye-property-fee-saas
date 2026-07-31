@@ -318,3 +318,60 @@ describe('AdminAuditController', () => {
     ]);
   });
 });
+
+/**
+ * 审计 payload 的键名不得撞上脱敏器的敏感词。
+ *
+ * 脱敏器按**键名**匹配（token/secret/password/openid/phone/key…），凡命中一律把值换成
+ * [REDACTED]。这是对的、也该保守 —— 但它会连带打掉无害的布尔标记：
+ * `afterSummary: { tokenRevoked: true }` 在审计里显示成 `"tokenRevoked": "[REDACTED]"`，
+ * 于是「令牌到底吊销了没有」这条留痕形同不存在，而且**不会有任何报错**。
+ *
+ * 生产上真出现过这一条（停用管理员账号的审计），已改名为 sessionsInvalidated。
+ * 这里静态扫描全部 audit.append 调用，防止再犯。
+ */
+describe('审计 payload 键名不撞脱敏词', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const fs = require('node:fs') as typeof import('node:fs');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const path = require('node:path') as typeof import('node:path');
+  const SRC = path.join(__dirname, '..');
+
+  /** 与 redactString 的键名正则保持一致的那部分（只取会误伤布尔/计数标记的词） */
+  const SENSITIVE = /(token|secret|password|passwd|pwd|credentials?|cookie|openid|phone|mobile|apiKey|api_key|privateKey)/i;
+
+  it('audit.append 的 beforeSummary / afterSummary 里没有会被打码的键名', () => {
+    const files: string[] = [];
+    (function walk(dir: string) {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (e.name.endsWith('.ts') && !e.name.endsWith('.spec.ts')) files.push(p);
+      }
+    })(SRC);
+    expect(files.length).toBeGreaterThan(50);
+
+    const offenders: string[] = [];
+    for (const file of files) {
+      const src = fs
+        .readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+      for (const m of src.matchAll(/(?:before|after)Summary:\s*\{([^{}]*)\}/g)) {
+        for (const kv of m[1].matchAll(/(\w+)\s*:/g)) {
+          const key = kv[1];
+          if (!SENSITIVE.test(key)) continue;
+          offenders.push(`${path.relative(SRC, file)} → ${key}`);
+        }
+      }
+    }
+    if (offenders.length) {
+      throw new Error(
+        '以下审计字段的键名会被脱敏器按敏感词打码成 [REDACTED]，留痕形同不存在，且不会报错：\n  ' +
+          offenders.join('\n  ') +
+          '\n请改名（如 tokenRevoked → sessionsInvalidated）。脱敏器保守是对的，不要为此放宽它。',
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
+});

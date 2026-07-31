@@ -210,7 +210,12 @@ export class TenantsService {
           resourceType: 'AdminUser',
           resourceId: adminId,
           reason: status === 'DISABLED' ? '停用管理员账号' : '启用管理员账号',
-          afterSummary: { status, tokenRevoked: true },
+          /*
+           * 字段名刻意避开「token」。审计脱敏器按键名匹配，凡含 token 的键一律打码，
+           * 于是 tokenRevoked: true 在审计里显示成 [REDACTED] —— 看不出令牌到底吊销
+           * 了没有。脱敏器保守是对的（宁可多打码），所以改字段名而不动它。
+           */
+          afterSummary: { status, sessionsInvalidated: true },
         },
         tx as never,
       );
@@ -322,7 +327,7 @@ export class TenantsService {
           resourceId: adminId,
           reason: '超管重置密码',
           // 绝不把口令写进审计
-          afterSummary: { event: 'PASSWORD_RESET', mustChangePassword: true },
+          afterSummary: { event: 'PASSWORD_RESET', mustResetOnFirstLogin: true },
         },
         tx as never,
       );
