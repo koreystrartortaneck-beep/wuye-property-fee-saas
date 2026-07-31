@@ -166,3 +166,75 @@ describe('循环里不得发数据库请求', () => {
     expect(body).not.toMatch(/prevValue\s*(\?\?|\|\|)\s*0/);
   });
 });
+
+/**
+ * BillRun.skippedDetail 不得无上限写进 Json 列。
+ *
+ * 抄表规则的**首月会跳过全部房屋**——缺上期基准读数时 getDiff 返回 null，
+ * calcOne 以 METER_READING_MISSING 跳过。这不是边界情况，是新小区上线的必然路径
+ * （水表已经用了多年，第一期只能作为基期）。
+ * 3000 户 = 3000 条明细 × 约 90 字节 = 单行 Json 约 270KB，
+ * 而 GET /admin/bill-runs 原先用 include 返回整行、管理端按 pageSize=200 拉，
+ * 理论响应体 54MB。
+ */
+describe('跳过明细必须汇总后落库', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { summarizeSkipped } = require('./billing/bill-run.service') as {
+    summarizeSkipped(d: Array<{ houseId: string; code: string; reason: string }>): {
+      total: number;
+      truncated: boolean;
+      byReason: Record<string, number>;
+      samples: Array<{ code: string }>;
+    };
+  };
+
+  function details(n: number, reason = 'METER_READING_MISSING') {
+    return Array.from({ length: n }, (_, i) => ({
+      houseId: `h${i}`,
+      code: `1-${String(i).padStart(4, '0')}`,
+      reason,
+    }));
+  }
+
+  it('3000 户全跳过时样本被截断，但总数与原因分布是全量真值', () => {
+    const out = summarizeSkipped(details(3000));
+    expect(out.total).toBe(3000);
+    expect(out.truncated).toBe(true);
+    expect(out.samples.length).toBeLessThanOrEqual(50);
+    // 「2998 户缺读数」这个数字必须准，它是物业判断问题范围的唯一依据
+    expect(out.byReason.METER_READING_MISSING).toBe(3000);
+  });
+
+  it('落库体积可控（3000 户不得超过 8KB）', () => {
+    const bytes = Buffer.byteLength(JSON.stringify(summarizeSkipped(details(3000))), 'utf8');
+    if (bytes > 8192) {
+      throw new Error(
+        `3000 户全跳过时 skippedDetail 序列化后 ${bytes} 字节。` +
+          '这一列会被 GET /admin/bill-runs 按 pageSize=200 一起拉走，必须保持在数 KB 量级。',
+      );
+    }
+    expect(bytes).toBeLessThan(8192);
+  });
+
+  it('少量跳过时样本完整，不做无谓截断', () => {
+    const out = summarizeSkipped(details(3));
+    expect(out.truncated).toBe(false);
+    expect(out.samples).toHaveLength(3);
+  });
+
+  it('多种原因分别计数（物业要能看出是缺面积还是缺读数）', () => {
+    const out = summarizeSkipped([...details(10, 'AREA_MISSING'), ...details(5, 'METER_READING_MISSING')]);
+    expect(out.byReason).toEqual({ AREA_MISSING: 10, METER_READING_MISSING: 5 });
+    expect(out.total).toBe(15);
+  });
+
+  it('列表接口不返回 skippedDetail（Json 列不该跟着分页一起拉）', () => {
+    const src = read('billing/bill-run.controller.ts');
+    const at = src.indexOf('billRun.findMany');
+    expect(at).toBeGreaterThan(-1);
+    const body = src.slice(at, src.indexOf('}),', at));
+    // 必须用 select 白名单，而不是 include 整行
+    expect(body).toContain('select:');
+    expect(body).not.toContain('skippedDetail');
+  });
+});

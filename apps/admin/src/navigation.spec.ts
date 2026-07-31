@@ -334,3 +334,72 @@ describe('加载失败的可恢复性', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * 显示给用户的「数量」不能取自被截断的列表长度。
+ *
+ * 住户档案的五个标签原先写 `账单（${data.bills.length}）`，而后端这些列表都带 take
+ * （账单 100、缴费 50、绑定 20、报修 50、开票 20）——一旦条数达到上限，标签就永远显示
+ * 「账单（100）」，物业以为这户总共只有 100 张账单。欠费页的「其中已逾期」也犯过
+ * 同一类错（用截断后的 rows 现算，与合计一起少报）。
+ *
+ * 判据：模板里出现在中文括号内的 `.length` 一律可疑——真实总数应由服务端 count 给出。
+ */
+describe('计数不得取自截断列表', () => {
+  /** 确实是「本页全部数据」的情况：不带 take、或本身就是前端计算出的集合 */
+  const LENGTH_OK: Record<string, string> = {
+    'views/BillImport.vue': '预览行来自本地解析的文件，没有截断',
+    'views/Houses.vue': '批量导入的待提交行来自本地 CSV，没有截断',
+    'views/MeterReadings.vue': '未录房屋列表由后端一次给全（无 take）',
+  };
+
+  it('标签/统计里的数量不用列表 .length', () => {
+    const offenders: string[] = [];
+    for (const file of vueFiles(SRC)) {
+      const rel = path.relative(SRC, file);
+      if (rel in LENGTH_OK) continue;
+      const src = fs.readFileSync(file, 'utf8');
+      const tpl = src.match(/<template>([\s\S]*)<\/template>/);
+      if (!tpl) continue;
+      // 「…（${xxx.length}）」这种给人看的计数
+      for (const m of tpl[1].matchAll(/（\$\{[\w.]*\.length\}）|（\{\{[^}]*\.length[^}]*\}\}）/g)) {
+        offenders.push(`${rel} → ${m[0]}`);
+      }
+    }
+    if (offenders.length) {
+      throw new Error(
+        '以下计数取自列表长度，而这些列表可能被服务端 take 截断，数字会停在上限：\n  ' +
+          offenders.join('\n  ') +
+          '\n请由服务端返回 count（走同一份 where、不受 take 影响），' +
+          '或把该页加进 LENGTH_OK 并说明为什么不会被截断。',
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('空状态一律用 EmptyState 组件，而不是一行字', () => {
+    /*
+     * 住户档案的五个空状态原先是 <div class="pf-empty">这户还没有账单</div> —— 一行灰字，
+     * 既没说「为什么空」也没说「下一步做什么」。而全站其余 24 处都用 EmptyState
+     * （22 处带 desc、11 处带可点的下一步）。同一个产品里两种空状态质量。
+     */
+    const offenders: string[] = [];
+    for (const file of vueFiles(SRC)) {
+      const src = fs.readFileSync(file, 'utf8');
+      const tpl = src.match(/<template>([\s\S]*)<\/template>/);
+      if (!tpl) continue;
+      for (const m of tpl[1].matchAll(/<template #empty>([\s\S]{0,300}?)<\/template>/g)) {
+        if (!m[1].includes('<EmptyState')) {
+          offenders.push(`${path.relative(SRC, file)} → ${m[1].trim().slice(0, 60)}`);
+        }
+      }
+    }
+    if (offenders.length) {
+      throw new Error(
+        '以下表格的空状态没有用 EmptyState，用户看不到「为什么空」与「下一步做什么」：\n  ' +
+          offenders.join('\n  '),
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
+});

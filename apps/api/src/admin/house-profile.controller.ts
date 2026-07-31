@@ -124,6 +124,23 @@ export class HouseProfileService {
       }
     }
 
+    const [billCount, paymentCount, bindingCount, ticketCount, invoiceCount] = await Promise.all([
+      this.prisma.t.bill.count({ where: { houseId } }),
+      paymentIds.length ? this.prisma.raw.payment.count({ where: { id: { in: paymentIds } } }) : Promise.resolve(0),
+      this.prisma.t.houseBinding.count({ where: { houseId } }),
+      this.prisma.t.ticket.count({ where: { houseId } }),
+      paymentIds.length
+        ? this.prisma.t.invoiceApplication.count({ where: { paymentId: { in: paymentIds } } })
+        : Promise.resolve(0),
+    ]);
+    const counts = {
+      bills: billCount,
+      payments: paymentCount,
+      bindings: bindingCount,
+      tickets: ticketCount,
+      invoices: invoiceCount,
+    };
+
     return {
       house: {
         id: house.id,
@@ -146,6 +163,13 @@ export class HouseProfileService {
         openTickets: tickets.filter((t) => t.status === 'PENDING' || t.status === 'PROCESSING').length,
         pendingBindings: bindings.filter((b) => b.status === 'PENDING').length,
       },
+      /*
+       * 各页真实总数。管理端的标签原先显示 list.length，而这些列表都带 take
+       * （账单 100、缴费 20、绑定 20、报修 50、开票 20）——一旦条数达到上限，
+       * 标签就永远显示「账单（100）」，物业以为这户总共只有 100 张账单。
+       * count 走的是同一份 where，不受 take 影响。
+       */
+      counts,
       bills,
       payments,
       bindings,

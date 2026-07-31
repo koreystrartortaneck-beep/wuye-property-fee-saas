@@ -32,6 +32,39 @@ export interface GenerateResult {
  * - Bill 唯一键 (ruleId, houseId, period)：重跑只补缺（撞键视为已存在）
  * FORMULA 规则已全域停用，不再参与出账。
  */
+/**
+ * 跳过明细存进 Json 列前先汇总。
+ *
+ * 抄表规则的**首月会跳过全部房屋**（缺上期基准读数，getDiff 返回 null）——
+ * 这不是边界情况，是新小区上线的必然路径。3000 户就是 3000 条明细，
+ * 每条约 90 字节 → 单行 Json 约 270KB。而 GET /admin/bill-runs 用 include 返回整行、
+ * 管理端按 pageSize=200 拉，理论响应体 54MB。
+ *
+ * 汇总后物业看到的信息其实更有用：「2998 户缺读数」比 2998 条房号列表更能说明问题；
+ * 保留少量样本供定位具体是哪几户。
+ */
+const MAX_SKIP_SAMPLES = 50;
+
+export interface SkippedSummary {
+  total: number;
+  truncated: boolean;
+  /** 原因 → 户数 */
+  byReason: Record<string, number>;
+  /** 前若干条明细，供定位 */
+  samples: SkipDetail[];
+}
+
+export function summarizeSkipped(details: SkipDetail[]): SkippedSummary {
+  const byReason: Record<string, number> = {};
+  for (const d of details) byReason[d.reason] = (byReason[d.reason] ?? 0) + 1;
+  return {
+    total: details.length,
+    truncated: details.length > MAX_SKIP_SAMPLES,
+    byReason,
+    samples: details.slice(0, MAX_SKIP_SAMPLES),
+  };
+}
+
 @Injectable()
 export class BillRunService {
   private readonly logger = new Logger('BillRun');
@@ -129,7 +162,7 @@ export class BillRunService {
           total: houses.length,
           generated: 0,
           skipped: skippedCount,
-          skippedDetail: [{ houseId: '*', code: '*', reason }] as never,
+          skippedDetail: summarizeSkipped([{ houseId: '*', code: '*', reason }]) as never,
           finishedAt: new Date(),
         },
       });
@@ -251,7 +284,7 @@ export class BillRunService {
         total: houses.length,
         generated,
         skipped,
-        skippedDetail: skippedDetail as never,
+        skippedDetail: summarizeSkipped(skippedDetail) as never,
         finishedAt: new Date(),
       },
     });

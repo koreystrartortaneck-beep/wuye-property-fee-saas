@@ -270,7 +270,17 @@ interface Rule {
 interface Run {
   generated: number;
   skipped: number;
-  skippedDetail?: { code: string; reason: string }[] | null;
+  /*
+   * 服务端已把跳过明细汇总（原因→户数 + 最多 50 条样本）。
+   * 原先是完整数组：抄表规则首月会跳过全部房屋（缺上期基准读数是新小区上线的必然
+   * 路径），3000 户就是 3000 条，单行 Json 约 270KB，而这个页面按 pageSize=200 拉。
+   */
+  skippedDetail?: {
+    total: number;
+    truncated: boolean;
+    byReason: Record<string, number>;
+    samples: { code: string; reason: string }[];
+  } | null;
 }
 interface Batch {
   id: string;
@@ -367,12 +377,28 @@ const SKIP_REASON: Record<string, string> = {
   SHARE_POOL_MISSING: '没录入公共费用总额',
   FORMULA_INVALID: '公式算不出结果',
 };
+/**
+ * 按原因汇总地说明为什么跳过。
+ *
+ * 原先是把每一户逐个列出来（「1-101（房屋没填面积）；1-102（房屋没填面积）；…」），
+ * 3000 户时这一行会长到没法读。而「2998 户缺本期抄表读数」本身就更说明问题；
+ * 具体是哪几户由样本给出，够定位就行。
+ */
 function skipText(run: Run): string {
-  const detail = run.skippedDetail ?? [];
-  if (!detail.length) return '原因未知';
-  return detail
-    .map((d) => `${d.code === '*' ? '全部房屋' : d.code}（${SKIP_REASON[d.reason] ?? d.reason}）`)
-    .join('；');
+  const d = run.skippedDetail;
+  if (!d || !d.total) return '原因未知';
+  const parts = Object.entries(d.byReason).map(([reason, count]) => {
+    const label = SKIP_REASON[reason] ?? reason;
+    // 「全部房屋」是失败整批时的占位，不是真的房号
+    if (count === 1 && d.samples[0]?.code === '*') return label;
+    return `${count} 户${label}`;
+  });
+  const sample = d.samples
+    .filter((x) => x.code !== '*')
+    .slice(0, 3)
+    .map((x) => x.code);
+  const tail = sample.length ? `（如 ${sample.join('、')}${d.truncated ? ' 等' : ''}）` : '';
+  return parts.join('；') + tail;
 }
 
 /** 每个收费标准被用来出过几次账：让"建完了但没用"一眼可见 */

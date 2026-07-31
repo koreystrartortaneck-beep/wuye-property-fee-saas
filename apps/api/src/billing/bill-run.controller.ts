@@ -137,7 +137,24 @@ export class BillRunController {
       this.prisma.t.billRun.findMany({
         ...pageArgs(q),
         orderBy: { startedAt: 'desc' },
-        include: { rule: { select: { name: true, ruleType: true, communityId: true } } },
+        /*
+         * 列表不返回 skippedDetail：它是 Json 列，抄表规则首月会跳过全部房屋
+         * （缺上期基准读数是新小区上线的必然路径），3000 户的明细单行约 270KB，
+         * 而管理端按 pageSize=200 拉 —— 理论响应体 54MB。
+         * 明细已在服务端汇总（原因→户数 + 50 条样本），需要时走详情端点。
+         */
+        select: {
+          id: true,
+          ruleId: true,
+          period: true,
+          status: true,
+          total: true,
+          generated: true,
+          skipped: true,
+          startedAt: true,
+          finishedAt: true,
+          rule: { select: { name: true, ruleType: true, communityId: true } },
+        },
       }),
       this.prisma.t.billRun.count(),
     ]);

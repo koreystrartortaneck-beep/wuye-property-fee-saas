@@ -48,7 +48,7 @@
     />
 
     <el-tabs v-if="data" v-model="tab" class="pf-tabs">
-      <el-tab-pane :label="`账单（${data.bills.length}）`" name="bills">
+      <el-tab-pane :label="`账单（${data.counts.bills}）`" name="bills">
         <el-table :data="data.bills" size="small" max-height="420">
           <el-table-column label="费用" min-width="180">
             <template #default="{ row }">
@@ -92,11 +92,13 @@
               >收现金</el-button>
             </template>
           </el-table-column>
-          <template #empty><div class="pf-empty">这户还没有账单</div></template>
+          <template #empty>
+            <EmptyState icon="🧾" title="这户还没有账单" desc="账单由「出账与发布」按收费标准生成；也可用 CSV 批量导入历史账单" />
+          </template>
         </el-table>
       </el-tab-pane>
 
-      <el-tab-pane :label="`缴费记录（${data.payments.length}）`" name="payments">
+      <el-tab-pane :label="`缴费记录（${data.counts.payments}）`" name="payments">
         <el-table :data="data.payments" size="small" max-height="420">
           <el-table-column label="订单号" min-width="180">
             <template #default="{ row }">
@@ -120,11 +122,13 @@
           <el-table-column label="收据号" min-width="140">
             <template #default="{ row }"><span class="cell-sub">{{ row.receiptNo || '—' }}</span></template>
           </el-table-column>
-          <template #empty><div class="pf-empty">这户还没有缴费记录</div></template>
+          <template #empty>
+            <EmptyState icon="💳" title="这户还没有缴费记录" desc="业主在小程序缴费后自动出现；线下现金可在「收款与退款」登记" />
+          </template>
         </el-table>
       </el-tab-pane>
 
-      <el-tab-pane :label="`实名绑定（${data.bindings.length}）`" name="bindings">
+      <el-tab-pane :label="`实名绑定（${data.counts.bindings}）`" name="bindings">
         <el-table :data="data.bindings" size="small" max-height="420">
           <el-table-column label="申请人 / 微信" min-width="180">
             <template #default="{ row }">
@@ -148,7 +152,9 @@
           <el-table-column label="申请时间" min-width="150">
             <template #default="{ row }"><span class="cell-sub">{{ dt(row.createdAt) }}</span></template>
           </el-table-column>
-          <template #empty><div class="pf-empty">这户还没有业主绑定</div></template>
+          <template #empty>
+            <EmptyState icon="👤" title="这户还没有业主实名绑定" desc="业主在小程序提交实名申请后，在「业主实名审核」通过即可绑定" />
+          </template>
         </el-table>
         <p class="pf-note">
           审核时请核对申请人信息与本页顶部登记的业主
@@ -156,7 +162,7 @@
         </p>
       </el-tab-pane>
 
-      <el-tab-pane :label="`报事报修（${data.tickets.length}）`" name="tickets">
+      <el-tab-pane :label="`报事报修（${data.counts.tickets}）`" name="tickets">
         <el-table :data="data.tickets" size="small" max-height="420">
           <el-table-column label="类型" width="90">
             <template #default="{ row }">{{ TICKET_TYPE_LABEL[row.type] || row.type }}</template>
@@ -174,11 +180,13 @@
           <el-table-column label="提交时间" min-width="150">
             <template #default="{ row }"><span class="cell-sub">{{ dt(row.createdAt) }}</span></template>
           </el-table-column>
-          <template #empty><div class="pf-empty">这户没有报修记录</div></template>
+          <template #empty>
+            <EmptyState icon="🔧" title="这户没有报事报修" desc="业主在小程序提交后会出现在这里，并计入侧栏待办" />
+          </template>
         </el-table>
       </el-tab-pane>
 
-      <el-tab-pane :label="`开票（${data.invoices.length}）`" name="invoices">
+      <el-tab-pane :label="`开票（${data.counts.invoices}）`" name="invoices">
         <el-table :data="data.invoices" size="small" max-height="420">
           <el-table-column label="申请单号" min-width="180">
             <template #default="{ row }">{{ row.applicationNo }}</template>
@@ -202,7 +210,9 @@
           <el-table-column label="发票号" min-width="140">
             <template #default="{ row }"><span class="cell-sub">{{ row.invoiceNo || '—' }}</span></template>
           </el-table-column>
-          <template #empty><div class="pf-empty">这户没有开票申请</div></template>
+          <template #empty>
+            <EmptyState icon="📄" title="这户没有开票申请" desc="业主缴费后可在小程序申请开票，处理入口在「开票申请」" />
+          </template>
         </el-table>
       </el-tab-pane>
     </el-tabs>
@@ -218,6 +228,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
+import EmptyState from '../components/EmptyState.vue';
 import { HOUSE_TYPE_LABEL } from '../composables';
 import {
   BILL_STATUS_LABEL,
@@ -258,6 +269,18 @@ interface Profile {
     communityId: string | null;
     communityName: string | null;
     servicePhone: string | null;
+  };
+  /*
+   * 各页真实总数。标签原先用 list.length，而这些列表都带 take
+   * （账单 100、缴费 50、绑定 20、报修 50、开票 20）——条数达上限后标签就永远显示
+   * 「账单（100）」，物业以为这户总共只有 100 张账单。
+   */
+  counts: {
+    bills: number;
+    payments: number;
+    bindings: number;
+    tickets: number;
+    invoices: number;
   };
   summary: {
     unpaidAmount: string;
@@ -401,12 +424,6 @@ onMounted(load);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-card);
   padding: 0 var(--sp-4) var(--sp-3);
-}
-.pf-empty {
-  padding: var(--sp-6) 0;
-  text-align: center;
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
 }
 .pf-note {
   margin: var(--sp-2) 0 0;
