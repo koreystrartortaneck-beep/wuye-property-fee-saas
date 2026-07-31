@@ -62,7 +62,10 @@ describe('PaymentService', () => {
       payment: {
         create: jest.fn().mockResolvedValue({ id: 'payment-1', orderNo: 'WY202607220001', totalAmount: '1.00' }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        // finishUnpaidPayment 现在在事务内读订单上的券并退还（时序修正，见 A6）
+        findUnique: jest.fn().mockResolvedValue({ userCouponId: null }),
       },
+      userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       paymentBill: { create: jest.fn().mockResolvedValue({}) },
       auditLog: { create: jest.fn() },
@@ -332,7 +335,12 @@ describe('PaymentService', () => {
         paymentBills: [{ billId: 'bill-1' }, { billId: 'bill-2' }],
       };
       const tx = {
-        payment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        payment: {
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          // 退券已挪进事务（时序修正），关单路径会在事务内读订单上的券
+          findUnique: jest.fn().mockResolvedValue({ userCouponId: null }),
+        },
+        userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
       };
       const prisma = {
@@ -362,7 +370,12 @@ describe('PaymentService', () => {
         channel: 'WXPAY', status: 'CREATED', transactionId: null, paymentBills: [{ billId: 'bill-1' }],
       };
       const tx = {
-        payment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        payment: {
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          // 退券已挪进事务（时序修正），关单路径会在事务内读订单上的券
+          findUnique: jest.fn().mockResolvedValue({ userCouponId: null }),
+        },
+        userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       };
       const prisma = {
@@ -414,7 +427,12 @@ describe('PaymentService', () => {
         id: 'payment-1', wxUserId: 'owner-1', orderNo: 'WY202607220001', channel: 'WXPAY', status: 'CREATED',
       };
       const tx = {
-        payment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        payment: {
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          // 退券已挪进事务（时序修正），关单路径会在事务内读订单上的券
+          findUnique: jest.fn().mockResolvedValue({ userCouponId: null }),
+        },
+        userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       };
       const prisma = {
@@ -443,7 +461,12 @@ describe('PaymentService', () => {
     it('超时订单在微信侧不存在时标记失败并释放账单', async () => {
       const payment = { id: 'payment-1', orderNo: 'WY202607220001', channel: 'WXPAY', status: 'CREATED' };
       const tx = {
-        payment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        payment: {
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          // 退券已挪进事务（时序修正），关单路径会在事务内读订单上的券
+          findUnique: jest.fn().mockResolvedValue({ userCouponId: null }),
+        },
+        userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       };
       const prisma = {
@@ -474,7 +497,12 @@ describe('PaymentService', () => {
         channel: 'WXPAY', status: 'PREPAY_UNKNOWN', transactionId: null, paymentBills: [{ billId: 'bill-1' }],
       };
       const tx = {
-        payment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        payment: {
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          // 退券已挪进事务（时序修正），关单路径会在事务内读订单上的券
+          findUnique: jest.fn().mockResolvedValue({ userCouponId: null }),
+        },
+        userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       };
       const prisma = {
@@ -503,7 +531,12 @@ describe('PaymentService', () => {
         channel: 'WXPAY', status: 'CREATED', transactionId: null, paymentBills: [{ billId: 'bill-1' }],
       };
       const tx = {
-        payment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        payment: {
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          // 退券已挪进事务（时序修正），关单路径会在事务内读订单上的券
+          findUnique: jest.fn().mockResolvedValue({ userCouponId: null }),
+        },
+        userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       };
       const prisma = {
@@ -532,7 +565,12 @@ describe('PaymentService', () => {
     function notifyTx() {
       return {
         paymentEvent: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({}) },
-        payment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        payment: {
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          // 退券已挪进事务（时序修正），关单路径会在事务内读订单上的券
+          findUnique: jest.fn().mockResolvedValue({ userCouponId: null }),
+        },
+        userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       };
     }

@@ -610,8 +610,19 @@ export class PaymentService {
   }
 
   private async finishUnpaidPayment(paymentId: string, status: 'CLOSED' | 'FAILED'): Promise<void> {
-    // 订单未成交（关闭/失败）时把抵扣券退还业主，否则券被白扣。
-    await this.releaseCouponFor(paymentId);
+    /*
+     * 订单未成交（关闭/失败）时把抵扣券退还业主，否则券被白扣。
+     *
+     * 关键：退券必须在「订单确实被改成未成交」**之后**、且在同一事务内。
+     *
+     * 原实现在事务外、状态判定之前就无条件 releaseCouponFor()。而
+     * releaseCouponFor 的唯一条件是券 status='USED'，不看支付是否已成交。
+     * 于是存在这条竞态：恢复任务查单得到 NOTPAY → 业主随后在收银台付款成功 →
+     * 回调把 Payment 置 SUCCESS、账单 PAID → 恢复任务继续走 close() →
+     * **先把券退了** → 事务里 updateMany 命中 0 行直接 return，退券不会回滚。
+     * 结果：账单按抵扣后金额销账（物业承担了券的成本），券却回到 UNUSED 可再用一次，
+     * 每次命中泄漏一张券的面额；而 Payment.userCouponId 仍指向它，对账也看不出异常。
+     */
     await this.prisma.raw.$transaction(async (tx) => {
       const updated = await tx.payment.updateMany({
         where: { id: paymentId, status: { in: [...ACTIVE_PAYMENT_STATUSES] } },
@@ -622,6 +633,13 @@ export class PaymentService {
         where: { paymentId, status: 'UNPAID' },
         data: { paymentId: null },
       });
+      const p = await tx.payment.findUnique({ where: { id: paymentId }, select: { userCouponId: true } });
+      if (p?.userCouponId) {
+        await tx.userCoupon.updateMany({
+          where: { id: p.userCouponId, status: 'USED' },
+          data: { status: 'UNUSED', usedAt: null },
+        });
+      }
     });
   }
 
@@ -764,9 +782,17 @@ export class PaymentService {
      */
     const billCents = toCents(bill.amount.toString());
     const now = new Date();
+    /*
+     * 必须带 tenantId：consumeCouponInTx 强制 tenantId 匹配（见其 where 子句），
+     * 这里若不带，业主在 A 物业领的券会出现在 B 物业账单的可用券列表里，
+     * 点下去被「优惠券不存在或不属于你」拒掉——与刚修的「显示 ¥0.00 再被拒」同一类
+     * 「前端给的选项后端不接受」。
+     * 另加稳定排序：券多于 50 张时 take 会截断，按面额降序保证不会把最优券切掉。
+     */
     const myCoupons = await this.prisma.raw.userCoupon.findMany({
-      where: { wxUserId: ownerId, status: 'UNUSED' },
+      where: { wxUserId: ownerId, status: 'UNUSED', tenantId: bill.tenantId },
       include: { coupon: true },
+      orderBy: { coupon: { faceValue: 'desc' } },
       take: 50,
     });
     const usableCoupons = myCoupons

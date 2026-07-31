@@ -70,14 +70,27 @@ export class MeterService {
     });
   }
 
-  /** 出账用：本期读数差；无本期读数返回 null */
+  /**
+   * 出账用：本期读数差。无本期读数、或缺上期读数时返回 null（跳过出账）。
+   *
+   * 为什么缺上期读数必须返回 null 而不是按 0 计：
+   * 原实现 `prevValue === null ? 0` 会把**累计读数**当成本期用量。小区上线首月，
+   * 水表已经用了多年（比如读数 1234），单价 3.5 元/吨时会开出
+   *   Math.round(350 × 123400 / 100) = 431900 分 = ¥4319.00
+   * 而该户当月实际用水约 30 吨、应为 ¥105.00 —— 单户超收 ¥4214，且全小区首月
+   * 同时中招。这不是边界情况，是新小区上线的必然路径。
+   *
+   * 返回 null 后 calcOne 会以 METER_READING_MISSING 跳过该户并计入 skippedDetail，
+   * 物业能在出账页看到「缺读数」而不是收到一张天文数字的账单。
+   * 首期基准读数需要先录一期作为基期，第二期起才产生用量。
+   */
   async getDiff(houseId: string, meterType: MeterType, period: string): Promise<number | null> {
     const reading = await this.prisma.t.meterReading.findUnique({
       where: { houseId_meterType_period: { houseId, meterType, period } },
     });
     if (!reading) return null;
-    const prev = reading.prevValue === null ? 0 : Number(reading.prevValue);
-    return Number(reading.value) - prev;
+    if (reading.prevValue === null) return null;
+    return Number(reading.value) - Number(reading.prevValue);
   }
 
   /** 后台查询：某小区某期的抄表情况 + 未录房屋列表 */

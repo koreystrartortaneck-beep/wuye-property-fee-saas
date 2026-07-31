@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { toCents } from '../billing/engine/money';
 import { PaymentService } from './payment.service';
 
@@ -210,5 +212,48 @@ describe('可用券列表与实际接受范围一致', () => {
   it('门槛不满时也不进入列表', () => {
     expect(usable('50.00', '10.00', '100.00')).toBe(false);
     expect(usable('150.00', '10.00', '100.00')).toBe(true);
+  });
+});
+
+/**
+ * 退券的时序：必须在「订单确实被改成未成交」之后、且同事务内。
+ *
+ * 原实现在事务外、状态判定之前无条件 releaseCouponFor()。而它唯一的条件是券
+ * status='USED'，不看支付是否已成交。于是有这条竞态：恢复任务查单得到 NOTPAY →
+ * 业主随后在收银台付款成功 → 回调把 Payment 置 SUCCESS、账单 PAID → 恢复任务继续
+ * 走 close() → **先把券退了** → 事务里 updateMany 命中 0 行直接 return，退券不回滚。
+ * 结果：账单按抵扣后金额销账（物业承担了券成本），券却回到 UNUSED 可再用一次。
+ *
+ * 这里做静态断言而非行为断言：竞态本身很难在单测里稳定复现，而「退券语句必须出现在
+ * count===0 的 return 之后」是可以直接从源码结构上钉住的。
+ */
+describe('退券必须在订单状态判定之后', () => {
+  const src = readFileSync(join(__dirname, 'payment.service.ts'), 'utf8');
+
+  it('finishUnpaidPayment 里退券语句排在 count===0 的 return 之后', () => {
+    const start = src.indexOf('private async finishUnpaidPayment');
+    expect(start).toBeGreaterThan(-1);
+    const body = src.slice(start, start + 3000);
+
+    const guardAt = body.indexOf('if (updated.count === 0) return;');
+    const releaseAt = body.indexOf("data: { status: 'UNUSED', usedAt: null }");
+    expect(guardAt).toBeGreaterThan(-1);
+    expect(releaseAt).toBeGreaterThan(-1);
+    expect(releaseAt).toBeGreaterThan(guardAt);
+  });
+
+  it('不得再在事务外调用 releaseCouponFor（那正是竞态的来源）', () => {
+    const start = src.indexOf('private async finishUnpaidPayment');
+    const body = src.slice(start, start + 3000);
+    const txAt = body.indexOf('$transaction');
+    const legacyAt = body.indexOf('this.releaseCouponFor(');
+    // 要么完全不再调用它，要么调用点在事务之内
+    if (legacyAt !== -1) expect(legacyAt).toBeGreaterThan(txAt);
+  });
+
+  it('退券用条件更新保证幂等（不会把业主已重新用掉的券改回 UNUSED）', () => {
+    const start = src.indexOf('private async finishUnpaidPayment');
+    const body = src.slice(start, start + 3000);
+    expect(body).toContain("status: 'USED'");
   });
 });
