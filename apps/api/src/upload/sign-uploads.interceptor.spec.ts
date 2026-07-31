@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { signUploadsDeep } from './sign-uploads.interceptor';
+import { UploadPathsInterceptor, signUploadsDeep, stripUploadSignaturesDeep } from './sign-uploads.interceptor';
 import { signIfUploadPath, stripUploadSignature, verifyUploadToken } from './upload-access';
 
 /**
@@ -17,6 +17,17 @@ import { signIfUploadPath, stripUploadSignature, verifyUploadToken } from './upl
 
 const SRC = join(__dirname, '..');
 const read = (p: string) => readFileSync(join(SRC, p), 'utf8');
+
+/** 递归收集 api 源码里的 .ts（排除 spec） */
+function walkSrc(dir: string): string[] {
+  const out: string[] = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) out.push(...walkSrc(p));
+    else if (e.name.endsWith('.ts') && !e.name.includes('.spec.')) out.push(p);
+  }
+  return out;
+}
 
 const OLD_SECRET = process.env.JWT_SECRET;
 beforeAll(() => {
@@ -137,15 +148,15 @@ describe('上传路径在响应出口统一现签', () => {
 describe('拦截器必须真的挂上，且顺序正确', () => {
   const setup = read('setup-app.ts');
 
-  it('SignUploadsInterceptor 全局注册', () => {
-    expect(setup).toMatch(/useGlobalInterceptors\([\s\S]*new SignUploadsInterceptor\(\)/);
+  it('UploadPathsInterceptor 全局注册', () => {
+    expect(setup).toMatch(/useGlobalInterceptors\([\s\S]*new UploadPathsInterceptor\(\)/);
   });
 
   it('排在 ResponseInterceptor 之前注册', () => {
     // Nest 全局拦截器按注册顺序进、逆序出，先注册的后处理响应体。
     // 顺序写反只会签到未包装的内层：看起来也有签名，但包装层之外的字段漏掉。
     const call = setup.slice(setup.indexOf('useGlobalInterceptors('));
-    const sign = call.indexOf('new SignUploadsInterceptor()');
+    const sign = call.indexOf('new UploadPathsInterceptor()');
     const resp = call.indexOf('new ResponseInterceptor()');
     expect(sign).toBeGreaterThanOrEqual(0);
     expect(resp).toBeGreaterThanOrEqual(0);
@@ -163,6 +174,45 @@ describe('库里只能存裸路径', () => {
     // 微信云存储临时 URL 自带鉴权参数，剥掉就下载不了
     const urls = ['cloud://a.jpg', 'https://x.com/a.jpg?sign=abc'];
     expect(stripUploadSignature(urls)).toEqual(urls);
+  });
+
+  it('入口侧统一剥签名：请求体里任意深度、任意字段名都覆盖', () => {
+    /*
+     * 起初只在两个写入口调 stripUploadSignature，随后发现 ServiceItem.coverImage
+     * 是第三个 —— 和「出口逐处签会漏」完全一样的错误，同一天犯了第二次。
+     * 所以入口也做成统一的，断言的是「统一」而不是某几个文件里有没有调。
+     */
+    const body = {
+      images: ['/uploads/a.jpg?exp=1&sig=zz', 'cloud://b.jpg'],
+      nested: { coverImage: '/uploads/c.png?exp=2&sig=yy' },
+      外链: 'https://x.com/a.jpg?sign=keep-me',
+    };
+    const out = stripUploadSignaturesDeep(body) as typeof body;
+    expect(out.images[0]).toBe('/uploads/a.jpg');
+    expect(out.images[1]).toBe('cloud://b.jpg');
+    expect(out.nested.coverImage).toBe('/uploads/c.png');
+    // 外链的查询串是有意义的（可能本身就是鉴权参数），不能动
+    expect(out['外链']).toBe('https://x.com/a.jpg?sign=keep-me');
+  });
+
+  it('拦截器在进入处理器前就把请求体剥好', () => {
+    // 时序前提：拦截器 pre-handle 跑在 ValidationPipe 之前，DTO 才拿得到剥过的值。
+    // 这条断言钉住「真的改了 req.body」，而不只是导出了一个函数。
+    const req: { body: unknown } = { body: { images: ['/uploads/a.jpg?exp=1&sig=zz'] } };
+    const ctx = {
+      switchToHttp: () => ({ getRequest: () => req }),
+    } as unknown as Parameters<UploadPathsInterceptor['intercept']>[0];
+    const next = { handle: () => ({ pipe: () => ({}) }) } as unknown as Parameters<
+      UploadPathsInterceptor['intercept']
+    >[1];
+    new UploadPathsInterceptor().intercept(ctx, next);
+    expect((req.body as { images: string[] }).images[0]).toBe('/uploads/a.jpg');
+  });
+
+  it('Buffer 请求体原样不动——支付回调靠 rawBody 验签', () => {
+    // 动了 Buffer 就是签名验不过，直接影响钱。比坏图严重得多。
+    const buf = Buffer.from('{"resource":"x"}');
+    expect(stripUploadSignaturesDeep(buf)).toBe(buf);
   });
 
   it('所有接收 images 的写入口都先剥签名', () => {
@@ -184,10 +234,26 @@ describe('库里只能存裸路径', () => {
     }
   });
 
-  it('工单创建与工作日志创建都不再用 as never 关掉字段校验', () => {
-    // `as never` 会让字段名写错、类型不符都编译通过，直到运行时才炸
-    for (const f of ['tickets/tickets.service.ts', 'work-logs/admin-work-logs.controller.ts']) {
-      expect(read(f)).not.toMatch(/create\(\{\s*data:[^}]*as never/);
+  it('全库不得再出现 as never', () => {
+    /*
+     * 从「列举几个文件」改成全库扫描：本轮已经在第 4 个文件里又碰到一次
+     * （ServiceItem.create）。列举式的检查只能证明列进来的那几个是干净的。
+     *
+     * `as never` 会让字段名写错、类型不符全部编译通过，直到运行时才炸；
+     * 而写操作出错就是数据错，是这个系统里最贵的一类错。
+     */
+    const offenders: string[] = [];
+    for (const f of walkSrc(SRC)) {
+      const src = readFileSync(f, 'utf8');
+      // 覆盖全部形态而不只是 `data: {...} as never`：
+      // 值级的 `amount: x as never` 同样是放弃类型检查（金额字段尤其不能这么写），
+      // `tx as never`、`includes(x as never)` 也各自遮盖过真实的类型不匹配。
+      // 代码里已经一处不剩，所以直接禁掉整个写法；注释里提到这四个字不算。
+      for (const line of src.split('\n')) {
+        const code = line.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, '');
+        if (/\bas never\b/.test(code)) offenders.push(`${f.slice(SRC.length + 1)}: ${line.trim().slice(0, 60)}`);
+      }
     }
+    expect(offenders).toEqual([]);
   });
 });

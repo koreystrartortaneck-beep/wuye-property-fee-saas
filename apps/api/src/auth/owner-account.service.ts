@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ErrorCode } from '@pf/shared';
 import { AuditService } from '../audit/audit.service';
 import { BizException } from '../common/biz.exception';
@@ -76,7 +77,8 @@ export class OwnerAccountService {
       // 报修文字保留（物业要据此追溯处理过程），但清空照片：可能拍到户内/门牌/身份材料
       await tx.ticket.updateMany({
         where: { wxUserId: ownerId },
-        data: { images: [] as never },
+        // Json 列用 InputJsonValue 而不是 never：never 连「是不是可序列化的 JSON」都不检查
+        data: { images: [] as Prisma.InputJsonValue },
       });
       await this.anonymizeOfflinePayerNames(tx, ownerId);
       await tx.wxUser.update({
@@ -102,7 +104,7 @@ export class OwnerAccountService {
               resourceId: b.id,
               afterSummary: { event: 'ACCOUNT_DELETE_UNBIND', status: 'REJECTED' },
             },
-            tx as never,
+            tx,
           ),
         );
       }
@@ -134,7 +136,9 @@ export class OwnerAccountService {
       if (!snap || typeof snap.payerName !== 'string' || !snap.payerName) continue;
       await tx.payment.update({
         where: { id: r.id },
-        data: { offlinePayerSnapshot: { ...snap, payerName: maskName(snap.payerName) } as never },
+        data: {
+          offlinePayerSnapshot: { ...snap, payerName: maskName(snap.payerName) } as Prisma.InputJsonValue,
+        },
       });
     }
   }

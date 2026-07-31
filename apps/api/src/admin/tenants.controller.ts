@@ -217,7 +217,7 @@ export class TenantsService {
            */
           afterSummary: { status, sessionsInvalidated: true },
         },
-        tx as never,
+        tx,
       );
     });
 
@@ -329,7 +329,7 @@ export class TenantsService {
           // 绝不把口令写进审计
           afterSummary: { event: 'PASSWORD_RESET', mustResetOnFirstLogin: true },
         },
-        tx as never,
+        tx,
       );
     });
 

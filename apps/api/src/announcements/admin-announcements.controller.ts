@@ -4,6 +4,7 @@ import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 class CreateAnnouncementDto {
@@ -54,7 +55,12 @@ export class AdminAnnouncementsController {
   @Post()
   create(@Current() cur: CurrentAdmin, @Body() dto: CreateAnnouncementDto) {
     return this.prisma.t.announcement.create({
-      data: { ...dto, communityId: dto.communityId || null, createdBy: cur.adminId } as never,
+      // 不整体转 never：否则其余字段的校验一并失效。tenantId 由租户扩展注入。
+      data: {
+        ...dto,
+        communityId: dto.communityId || null,
+        createdBy: cur.adminId,
+      } as Omit<Prisma.AnnouncementUncheckedCreateInput, 'tenantId'> as Prisma.AnnouncementUncheckedCreateInput,
     });
   }
 

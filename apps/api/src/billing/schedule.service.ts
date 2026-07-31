@@ -107,7 +107,7 @@ export class ScheduleService {
         });
         for (const bill of dueSoon) {
           try {
-            await this.notifier.onReminder(bill as never, 'DUE_SOON');
+            await this.notifier.onReminder(bill, 'DUE_SOON');
           } catch (e) {
             this.logger.warn(`到期提醒失败 bill=${bill.id}: ${e instanceof Error ? e.message : e}`);
           }
@@ -118,7 +118,7 @@ export class ScheduleService {
         });
         for (const bill of overdue) {
           try {
-            await this.notifier.onReminder(bill as never, 'OVERDUE');
+            await this.notifier.onReminder(bill, 'OVERDUE');
           } catch (e) {
             this.logger.warn(`逾期提醒失败 bill=${bill.id}: ${e instanceof Error ? e.message : e}`);
           }

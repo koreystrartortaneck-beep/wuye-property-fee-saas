@@ -6,6 +6,7 @@ import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { RolesGuard } from '../auth/roles.decorator';
 import { BizException } from '../common/biz.exception';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 class CreateReadingDto {
@@ -111,7 +112,7 @@ export class MeterService {
         value: dto.value,
         prevValue: prev ? prev.value : null,
         createdBy: adminId,
-      } as never,
+      } as Omit<Prisma.MeterReadingUncheckedCreateInput, 'tenantId'> as Prisma.MeterReadingUncheckedCreateInput,
       update: { value: dto.value, createdBy: adminId },
     });
 

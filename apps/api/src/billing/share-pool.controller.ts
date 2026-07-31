@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Injectable, Put, Query, UseGuards } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Min } from 'class-validator';
 import { ErrorCode } from '@pf/shared';
@@ -33,7 +34,10 @@ export class SharePoolService {
     }
     return this.prisma.t.sharePool.upsert({
       where: { ruleId_period: { ruleId: dto.ruleId, period: dto.period } },
-      create: { ruleId: dto.ruleId, period: dto.period, totalAmount: dto.totalAmount } as never,
+      create: { ruleId: dto.ruleId, period: dto.period, totalAmount: dto.totalAmount } as Omit<
+        Prisma.SharePoolUncheckedCreateInput,
+        'tenantId'
+      > as Prisma.SharePoolUncheckedCreateInput,
       update: { totalAmount: dto.totalAmount },
     });
   }

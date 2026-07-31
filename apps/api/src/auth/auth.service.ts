@@ -157,7 +157,7 @@ export class AuthService {
           resourceId: bindingId,
           afterSummary: summary,
         },
-        tx as never,
+        tx,
       ),
     );
   }

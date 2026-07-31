@@ -3,6 +3,7 @@ import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validat
 import { AdminGuard } from '../auth/admin.guard';
 import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 class CreateCommunityDto {
@@ -48,8 +49,16 @@ export class CommunitiesService {
   constructor(private readonly prisma: PrismaService) {}
 
   create(dto: CreateCommunityDto) {
-    // tenantId 由租户隔离扩展自动写入
-    return this.prisma.t.community.create({ data: dto as never });
+    /*
+     * tenantId 由租户隔离扩展自动写入，所以类型上要 Omit 掉它 ——
+     * 但**不能**因此把整个 data 转成 never：那会连带关掉其余所有字段的校验，
+     * 字段名写错、类型不符都要等到运行时才炸。写操作出错就是数据错。
+     *
+     * 用 Unchecked 版：扩展注入的是标量 tenantId，而 CommunityCreateInput 因为有
+     * tenant 关联字段，要求的是 { tenant: { connect } } 形状。
+     */
+    const data: Omit<Prisma.CommunityUncheckedCreateInput, 'tenantId'> = { ...dto };
+    return this.prisma.t.community.create({ data: data as Prisma.CommunityUncheckedCreateInput });
   }
 
   async list(q: PageQuery) {

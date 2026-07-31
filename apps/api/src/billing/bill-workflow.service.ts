@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ErrorCode } from '@pf/shared';
 import { AuditService } from '../audit/audit.service';
 import { BizException } from '../common/biz.exception';
@@ -381,8 +382,13 @@ export class BillWorkflowService {
               source: bill.source ?? 'RULE',
               period: bill.period,
               title: bill.title,
-              snapshot: { ...(bill.snapshot as object), reissuedFrom: bill.id, originalRuleId: bill.ruleId } as never,
-              amount: bill.amount as never,
+              snapshot: {
+                ...(bill.snapshot as object),
+                reissuedFrom: bill.id,
+                originalRuleId: bill.ruleId,
+              } as Prisma.InputJsonValue,
+              // 金额直传：源与目标都是 Decimal(10,2)。原来的 as never 等于对金额不做任何检查
+              amount: bill.amount,
               status: 'UNPAID',
               dueDate,
               publishedAt: now,

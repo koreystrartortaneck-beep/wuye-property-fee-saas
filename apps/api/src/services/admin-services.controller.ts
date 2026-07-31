@@ -15,6 +15,7 @@ import { SERVICE_ORDER_STATUSES, ServiceOrderStatus } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ServicesService } from './services.service';
 
@@ -117,7 +118,22 @@ class ServiceItemsService {
   constructor(private readonly prisma: PrismaService) {}
 
   create(dto: CreateItemDto) {
-    return this.prisma.t.serviceItem.create({ data: { ...dto, communityId: dto.communityId || null } as never });
+    /*
+     * 不用 `as never`：它把整个 data 的字段校验关掉，字段名写错也编译通过。
+     * price 必须显式转 —— DTO 里是 number，列是 Decimal(10,2)，靠 as never
+     * 蒙过去的话精度问题不会有任何提示。
+     */
+    const data: Omit<Prisma.ServiceItemCreateInput, 'tenantId'> = {
+      name: dto.name,
+      category: dto.category ?? null,
+      price: dto.price,
+      unit: dto.unit ?? undefined,
+      description: dto.description ?? null,
+      coverImage: dto.coverImage ?? null,
+      communityId: dto.communityId || null,
+      sortOrder: dto.sortOrder ?? undefined,
+    };
+    return this.prisma.t.serviceItem.create({ data: data as Prisma.ServiceItemCreateInput });
   }
 
   async list(q: PageQuery & { communityId?: string }) {

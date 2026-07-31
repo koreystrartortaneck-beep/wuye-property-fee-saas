@@ -16,6 +16,7 @@ import { COUPON_TYPES, CouponType } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery } from '../common/pagination';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CouponsService } from './coupons.service';
 
@@ -103,7 +104,7 @@ export class AdminCouponsController {
         communityId: dto.communityId || null,
         validFrom: new Date(dto.validFrom),
         validTo: new Date(`${dto.validTo}T23:59:59`),
-      } as never,
+      } as Omit<Prisma.CouponUncheckedCreateInput, 'tenantId'> as Prisma.CouponUncheckedCreateInput,
     });
   }
 

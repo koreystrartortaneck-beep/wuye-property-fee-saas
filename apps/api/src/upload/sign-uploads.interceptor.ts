@@ -21,6 +21,19 @@ import { signIfUploadPath } from './upload-access';
  *
  * 成本：响应体都是分页后的结果（每页 ≤ 100 条），一次浅遍历，可忽略。
  * 深度上限防的是自引用对象造成的栈溢出 —— Prisma 结果不会自引用，但响应体不只有它。
+ *
+ * ── 入口侧是同一个问题的另一半 ──
+ *
+ * 出口统一现签之后，客户端手里的地址都带令牌。任何「读出来、改一改、提交回去」的
+ * 编辑流程都会把带令牌的地址原样交回来，入库即成永久坏图（10 分钟后打不开，
+ * 且从库里看不出原因）。
+ *
+ * 起初只在两个写入口调了 stripUploadSignature。随后发现 ServiceItem.coverImage
+ * 是第三个 —— 和「出口逐处签会漏」完全一样的错误，我在同一天犯了第二次。
+ * 所以入口也做成统一的：请求体里任意深度的 /uploads/ 路径一律剥掉查询串。
+ *
+ * 时序上成立：Nest 的拦截器 pre-handle 阶段在 ValidationPipe 之前，
+ * 所以这里改过的 req.body 才是 DTO 最终收到的值。
  */
 
 /** 遍历深度上限。Prisma 结果最深 3~4 层，16 层足够且能挡住异常结构。 */
@@ -57,9 +70,48 @@ export function signUploadsDeep(value: unknown, depth = 0): unknown {
   return changed ? out : value;
 }
 
+/** 请求体侧：把 /uploads/ 路径上的查询串（访问令牌）剥掉，还原成可入库的裸路径 */
+export function stripUploadSignaturesDeep(value: unknown, depth = 0): unknown {
+  if (depth > MAX_DEPTH) return value;
+  if (typeof value === 'string') {
+    return value.startsWith('/uploads/') ? value.replace(/\?.*$/, '') : value;
+  }
+  if (Array.isArray(value)) {
+    let changed = false;
+    const mapped = value.map((v) => {
+      const next = stripUploadSignaturesDeep(v, depth + 1);
+      if (next !== v) changed = true;
+      return next;
+    });
+    return changed ? mapped : value;
+  }
+  if (value === null || typeof value !== 'object') return value;
+  // Buffer 必须原样返回：支付回调用 rawBody 验签，动它就是签名验不过 —— 直接影响钱
+  if (Object.getPrototypeOf(value) !== Object.prototype) return value;
+
+  const src = value as Record<string, unknown>;
+  let changed = false;
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(src)) {
+    const next = stripUploadSignaturesDeep(src[k], depth + 1);
+    if (next !== src[k]) changed = true;
+    out[k] = next;
+  }
+  return changed ? out : value;
+}
+
 @Injectable()
-export class SignUploadsInterceptor implements NestInterceptor {
-  intercept(_context: ExecutionContext, next: CallHandler): Observable<unknown> {
+export class UploadPathsInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    const req = context.switchToHttp().getRequest<{ body?: unknown }>();
+    if (req && req.body !== undefined) {
+      const stripped = stripUploadSignaturesDeep(req.body);
+      // 只在真有改动时赋值：避免给 rawBody 之类的特殊请求体换引用
+      if (stripped !== req.body) req.body = stripped;
+    }
     return next.handle().pipe(map((body) => signUploadsDeep(body)));
   }
 }
+
+/** 旧名保留：setup-app 与测试都已改用 UploadPathsInterceptor，这里只为兼容引用 */
+export const SignUploadsInterceptor = UploadPathsInterceptor;

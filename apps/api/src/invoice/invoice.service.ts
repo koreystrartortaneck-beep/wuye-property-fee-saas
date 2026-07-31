@@ -96,7 +96,8 @@ export class InvoiceService implements InvoiceRefundLink {
               taxNo: input.taxNo?.trim() ?? null,
               deliveryMethod: input.deliveryMethod,
               email: input.email ?? null,
-              amount: payment.totalAmount as never,
+              // 金额直传：Decimal → Decimal(10,2)，不需要也不应该转 never
+              amount: payment.totalAmount,
               status: 'SUBMITTED',
             },
           });

@@ -6,6 +6,7 @@ import { AdminGuard } from '../auth/admin.guard';
 import { RolesGuard } from '../auth/roles.decorator';
 import { BizException } from '../common/biz.exception';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { validateRuleParams } from './engine/rule-params';
 
@@ -108,7 +109,15 @@ export class FeeRulesService {
       throw new BizException(ErrorCode.FORMULA_INVALID, 'FORMULA 规则已停用，请改用固定/面积/计量/公摊规则或账单导入');
     }
     validateRuleParams(dto.ruleType, dto.params);
-    return this.prisma.t.feeRule.create({ data: { ...dto, params: dto.params as never } as never });
+    /*
+     * 整体 as never 会关掉全部字段校验；params 是 Json 列，只需把它单独窄转成
+     * InputJsonValue —— 这样字段名与其余字段类型仍然受检。
+     */
+    const data: Omit<Prisma.FeeRuleUncheckedCreateInput, 'tenantId'> = {
+      ...dto,
+      params: dto.params as Prisma.InputJsonValue,
+    };
+    return this.prisma.t.feeRule.create({ data: data as Prisma.FeeRuleUncheckedCreateInput });
   }
 
   async list(q: ListFeeRulesQuery) {
@@ -131,7 +140,7 @@ export class FeeRulesService {
     if (dto.params) validateRuleParams(rule.ruleType as RuleType, dto.params);
     return this.prisma.t.feeRule.update({
       where: { id },
-      data: { ...dto, params: dto.params as never },
+      data: { ...dto, params: dto.params as Prisma.InputJsonValue },
     });
   }
 
@@ -143,7 +152,7 @@ export class FeeRulesService {
     validateRuleParams(dto.ruleType, dto.params);
     return this.prisma.t.feeRule.update({
       where: { id },
-      data: { ruleType: dto.ruleType, params: dto.params as never, enabled: false },
+      data: { ruleType: dto.ruleType, params: dto.params as Prisma.InputJsonValue, enabled: false },
     });
   }
 
@@ -154,7 +163,10 @@ export class FeeRulesService {
     if (rule.ruleType !== 'FORMULA') throw new BizException(ErrorCode.VALIDATION, '仅 FORMULA 规则可退役');
     return this.prisma.t.feeRule.update({
       where: { id },
-      data: { enabled: false, params: { ...(rule.params as object), __disposition: RETIRED } as never },
+      data: {
+        enabled: false,
+        params: { ...(rule.params as object), __disposition: RETIRED } as Prisma.InputJsonValue,
+      },
     });
   }
 

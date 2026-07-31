@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ErrorCode, MeterType, RuleType, ShareBy } from '@pf/shared';
 import { BizException } from '../common/biz.exception';
+import { toJsonColumn } from '../common/json-column';
 import { PrismaService } from '../prisma/prisma.service';
 import { calcOne } from './engine/calc';
 import { centsToStr, toCents } from './engine/money';
@@ -106,12 +107,17 @@ export class BillRunService {
           source: 'RULE',
           ruleId,
           status: 'DRAFT',
-        } as never,
+          // 不整体转 never：tenantId 由租户扩展注入，只需把它从类型里 Omit 掉，
+          // 其余字段的校验必须留着 —— 这里写的是账单批次，字段错就是钱错。
+        } as Omit<Prisma.BillBatchUncheckedCreateInput, 'tenantId'> as Prisma.BillBatchUncheckedCreateInput,
       }));
 
     const run = await this.prisma.t.billRun.upsert({
       where: { ruleId_period: { ruleId, period } },
-      create: { ruleId, period, status: 'RUNNING' } as never,
+      create: { ruleId, period, status: 'RUNNING' } as Omit<
+        Prisma.BillRunUncheckedCreateInput,
+        'tenantId'
+      > as Prisma.BillRunUncheckedCreateInput,
       update: { status: 'RUNNING', finishedAt: null },
     });
 
@@ -159,7 +165,7 @@ export class BillRunService {
         source: 'RULE',
         period,
         title: `${rule.name} ${period}`,
-        snapshot: snapshot as never,
+        snapshot: snapshot as Prisma.InputJsonValue,
         amount: centsToStr(cents),
         status: 'DRAFT',
         dueDate,
@@ -194,7 +200,7 @@ export class BillRunService {
           total: houses.length,
           generated: 0,
           skipped: skippedCount,
-          skippedDetail: summarizeSkipped([{ houseId: '*', code: '*', reason }]) as never,
+          skippedDetail: toJsonColumn(summarizeSkipped([{ houseId: '*', code: '*', reason }])),
           finishedAt: new Date(),
         },
       });
@@ -318,7 +324,7 @@ export class BillRunService {
         total: houses.length,
         generated,
         skipped,
-        skippedDetail: summarizeSkipped(skippedDetail) as never,
+        skippedDetail: toJsonColumn(summarizeSkipped(skippedDetail)),
         finishedAt: new Date(),
       },
     });

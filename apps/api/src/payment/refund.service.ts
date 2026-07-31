@@ -1,4 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { PaymentChannel, PaymentStatus, Prisma } from '@prisma/client';
 import { ErrorCode } from '@pf/shared';
 import { AuditService } from '../audit/audit.service';
 import { toCents } from '../billing/engine/money';
@@ -28,16 +29,21 @@ export interface CreateRefundInput {
   requestId: string;
 }
 
+/*
+ * 这些字段原本把金额写成 unknown、渠道写成 string，于是写入 Refund 时不得不用
+ * `as never` 把类型检查全部关掉 —— 金额字段放弃类型检查是这个系统里最不该做的事。
+ * 按真实列类型声明后，as never 就不需要了，写错也会在编译期被拦住。
+ */
 interface PaymentForRefund {
   id: string;
   tenantId: string;
   communityId: string | null;
   billId: string | null;
   orderNo: string;
-  status: string;
-  channel: string;
+  status: PaymentStatus;
+  channel: PaymentChannel;
   transactionId: string | null;
-  totalAmount: unknown;
+  totalAmount: Prisma.Decimal;
   mchid: string | null;
   appid: string | null;
   merchantAccountId: string | null;
@@ -200,11 +206,13 @@ export class RefundService {
           appid: payment.appid ?? process.env.WX_PAY_APP_ID ?? process.env.WX_APPID ?? 'UNKNOWN',
           refundNo,
           type: 'FULL',
-          originalAmount: payment.totalAmount as never,
-          refundAmount: payment.totalAmount as never,
+          // 金额字段绝不用 as never：那等于放弃对金额类型的一切检查。
+          // 列是 Decimal(10,2)，payment.totalAmount 本身就是 Decimal，直接传。
+          originalAmount: payment.totalAmount,
+          refundAmount: payment.totalAmount,
           currency: 'CNY',
           reason,
-          channel: payment.channel as never,
+          channel: payment.channel,
           status: 'CREATED',
           requestedBy: adminId,
         },
@@ -424,7 +432,7 @@ export class RefundService {
    */
   async recoverRefund(refundNo: string): Promise<{ refundNo: string; status: string } | null> {
     const refund = (await this.prisma.raw.refund.findUnique({ where: { refundNo } })) as RefundAggregate | null;
-    if (!refund || !QUERYABLE_REFUND_STATUSES.includes(refund.status as never)) {
+    if (!refund || !(QUERYABLE_REFUND_STATUSES as readonly string[]).includes(refund.status)) {
       return refund ? { refundNo, status: refund.status } : null;
     }
     if (!this.provider.queryRefund) throw new Error('当前支付渠道不支持退款查询');

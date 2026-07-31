@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { BillStatus, ErrorCode } from '@pf/shared';
@@ -380,7 +381,7 @@ export class BillImportService {
               sourceRowKey: row.rowKey,
               period: input.period,
               title: row.title,
-              snapshot: { importedFrom: input.fileName, houseCode: row.houseCode } as never,
+              snapshot: { importedFrom: input.fileName, houseCode: row.houseCode } as Prisma.InputJsonValue,
               amount: row.amount,
               status: 'DRAFT',
               dueDate,

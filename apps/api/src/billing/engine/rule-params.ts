@@ -32,13 +32,16 @@ export function validateRuleParams(ruleType: RuleType, params: Record<string, un
       if (!isPositiveNumber(params.unitPrice)) {
         throw new BizException(ErrorCode.RULE_PARAM_INVALID, 'unitPrice 必须为正数');
       }
-      if (!METER_TYPES.includes(params.meterType as never)) {
+      // 先判类型再判取值：params 来自 Json 列，字段可能是数字甚至对象。
+      // 原来的 `includes(x as never)` 会让非字符串偷偷通过 includes（永远 false，
+      // 结果误报成「取值不合法」而不是「类型不合法」），提示语因此指错方向。
+      if (typeof params.meterType !== 'string' || !(METER_TYPES as readonly string[]).includes(params.meterType)) {
         throw new BizException(ErrorCode.RULE_PARAM_INVALID, `meterType 必须为 ${METER_TYPES.join('/')}`);
       }
       return;
 
     case 'SHARE':
-      if (!SHARE_BY.includes(params.shareBy as never)) {
+      if (typeof params.shareBy !== 'string' || !(SHARE_BY as readonly string[]).includes(params.shareBy)) {
         throw new BizException(ErrorCode.RULE_PARAM_INVALID, `shareBy 必须为 ${SHARE_BY.join('/')}`);
       }
       return;

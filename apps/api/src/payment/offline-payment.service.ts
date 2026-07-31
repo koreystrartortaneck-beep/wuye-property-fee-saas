@@ -148,7 +148,7 @@ export class OfflinePaymentService {
               offlineVoucherNo: input.voucherNo,
               offlinePaidAt: paidAt,
               offlineOperatorId: input.adminId,
-              offlinePayerSnapshot: payerSnapshot as never,
+              offlinePayerSnapshot: payerSnapshot as Prisma.InputJsonValue,
               offlineRemark: input.remark ?? null,
               receiptNo,
               receiptSnapshot: snapshot,

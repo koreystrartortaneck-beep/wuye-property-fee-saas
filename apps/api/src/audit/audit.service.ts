@@ -208,7 +208,16 @@ export interface AuditListQuery extends PageQuery {
   to?: string;
 }
 
+/*
+ * 全库 4 处调用原本都写 `tx as never` 才传进来。核实过：那 4 个 cast 是纯噪音 ——
+ * 去掉之后 Pick<Prisma.TransactionClient, 'auditLog'> 本来就能编译。
+ *
+ * 记在这里是因为「加个 as never 让它过」是很容易顺手做掉的事，而它会把该实参的
+ * 一切检查关掉：传错对象也编译通过，运行时才发现审计日志根本没写进去。
+ * 用 Prisma 自己生成的类型而不是手写最小接口，是为了不让它随 schema 演进而漂移。
+ */
 export type AuditTransaction = Pick<Prisma.TransactionClient, 'auditLog'>;
+
 
 @Injectable()
 export class AuditService {
