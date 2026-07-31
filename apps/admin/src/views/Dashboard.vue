@@ -124,7 +124,19 @@
         />
       </template>
       <el-table :data="rowsData" size="small">
-        <el-table-column prop="name" label="小区" min-width="150" />
+        <!--
+          未归属小区（communityId 为空）是后端为「账单的小区已不存在」补的一行 ——
+          少了它，明细各行之和会比上面的应收合计少一截，而界面上没有任何解释。
+          这里必须说明它是什么、该找谁，否则物业只会以为系统在乱算。
+        -->
+        <el-table-column label="小区" min-width="150">
+          <template #default="{ row }">
+            <span>{{ row.name }}</span>
+            <div v-if="!row.communityId" class="cell-hint">
+              这些账单关联的小区已不存在，金额已计入合计；如需归位请联系技术支持
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="应收（元）" width="130" align="right">
           <template #default="{ row }"><span class="num">{{ yuan(row.billAmount) }}</span></template>
         </el-table-column>

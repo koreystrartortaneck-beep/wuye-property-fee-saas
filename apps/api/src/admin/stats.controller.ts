@@ -96,10 +96,34 @@ export class StatsController {
       list.push(g);
       byId.set(g.communityId, list);
     }
-    return communities.map((c) => ({
+    const rows = communities.map((c) => ({
       communityId: c.id,
       name: c.name,
       ...summarizeGroups(byId.get(c.id) ?? []),
     }));
+
+    /*
+     * 匹配不到小区的账单必须单独列出来，不能静默丢掉。
+     *
+     * 原实现只遍历 community.findMany() 的结果：任何 communityId 匹配不上的分组
+     * （历史数据、小区被删、或曾经写入过跨租户的 communityId）金额直接消失，
+     * 而 /admin/stats/summary 是把**所有**分组都算进去的 ——
+     * 于是「本月应收合计」与「各小区之和」对不上，且界面上没有任何解释。
+     *
+     * 「同一个量两处显示成两个数」这类问题最费口舌：物业会先怀疑自己看错，
+     * 再怀疑系统在乱算。本仓已经出过一次（收缴率两处不同），不能再来一次。
+     *
+     * 新数据的来源已经堵住（assertCommunityInTenant），这里处理的是存量与被删小区。
+     */
+    const known = new Set(communities.map((c) => c.id));
+    const orphan = groups.filter((g) => !known.has(g.communityId));
+    if (orphan.length > 0) {
+      rows.push({
+        communityId: '',
+        name: '未归属小区',
+        ...summarizeGroups(orphan),
+      });
+    }
+    return rows;
   }
 }

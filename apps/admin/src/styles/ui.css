@@ -290,6 +290,18 @@
 
 /* ══════════════ 说明性文字 ══════════════ */
 
+/*
+ * 表格单元格内的补充说明。
+ * 不能直接用 .hint —— 它带 margin-bottom（为表单段落设计的），
+ * 放进单元格会把整行的行高顶开，而表格的密度是刻意压紧的。
+ */
+.cell-hint {
+  margin: 2px 0 0;
+  font-size: var(--fs-12);
+  color: var(--text-tertiary);
+  line-height: var(--lh-normal);
+}
+
 /* 表单/对话框里的提示段落 */
 .hint {
   margin: 0 0 var(--sp-3);
