@@ -80,6 +80,22 @@ export class AdminOperationsController {
      */
     const payMode = process.env.PAY_MODE ?? '(未配置)';
     const isRealPay = payMode === 'wxpay';
+    /*
+     * 每日对账定时任务真正依赖的环境变量。少一个就静默跳过整天的对账，
+     * 所以要在这里点名，而不是只判断 PAY_MODE。
+     */
+    const reconcileMissing = isRealPay
+      ? (
+          [
+            ['WX_PAY_ALLOWED_TENANT_ID', process.env.WX_PAY_ALLOWED_TENANT_ID],
+            ['WX_PAY_MERCHANT_SERIAL', process.env.WX_PAY_MERCHANT_SERIAL],
+            ['WX_PAY_MCH_ID', process.env.WX_PAY_MCH_ID],
+            ['WX_PAY_APP_ID/WX_APPID', process.env.WX_PAY_APP_ID ?? process.env.WX_APPID],
+          ] as Array<[string, string | undefined]>
+        )
+          .filter(([, v]) => !v)
+          .map(([k]) => k)
+      : [];
 
     // 三类订阅消息模板缺哪个就发不出哪种提醒，逐个列出而不是笼统说「未配置」
     const missingTemplates = (['WX_TMPL_BILL_CREATED', 'WX_TMPL_DUE_SOON', 'WX_TMPL_OVERDUE'] as const).filter(
@@ -105,11 +121,27 @@ export class AdminOperationsController {
           : `当前为 ${payMode}，不会产生真实收款`,
       },
       {
+        /*
+         * 只看 PAY_MODE 不够。
+         *
+         * 每日对账（ReconciliationService.runDaily）除了 PAY_MODE=wxpay，还要求
+         * WX_PAY_ALLOWED_TENANT_ID / WX_PAY_MERCHANT_SERIAL / WX_PAY_MCH_ID /
+         * WX_PAY_APP_ID（或 WX_APPID）—— 缺任何一个就**静默 return**，
+         * 那一天的对账根本没跑，而这里原本仍然显示「会真实下载微信账单并逐笔核对」。
+         *
+         * 对账是「发现漏账」的最后一道防线：它不跑，业主付了钱而本地没入账这类差异
+         * 就没有任何机制会发现。一个宣称已生效、实际静默停摆的检查，
+         * 比没有这个检查更糟 —— 它让人不再去看。
+         *
+         * 所以这里逐个点名缺哪个变量，而不是只报「不健康」。
+         */
         name: 'RECONCILIATION_CHANNEL',
-        healthy: isRealPay,
-        detail: isRealPay
-          ? '对账会真实下载微信账单并逐笔核对'
-          : '对账使用模拟渠道：账期恒为空，本地交易会被全部误判为「微信侧缺失」，真实资金差异无法发现',
+        healthy: isRealPay && reconcileMissing.length === 0,
+        detail: !isRealPay
+          ? '对账使用模拟渠道：账期恒为空，本地交易会被全部误判为「微信侧缺失」，真实资金差异无法发现'
+          : reconcileMissing.length > 0
+            ? `每日对账不会运行：缺少 ${reconcileMissing.join('、')}（缺任一项即静默跳过，漏账无法被发现）`
+            : '对账会真实下载微信账单并逐笔核对',
       },
       {
         /*

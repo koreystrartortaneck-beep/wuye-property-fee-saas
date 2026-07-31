@@ -76,9 +76,18 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     return found;
   }
 
+  /** 每日对账定时任务真正依赖的环境变量 */
+  function setReconcileEnv() {
+    process.env.WX_PAY_ALLOWED_TENANT_ID = 't1';
+    process.env.WX_PAY_MERCHANT_SERIAL = 'SERIAL';
+    process.env.WX_PAY_MCH_ID = '1700000000';
+    process.env.WX_PAY_APP_ID = 'wxappid';
+  }
+
   it('wxpay 模式：支付与对账都判为健康', async () => {
     process.env.PAY_MODE = 'wxpay';
     process.env.WX_MODE = 'real';
+    setReconcileEnv();
     setAllTemplates();
     const r = (await controller(true).getReadiness(cur)) as never as {
       healthy: boolean;
@@ -88,6 +97,32 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     expect(checkByName(r, 'WX_MODE').healthy).toBe(true);
     expect(checkByName(r, 'RECONCILIATION_CHANNEL').healthy).toBe(true);
     expect(r.healthy).toBe(true);
+  });
+
+  it('wxpay 但缺对账所需变量：必须不健康，且点名缺哪个', async () => {
+    /*
+     * runDaily 在这几个变量缺任一个时**静默 return** —— 那一天的对账根本没跑。
+     * 而原来这条检查只看 PAY_MODE，仍然显示「会真实下载微信账单并逐笔核对」。
+     *
+     * 对账是发现漏账的最后一道防线：它不跑，「业主付了钱而本地没入账」就没有任何
+     * 机制会发现。一个宣称已生效、实际静默停摆的检查比没有这个检查更糟 ——
+     * 它让人不再去看。
+     */
+    process.env.PAY_MODE = 'wxpay';
+    process.env.WX_MODE = 'real';
+    setReconcileEnv();
+    delete process.env.WX_PAY_MCH_ID;
+    setAllTemplates();
+    const r = (await controller(true).getReadiness(cur)) as never as {
+      healthy: boolean;
+      checks: { name: string; healthy: boolean; detail: string }[];
+    };
+    const c = checkByName(r, 'RECONCILIATION_CHANNEL');
+    expect(c.healthy).toBe(false);
+    // 只说「不健康」等于让运维去猜；必须点名
+    expect(c.detail).toContain('WX_PAY_MCH_ID');
+    expect(c.detail).toContain('不会运行');
+    expect(r.healthy).toBe(false);
   });
 
   it('mock 模式：整体不健康，且说明「真实资金差异无法发现」', async () => {
