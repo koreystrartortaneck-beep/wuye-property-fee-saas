@@ -42,10 +42,30 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     process.env.WX_TMPL_OVERDUE = 'c';
   }
 
-  /** 构造顺序是 (metrics, alerts, incidents)；本用例只需要 alerts.readiness() */
-  function controller(destinationConfigured: boolean) {
+  /**
+   * 构造顺序 (metrics, alerts, incidents, wxProbe, schemaVersion)。
+   * 本组用例只关心 alerts.readiness() 与迁移状态，其余依赖给空对象。
+   * schemaVersion 默认返回健康，避免它把别的检查项的断言带偏。
+   */
+  function controller(destinationConfigured: boolean, schemaOk = true) {
     const alerts = { readiness: () => ({ healthy: destinationConfigured, destinationConfigured }) };
-    return new AdminOperationsController({} as never, alerts as never, {} as never, {} as never);
+    const schemaVersion = {
+      info: jest.fn().mockResolvedValue({
+        latestInImage: '20260730020000_bill_payment_unique',
+        latestApplied: schemaOk ? '20260730020000_bill_payment_unique' : '20260727120000_coupon_deduction',
+        pendingCount: schemaOk ? 0 : 1,
+        failed: [],
+        ok: schemaOk,
+        detail: schemaOk ? '已应用至 20260730020000_bill_payment_unique，共 9 个' : '有 1 个迁移未应用',
+      }),
+    };
+    return new AdminOperationsController(
+      {} as never,
+      alerts as never,
+      {} as never,
+      {} as never,
+      schemaVersion as never,
+    );
   }
 
   const cur = { tenantId: 't1' } as never;
@@ -56,11 +76,11 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     return found;
   }
 
-  it('wxpay 模式：支付与对账都判为健康', () => {
+  it('wxpay 模式：支付与对账都判为健康', async () => {
     process.env.PAY_MODE = 'wxpay';
     process.env.WX_MODE = 'real';
     setAllTemplates();
-    const r = controller(true).getReadiness(cur) as never as {
+    const r = (await controller(true).getReadiness(cur)) as never as {
       healthy: boolean;
       checks: { name: string; healthy: boolean; detail: string }[];
     };
@@ -70,9 +90,9 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     expect(r.healthy).toBe(true);
   });
 
-  it('mock 模式：整体不健康，且说明「真实资金差异无法发现」', () => {
+  it('mock 模式：整体不健康，且说明「真实资金差异无法发现」', async () => {
     process.env.PAY_MODE = 'mock';
-    const r = controller(true).getReadiness(cur) as never as {
+    const r = (await controller(true).getReadiness(cur)) as never as {
       healthy: boolean;
       checks: { name: string; healthy: boolean; detail: string }[];
     };
@@ -83,9 +103,9 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     expect(r.healthy).toBe(false);
   });
 
-  it('PAY_MODE 未配置：同样判为不健康，并把实际取值回显出来', () => {
+  it('PAY_MODE 未配置：同样判为不健康，并把实际取值回显出来', async () => {
     delete process.env.PAY_MODE;
-    const r = controller(true).getReadiness(cur) as never as {
+    const r = (await controller(true).getReadiness(cur)) as never as {
       healthy: boolean;
       checks: { name: string; healthy: boolean; detail: string }[];
     };
@@ -93,12 +113,12 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     expect(r.healthy).toBe(false);
   });
 
-  it('订阅消息模板：缺哪个就列出哪个，业主收不到对应提醒', () => {
+  it('订阅消息模板：缺哪个就列出哪个，业主收不到对应提醒', async () => {
     process.env.PAY_MODE = 'wxpay';
     delete process.env.WX_TMPL_BILL_CREATED;
     delete process.env.WX_TMPL_DUE_SOON;
     process.env.WX_TMPL_OVERDUE = 'tmpl-overdue';
-    const r = controller(true).getReadiness(cur) as never as {
+    const r = (await controller(true).getReadiness(cur)) as never as {
       checks: { name: string; healthy: boolean; detail: string }[];
     };
     const c = checkByName(r as never, 'NOTIFY_TEMPLATES');
@@ -108,21 +128,21 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     expect(c.detail).not.toContain('WX_TMPL_OVERDUE');
   });
 
-  it('三类模板都配齐时判为健康', () => {
+  it('三类模板都配齐时判为健康', async () => {
     process.env.PAY_MODE = 'wxpay';
     setAllTemplates();
-    const r = controller(true).getReadiness(cur) as never as {
+    const r = (await controller(true).getReadiness(cur)) as never as {
       checks: { name: string; healthy: boolean; detail: string }[];
     };
     expect(checkByName(r as never, 'NOTIFY_TEMPLATES').healthy).toBe(true);
     for (const k of ['WX_TMPL_BILL_CREATED', 'WX_TMPL_DUE_SOON', 'WX_TMPL_OVERDUE']) delete process.env[k];
   });
 
-  it('WX_MODE 非 real 时判为不健康，并说明业主身份是伪造的', () => {
+  it('WX_MODE 非 real 时判为不健康，并说明业主身份是伪造的', async () => {
     process.env.PAY_MODE = 'wxpay';
     process.env.WX_MODE = 'mock';
     setAllTemplates();
-    const r = controller(true).getReadiness(cur) as never as {
+    const r = (await controller(true).getReadiness(cur)) as never as {
       healthy: boolean;
       checks: { name: string; healthy: boolean; detail: string }[];
     };
@@ -132,14 +152,48 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     expect(r.healthy).toBe(false);
   });
 
-  it('告警目的地未配置时整体也不健康（原有行为不被新检查掩盖）', () => {
+  it('告警目的地未配置时整体也不健康（原有行为不被新检查掩盖）', async () => {
     process.env.PAY_MODE = 'wxpay';
     process.env.WX_MODE = 'real';
-    const r = controller(false).getReadiness(cur) as never as {
+    const r = (await controller(false).getReadiness(cur)) as never as {
       healthy: boolean;
       checks: { name: string; healthy: boolean }[];
     };
     expect(checkByName(r as never, 'ALERT_DESTINATION').healthy).toBe(false);
     expect(r.healthy).toBe(false);
+  });
+
+  /*
+   * 迁移状态兼作版本标记。容器启动命令是 `prisma migrate deploy && node main.js`，
+   * 迁移失败服务起不来、成功也无处可查——此前每次发布都要临时造探针猜新版本上线了没，
+   * 还判断错过一次（服务能登录但跑的还是旧版本）。
+   */
+  it('有未应用的迁移时整体不健康，并回显镜像水位与已应用水位', async () => {
+    process.env.PAY_MODE = 'wxpay';
+    process.env.WX_MODE = 'real';
+    setAllTemplates();
+    const r = (await controller(true, false).getReadiness(cur)) as never as {
+      healthy: boolean;
+      checks: { name: string; healthy: boolean; detail: string }[];
+      schemaVersion: { latestInImage: string; latestApplied: string; pendingCount: number };
+    };
+    const c = checkByName(r as never, 'SCHEMA_MIGRATIONS');
+    expect(c.healthy).toBe(false);
+    expect(r.healthy).toBe(false);
+    expect(r.schemaVersion.pendingCount).toBe(1);
+    expect(r.schemaVersion.latestInImage).not.toBe(r.schemaVersion.latestApplied);
+  });
+
+  it('迁移全部应用时该项健康，且镜像水位与已应用水位一致', async () => {
+    process.env.PAY_MODE = 'wxpay';
+    process.env.WX_MODE = 'real';
+    setAllTemplates();
+    const r = (await controller(true).getReadiness(cur)) as never as {
+      checks: { name: string; healthy: boolean }[];
+      schemaVersion: { latestInImage: string; latestApplied: string; pendingCount: number };
+    };
+    expect(checkByName(r as never, 'SCHEMA_MIGRATIONS').healthy).toBe(true);
+    expect(r.schemaVersion.pendingCount).toBe(0);
+    expect(r.schemaVersion.latestInImage).toBe(r.schemaVersion.latestApplied);
   });
 });

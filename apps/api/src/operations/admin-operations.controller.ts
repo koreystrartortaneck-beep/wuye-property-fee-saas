@@ -10,6 +10,7 @@ import { AlertService } from './alert.service';
 import { IncidentService, IncidentStatus } from './incident.service';
 import { PilotMetricsService } from './pilot-metrics.service';
 import { WxProbeService } from '../wx/wx-probe.service';
+import { SchemaVersionService } from './schema-version.service';
 
 const INCIDENT_STATUSES: IncidentStatus[] = ['OPEN', 'ACKNOWLEDGED', 'RESOLVED'];
 
@@ -48,6 +49,7 @@ export class AdminOperationsController {
     private readonly alerts: AlertService,
     private readonly incidents: IncidentService,
     private readonly wxProbe: WxProbeService,
+    private readonly schemaVersion: SchemaVersionService,
   ) {}
 
   @Get('metrics')
@@ -56,8 +58,14 @@ export class AdminOperationsController {
   }
 
   @Get('readiness')
-  getReadiness(@Current() cur: CurrentAdmin) {
+  async getReadiness(@Current() cur: CurrentAdmin) {
     requireTenant(cur);
+    /*
+     * 迁移状态兼作「线上跑的是哪个版本」的标记。容器启动命令是
+     * `prisma migrate deploy && node main.js`，迁移失败服务就起不来、成功也无处可查。
+     * 此前每次发布都要临时造探针去猜新版本上线了没，还判断错过一次。
+     */
+    const schema = await this.schemaVersion.info();
     const alertReadiness = this.alerts.readiness();
 
     /*
@@ -78,6 +86,11 @@ export class AdminOperationsController {
     );
 
     const checks = [
+      {
+        name: 'SCHEMA_MIGRATIONS',
+        healthy: schema.ok,
+        detail: schema.detail,
+      },
       {
         name: 'ALERT_DESTINATION',
         healthy: alertReadiness.destinationConfigured,
@@ -139,7 +152,17 @@ export class AdminOperationsController {
       },
     ];
 
-    return { healthy: checks.every((c) => c.healthy), checks };
+    return {
+      healthy: checks.every((c) => c.healthy),
+      checks,
+      // 供部署脚本直接比对：镜像水位 vs 已应用水位
+      schemaVersion: {
+        latestInImage: schema.latestInImage,
+        latestApplied: schema.latestApplied,
+        pendingCount: schema.pendingCount,
+        failed: schema.failed,
+      },
+    };
   }
 
   /**

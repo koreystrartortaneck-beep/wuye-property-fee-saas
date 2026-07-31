@@ -36,6 +36,10 @@
           <div v-if="!c.healthy && c.name === 'PAY_MODE'" class="ck-hint">
             在云托管环境变量中把 PAY_MODE 设为 wxpay，否则业主的缴费不会真正扣款。
           </div>
+          <div v-if="!c.healthy && c.name === 'SCHEMA_MIGRATIONS'" class="ck-hint">
+            容器启动时会自动执行 prisma migrate deploy。这一项不健康意味着有迁移没应用或应用失败，
+            此时代码与数据库结构不匹配，可能出现字段缺失类报错——请查看云托管的启动日志。
+          </div>
           <div v-if="!c.healthy && c.name === 'OUTBOX_DISPATCH'" class="ck-hint">
             把云托管环境变量 OUTBOX_DISPATCH_ENABLED 删掉或设为 true 即可恢复。
             关闭期间产生的通知事件不会丢，恢复后会按退避重试补投。
@@ -254,6 +258,7 @@ const CHECK_LABEL: Record<string, string> = {
   ALERT_DESTINATION: '异常告警推送地址',
   PAY_MODE: '支付模式',
   RECONCILIATION_CHANNEL: '对账数据来源',
+  SCHEMA_MIGRATIONS: '数据库结构版本',
   OUTBOX_DISPATCH: '通知投递任务',
   NOTIFY_TEMPLATES: '业主通知模板',
 };
