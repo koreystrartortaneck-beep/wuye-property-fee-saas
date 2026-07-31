@@ -88,6 +88,27 @@ export class SchemaVersionService {
     const pending = inImage.filter((name) => !appliedSet.has(name));
     const latestApplied = applied.length > 0 ? applied[applied.length - 1] : null;
 
+    /*
+     * 读不到镜像里的迁移目录时**不能报健康**。
+     *
+     * migrationsInImage() 在两个候选路径都失败时返回空数组，于是 pending 也是空的，
+     * ok 就成了 true，detail 还是「已应用至 X，共 N 个」——
+     * 而此时它对「镜像里应该有哪些迁移」一无所知，那句话没有任何依据。
+     *
+     * 这个字段是判断部署是否生效的主要证据（本仓每次推送后都靠它核对），
+     * 一个在自己瞎了的时候仍然说「一切正常」的检查，比没有这个检查更糟。
+     */
+    if (inImage.length === 0) {
+      return {
+        latestInImage,
+        latestApplied: applied.length > 0 ? applied[applied.length - 1] : null,
+        pendingCount: 0,
+        failed,
+        ok: false,
+        detail: '读不到镜像内的迁移目录，无法判断是否有未应用的迁移（数据库中已记录 ' + applied.length + ' 个）',
+      };
+    }
+
     const ok = failed.length === 0 && pending.length === 0;
     let detail: string;
     if (failed.length > 0) {
