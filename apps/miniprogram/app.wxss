@@ -193,3 +193,18 @@ button::after {
   font-size: 24rpx;
   flex-shrink: 0;
 }
+
+/*
+ * 列表页脚（4 个分页列表共用）。
+ *
+ * loadingMore 此前在 bill / payments / tickets / work-wall 四页都只作为 JS 里的
+ * 防重入标记，模板零引用——业主往下拉时看不到任何反馈，不知道是在加载还是到底了。
+ * .list-end 原先只在 bill.wxss 里有一份，其余三页连「已显示全部」都没有。
+ */
+.list-loading,
+.list-end {
+  text-align: center;
+  color: #ada4bd;
+  font-size: 22rpx;
+  padding: 14rpx 0 6rpx;
+}

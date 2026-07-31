@@ -31,5 +31,7 @@
     <view wx:if="{{!loading && !error && list.length === 0}}" class="pay-item card">
       <view class="pay-item-bills">暂无缴费记录</view>
     </view>
-  </view>
+      <view wx:if="{{loadingMore}}" class="list-loading">正在加载…</view>
+    <view wx:elif="{{list.length > 0 && list.length >= total}}" class="list-end">已显示全部 {{total}} 条</view>
+</view>
 </view>

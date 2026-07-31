@@ -42,6 +42,13 @@ Page({
   data: {
     nav: { spacerPx: 48, rowPx: 32 },
     ready: false,
+    /*
+     * 加载失败必须有独立状态。原先 onShow 的 catch 只 console.error，然后 finally
+     * 把 ready 置 true，于是界面拿 data 的初值渲染：「待缴合计（0 笔）/ ¥ 0.00 /
+     * 立即缴纳」——业主据此以为自己没有欠费。房屋切换时更确定，因为 houseChanged
+     * 分支会先把金额清成 '0.00' 再去请求。
+     */
+    error: false,
     noHouse: false,
     currentHouse: null,
     houses: [],
@@ -60,6 +67,7 @@ Page({
   async onShow() {
     const app = getApp();
     await app.loginReady;
+    this.setData({ error: false });
     try {
       const houses = await loadMyHouses();
       if (houses.length === 0) {
@@ -78,14 +86,28 @@ Page({
       await this.loadHome();
     } catch (e) {
       console.error(e);
+      // 不确定金额时不要显示金额：宁可让业主看到「没能加载」也不能让他以为已缴清
+      this.setData({ error: true, unpaidTotal: '', unpaidCount: 0, paidUp: false, feed: [] });
     } finally {
       this.setData({ ready: true });
     }
   },
 
+  retry() {
+    this.onShow();
+  },
+
+  /*
+   * 请求令牌：快速切换房屋时，先发的请求可能后到，把 A 房屋的金额写到 B 房屋的
+   * 标题下面。bill.js 早就有这个保护，首页漏了——而首页恰好是金额最显眼的地方。
+   */
+  _reqToken: 0,
+
   async loadHome() {
     const house = getApp().globalData.currentHouse;
     if (!house) return;
+    this._reqToken += 1;
+    const myToken = this._reqToken;
     const [summary, billPage, anns, works] = await Promise.all([
       request(`/owner/bills/summary?houseId=${house.houseId}`),
       // 未缴账单不再在首页展示，只为「立即缴纳」合并下单做准备
@@ -93,6 +115,8 @@ Page({
       request(`/owner/announcements?houseId=${house.houseId}`).catch(() => []),
       request(`/owner/work-logs?houseId=${house.houseId}&pageSize=8`).catch(() => ({ list: [] })),
     ]);
+    // 期间又切了房屋：这批数据已经过期，丢弃
+    if (myToken !== this._reqToken) return;
     this._unpaidBills = billPage.list.map((b) => ({
       id: b.id,
       name: b.title,

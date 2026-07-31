@@ -24,6 +24,12 @@
   font-weight: 900;
 }
 
+/* 报价未回来时的占位：与金额同一行高，避免卡片高度跳动 */
+.pay-amount-loading {
+  opacity: 0.55;
+  font-size: 40rpx;
+}
+
 .pay-house {
   display: inline-flex;
   margin-top: 24rpx;

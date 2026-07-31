@@ -10,6 +10,7 @@ const STATUS_BY_TAB = [undefined, 'UNPAID', 'PAID']; // 全部 / 待缴 / 已缴
 
 Page({
   data: {
+    error: false, // 加载失败：必须与「真的没有账单」区分开
     nav: { spacerPx: 48, rowPx: 32 },
     tabs: ['全部', '待缴', '已缴'],
     activeTab: 1,
@@ -88,8 +89,22 @@ Page({
 
   async reload() {
     this._reqToken += 1;
-    this.setData({ page: 1, bills: [], groups: [] });
-    await this.fetchPage(1, this._reqToken);
+    this.setData({ page: 1, bills: [], groups: [], error: false });
+    try {
+      await this.fetchPage(1, this._reqToken);
+    } catch (e) {
+      /*
+       * 原先 fetchPage 抛出的异常一路冒到 onShow 之外，没人处理，于是 bills 保持
+       * 空数组、界面显示「暂无账单 / 当前分类下没有账单」——业主会以为自己这个月
+       * 没有账单，而实际上是网络失败。
+       */
+      console.error(e);
+      this.setData({ error: true });
+    }
+  },
+
+  retry() {
+    this.reload();
   },
 
   async fetchPage(page, token) {

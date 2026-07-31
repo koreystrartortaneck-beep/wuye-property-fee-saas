@@ -26,7 +26,9 @@
     <view wx:if="{{!loading && !error && list.length === 0}}" class="ticket-item card">
       <view class="ticket-content">还没有工单，点击下方按钮提交报修或建议</view>
     </view>
-  </view>
+      <view wx:if="{{loadingMore}}" class="list-loading">正在加载…</view>
+    <view wx:elif="{{list.length > 0 && list.length >= total}}" class="list-end">已显示全部 {{total}} 条</view>
+</view>
 
   <button class="dark-button fab-btn" bindtap="goCreate">＋ 新工单</button>
 </view>

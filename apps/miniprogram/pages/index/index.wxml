@@ -28,7 +28,17 @@
   </view>
 
   <!-- 正常态 -->
-  <block wx:if="{{ready && !noHouse}}">
+  <!--
+    加载失败：给出明确的失败提示与重试入口。绝不能落回「¥ 0.00 / 立即缴纳」——
+    那会让业主以为自己没有欠费。
+  -->
+  <view wx:if="{{ready && !noHouse && error}}" class="state">
+    <view class="state-icon">⚠️</view>
+    <view class="state-text">没能加载账单信息，请检查网络</view>
+    <button class="state-retry" bindtap="retry">点击重试</button>
+  </view>
+
+  <block wx:if="{{ready && !noHouse && !error}}">
     <!-- ① 缴费中心：账单的唯一入口 -->
     <view class="hero-card">
       <view class="hero-kicker">PROPERTY SERVICE</view>

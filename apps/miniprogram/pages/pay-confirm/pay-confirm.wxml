@@ -2,9 +2,15 @@
   <view class="nav-title">确认缴费</view>
   <view class="nav-subtitle">请核对房屋与账单信息</view>
 
+  <!--
+    loaded 之前不显示金额。data 的初值是 '0.00'，而 js 里 loaded 虽已声明却从未在
+    模板中使用，于是进入本页的第一帧是「应付金额 ¥ 0.00」，报价回来后才跳成真实
+    金额——在一个要按这个数字扣钱的页面上闪一个 0，业主会怀疑金额到底是多少。
+  -->
   <view class="pay-card">
     <view class="pay-label">应付金额</view>
-    <view class="pay-amount amount">¥ {{totalAmount}}</view>
+    <view wx:if="{{loaded}}" class="pay-amount amount">¥ {{totalAmount}}</view>
+    <view wx:else class="pay-amount amount pay-amount-loading">计算中…</view>
     <view class="pay-house">{{house}}</view>
   </view>
 

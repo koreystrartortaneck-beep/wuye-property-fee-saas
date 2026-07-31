@@ -271,9 +271,4 @@
   font-weight: 300;
 }
 
-.list-end {
-  text-align: center;
-  color: #ada4bd;
-  font-size: 22rpx;
-  padding: 14rpx 0 6rpx;
-}
+/* .list-end 已提到 app.wxss，四个分页列表共用一份 */

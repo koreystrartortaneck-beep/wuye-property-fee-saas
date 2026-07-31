@@ -8,6 +8,7 @@ const RELATION_LABEL = BINDING_RELATION;
 
 Page({
   data: {
+    loadError: false, // 档案加载失败：与「真的没绑房屋」区分开
     nav: { spacerPx: 48, rowPx: 32 },
     /** 订阅授权状态：accept/reject/ban/unknown，决定「缴费提醒」的说明与点击行为 */
     notifyState: 'unknown',
@@ -78,8 +79,19 @@ Page({
           : null,
       });
     } catch (e) {
+      /*
+       * 原先只 console.error，于是 currentHouse 保持 null，界面显示
+       * 「尚未绑定房屋」——业主已经绑好了，看到这句会以为绑定掉了，进而重复提交
+       * 实名申请。加载失败与真的没绑必须区分。
+       */
       console.error(e);
+      this.setData({ loadError: true });
     }
+  },
+
+  retryProfile() {
+    this.setData({ loadError: false });
+    this.onShow();
   },
 
   /** 点当前房屋卡：弹出切换菜单（末项为绑定新房屋） */

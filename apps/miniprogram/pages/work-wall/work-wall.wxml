@@ -40,5 +40,7 @@
       <view class="we-title">暂无物业公示</view>
       <view class="we-desc">物业的日常巡检、保洁、维修工作照片会展示在这里</view>
     </view>
-  </view>
+      <view wx:if="{{loadingMore}}" class="list-loading">正在加载…</view>
+    <view wx:elif="{{list.length > 0 && list.length >= total}}" class="list-end">已显示全部 {{total}} 条</view>
+</view>
 </view>

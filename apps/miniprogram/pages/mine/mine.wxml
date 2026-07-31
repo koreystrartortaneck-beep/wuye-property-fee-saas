@@ -33,7 +33,20 @@
     </view>
   </view>
 
-  <view class="current-house card" bindtap="goBind" wx:if="{{!currentHouse}}">
+  <!--
+    加载失败与真的没绑房屋必须分开。原先失败时也显示「尚未绑定房屋 / 点击绑定您的
+    房屋」，业主明明绑好了却看到这句，会以为绑定掉了、再去提交一次实名申请。
+    失败态不能把人引向绑定流程，只给重试。
+  -->
+  <view class="current-house card" bindtap="retryProfile" wx:if="{{!currentHouse && loadError}}">
+    <view class="ch-left">
+      <view class="house-community">信息加载失败</view>
+      <view class="ch-title-row"><text class="ch-name">请检查网络后点击重试</text></view>
+    </view>
+    <view class="ch-right"><view class="ch-switch">重试 ›</view></view>
+  </view>
+
+  <view class="current-house card" bindtap="goBind" wx:elif="{{!currentHouse}}">
     <view class="ch-left">
       <view class="house-community">尚未绑定房屋</view>
       <view class="ch-title-row"><text class="ch-name">点击绑定您的房屋</text></view>
