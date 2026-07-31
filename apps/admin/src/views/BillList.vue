@@ -178,7 +178,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { useCommunities } from '../composables';
-import { billStatusTag, buildReasonPayload, day, genRequestId, shanghaiToday, yuan } from '../finance';
+import { BILL_STATUS_LABEL, billStatusTag, buildReasonPayload, day, genRequestId, shanghaiToday, yuan } from '../finance';
 import { exportCsv } from '../export';
 
 interface Bill {
@@ -219,17 +219,20 @@ const pageAmount = computed(() =>
   yuan(bills.value.filter((b) => COUNTED.includes(b.status)).reduce((s, b) => s + Number(b.amount || 0), 0)),
 );
 
-const STATUS_TEXT: Record<string, string> = {
-  UNPAID: '待缴',
-  PAID: '已缴',
-  REFUNDED: '已退款',
-  REFUNDING: '退款中',
-  CANCELED: '已作废',
-  DRAFT: '未发布',
-};
+/*
+ * 状态中文用 finance.ts 的 BILL_STATUS_LABEL，不在本页另抄一份。
+ *
+ * 本页原本自带一张同样的表 —— 全仓因此有四处账单状态文案
+ * （@pf/shared 的 BILL_STATUS_CN、小程序的 BILL_STATUS、finance.ts、这里）。
+ * 取值当时恰好一致，但复制出来的表一定会漂移：改一处漏三处之后，
+ * 同一个状态在不同页面显示成不同的词，用户会以为是两回事。
+ *
+ * finance.ts 那张表已经被 tests/enum-labels-consistency.test.js 与 shared 逐 key 对齐，
+ * 引用它等于自动纳入那份校验。
+ */
 function statusText(row: Bill): string {
   if (row.status === 'UNPAID' && isOverdue(row)) return '已逾期';
-  return STATUS_TEXT[row.status] ?? row.status;
+  return BILL_STATUS_LABEL[row.status] ?? row.status;
 }
 /**
  * 逾期按北京时间的「日」比较：到期日当天不算逾期。

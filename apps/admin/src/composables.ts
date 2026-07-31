@@ -107,3 +107,37 @@ export function today(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+/*
+ * 以下三张表原本在两个页面里各有一份（Bindings.vue 与 HouseProfile.vue、
+ * Tickets.vue 与 HouseProfile.vue）。取值当时恰好一致，所以既有的一致性测试
+ * 查不出来 —— 它只对比「列进 PAIRS 的那几张表」。
+ *
+ * 复制出来的表一定会漂移：改一处漏一处之后，同一个状态在两个页面显示成不同的词，
+ * 用户会以为那是两回事。合并到这里，并由 tests/enum-labels-consistency.test.js
+ * 的「同一概念不得两处各有一份」守卫钉住。
+ */
+export const BINDING_RELATION_LABEL: Record<string, string> = {
+  OWNER: '业主',
+  FAMILY: '家属',
+  TENANT: '租客',
+};
+
+export const BINDING_STATUS_LABEL: Record<string, string> = {
+  PENDING: '待审核',
+  ACTIVE: '已通过',
+  REJECTED: '已驳回',
+};
+
+export const TICKET_TYPE_LABEL: Record<string, string> = {
+  REPAIR: '报修',
+  COMPLAINT: '投诉',
+  SUGGESTION: '建议',
+};
+
+export const TICKET_STATUS_LABEL: Record<string, string> = {
+  PENDING: '待受理',
+  PROCESSING: '处理中',
+  DONE: '已办结',
+  CLOSED: '已关闭',
+};

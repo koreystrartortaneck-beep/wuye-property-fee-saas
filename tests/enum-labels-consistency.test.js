@@ -213,3 +213,111 @@ test('页面不得自建枚举中文映射（真源只能在 labels.js）', () =
     );
   }
 });
+
+test('后台：同一个概念不得在两个文件里各有一份', () => {
+  /*
+   * 缺陷经过：绑定关系、绑定状态、工单类型、工单状态这四张表各在两个页面里重复
+   * （Bindings.vue / HouseProfile.vue / Tickets.vue 之间）。
+   * 取值当时恰好一致，所以既有的一致性测试查不出来 —— 它只对比「列进 PAIRS 的那几张表」。
+   *
+   * 为什么不像小程序侧那样宽泛地禁掉一切页面内映射：
+   * Operations.vue 的 CHECK_LABEL、BillRun.vue 的 SKIP_REASON 之类**本就是本页专属**，
+   * 硬塞进公共文件反而更糟，还会催生一张越来越长的例外清单。
+   * 真正要防的风险是「两份拷贝各自演进」，所以直接钉这一点。
+   *
+   * 概念身份用**键集合完全相同**判定：{OWNER,TENANT,FAMILY} 出现两次就是同一概念。
+   * 用「有交集」会误报 —— PENDING 在工单与绑定里都有，含义并不同。
+   */
+  const dir = path.join(ROOT, 'apps', 'admin', 'src');
+  const found = [];
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p2 = path.join(d, e.name);
+      if (e.isDirectory()) walk(p2);
+      else if (/\.(ts|vue)$/.test(e.name) && !e.name.includes('.spec.')) {
+        const src = fs
+          .readFileSync(p2, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/^\s*\/\/.*$/gm, '');
+        for (const m of src.matchAll(/const\s+(\w+)\s*(?::[^=]*)?=\s*\{([^}]*)\}/g)) {
+          const entries = [...m[2].matchAll(/([A-Z_][A-Z0-9_]*)\s*:\s*'([^']*)'/g)].filter((x) =>
+            /[一-龥]/.test(x[2]),
+          );
+          if (entries.length < 2) continue;
+          found.push({
+            file: path.relative(dir, p2),
+            name: m[1],
+            sig: entries.map((x) => x[1]).sort().join(','),
+            values: Object.fromEntries(entries.map((x) => [x[1], x[2]])),
+          });
+        }
+      }
+    }
+  };
+  walk(dir);
+
+  // 先自检：解析器必须真的找到一批表，否则下面那条断言永真
+  assert.ok(found.length >= 10, `只解析到 ${found.length} 张映射表，解析器可能坏了`);
+
+  const dupes = findDuplicateConcepts(found);
+  assert.deepStrictEqual(dupes, [], '\n  ' + dupes.join('\n  '));
+});
+
+/**
+ * 检测「同一键集合出现在多个文件」。抽成函数是为了能用合成数据反向验证它自己 ——
+ * 否则一行 `continue` 就能把整条守卫悄悄关掉，而测试仍然全绿
+ * （我注入验证时正是这么绕过去的）。
+ */
+function findDuplicateConcepts(found) {
+  const bySig = {};
+  for (const f of found) (bySig[f.sig] ||= []).push(f);
+  const dupes = [];
+  for (const [sig, list] of Object.entries(bySig)) {
+    const files = [...new Set(list.map((x) => x.file))];
+    if (files.length < 2) continue;
+    // 取值是否已经漂移一并报出：已漂移的属于线上可见缺陷，不只是隐患
+    const drifted = [];
+    for (const k of sig.split(',')) {
+      const vals = [...new Set(list.map((x) => x.values[k]))];
+      if (vals.length > 1) drifted.push(`${k}: ${vals.join(' \u2260 ')}`);
+    }
+    dupes.push(
+      `{${sig}} 在 ${files.join(' 与 ')} 各有一份` + (drifted.length ? `，且已漂移：${drifted.join('；')}` : ''),
+    );
+  }
+  return dupes;
+}
+
+test('重复检测器本身能认出重复与漂移（正向对照）', () => {
+  // 同键集合、同取值 → 必须报重复
+  const same = [
+    { file: 'a.ts', name: 'X', sig: 'A,B', values: { A: '甲', B: '乙' } },
+    { file: 'b.vue', name: 'Y', sig: 'A,B', values: { A: '甲', B: '乙' } },
+  ];
+  const r1 = findDuplicateConcepts(same);
+  assert.strictEqual(r1.length, 1, '同键集合出现在两个文件必须被报出来');
+  assert.ok(!r1[0].includes('漂移'), '取值一致时不该报漂移');
+
+  // 同键集合、取值不同 → 还要指出漂移的是哪个 key
+  const drift = [
+    { file: 'a.ts', name: 'X', sig: 'A,B', values: { A: '甲', B: '乙' } },
+    { file: 'b.vue', name: 'Y', sig: 'A,B', values: { A: '甲', B: '丙' } },
+  ];
+  const r2 = findDuplicateConcepts(drift);
+  assert.strictEqual(r2.length, 1);
+  assert.ok(r2[0].includes('漂移') && r2[0].includes('B:'), `应指出漂移的 key，实际：${r2[0]}`);
+
+  // 同一文件里两张同形表不算重复（不是跨文件拷贝，改的时候一眼能看见）
+  const oneFile = [
+    { file: 'a.ts', name: 'X', sig: 'A,B', values: { A: '甲', B: '乙' } },
+    { file: 'a.ts', name: 'Y', sig: 'A,B', values: { A: '甲', B: '乙' } },
+  ];
+  assert.deepStrictEqual(findDuplicateConcepts(oneFile), []);
+
+  // 键集合不同（仅有交集）不算同一概念：PENDING 在工单与绑定里含义不同
+  const overlap = [
+    { file: 'a.ts', name: 'X', sig: 'ACTIVE,PENDING', values: { ACTIVE: '已通过', PENDING: '待审核' } },
+    { file: 'b.vue', name: 'Y', sig: 'DONE,PENDING', values: { DONE: '已办结', PENDING: '待受理' } },
+  ];
+  assert.deepStrictEqual(findDuplicateConcepts(overlap), []);
+});

@@ -17,7 +17,7 @@
       </el-table-column>
       <el-table-column prop="applicantName" label="申请人" width="110" />
       <el-table-column label="关系" width="80">
-        <template #default="{ row }">{{ RELATION[row.relation] }}</template>
+        <template #default="{ row }">{{ BINDING_RELATION_LABEL[row.relation] }}</template>
       </el-table-column>
       <el-table-column label="手机号" width="130">
         <template #default="{ row }">{{ row.wxUser?.phone || '—' }}</template>
@@ -27,7 +27,7 @@
       </el-table-column>
       <el-table-column label="状态" width="90">
         <template #default="{ row }">
-          <el-tag :type="TAG[row.status]">{{ STATUS[row.status] }}</el-tag>
+          <el-tag :type="TAG[row.status]">{{ BINDING_STATUS_LABEL[row.status] }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="rejectReason" label="驳回原因" min-width="120" />
@@ -72,6 +72,7 @@ import HouseCell from '../components/HouseCell.vue';
 import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
+import { BINDING_RELATION_LABEL, BINDING_STATUS_LABEL } from '../composables';
 import { api, qs, type Page } from '../api';
 import { refreshBadges } from '../badges';
 
@@ -87,8 +88,6 @@ interface Binding {
   wxUser?: { phone: string | null };
 }
 
-const RELATION: Record<string, string> = { OWNER: '业主', FAMILY: '家属', TENANT: '租客' };
-const STATUS: Record<string, string> = { PENDING: '待审核', ACTIVE: '已通过', REJECTED: '已驳回' };
 const TAG: Record<string, 'warning' | 'success' | 'danger'> = { PENDING: 'warning', ACTIVE: 'success', REJECTED: 'danger' };
 
 const status = ref('PENDING');

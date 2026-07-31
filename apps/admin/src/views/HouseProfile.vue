@@ -229,7 +229,13 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
 import EmptyState from '../components/EmptyState.vue';
-import { HOUSE_TYPE_LABEL } from '../composables';
+import {
+  BINDING_RELATION_LABEL,
+  BINDING_STATUS_LABEL,
+  HOUSE_TYPE_LABEL,
+  TICKET_STATUS_LABEL,
+  TICKET_TYPE_LABEL,
+} from '../composables';
 import {
   BILL_STATUS_LABEL,
   INVOICE_STATUS_LABEL,
@@ -245,16 +251,7 @@ import {
 } from '../finance';
 
 /** 绑定相关文案：后台此前没有这几个映射，直接渲染会外露英文 */
-const BINDING_RELATION_LABEL: Record<string, string> = { OWNER: '业主', FAMILY: '家属', TENANT: '租客' };
 const BINDING_SOURCE_LABEL: Record<string, string> = { PHONE_MATCH: '手机号匹配', APPLY: '自助申请' };
-const BINDING_STATUS_LABEL: Record<string, string> = { PENDING: '待审核', ACTIVE: '已通过', REJECTED: '已驳回' };
-const TICKET_TYPE_LABEL: Record<string, string> = { REPAIR: '报修', COMPLAINT: '投诉', SUGGESTION: '建议' };
-const TICKET_STATUS_LABEL: Record<string, string> = {
-  PENDING: '待受理',
-  PROCESSING: '处理中',
-  DONE: '已办结',
-  CLOSED: '已关闭',
-};
 
 interface Profile {
   house: {

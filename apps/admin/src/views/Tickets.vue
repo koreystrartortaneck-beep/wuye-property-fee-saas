@@ -5,7 +5,7 @@
         <el-option v-for="c in communities" :key="c.id" :label="c.name" :value="c.id" />
       </el-select>
       <el-select v-model="filter.type" placeholder="类型" clearable style="width: 120px" @change="reload">
-        <el-option v-for="(label, val) in TYPE" :key="val" :label="label" :value="val" />
+        <el-option v-for="(label, val) in TICKET_TYPE_LABEL" :key="val" :label="label" :value="val" />
       </el-select>
       <el-radio-group v-model="filter.status" @change="reload">
         <el-radio-button value="PENDING">待受理</el-radio-button>
@@ -19,7 +19,7 @@
       <el-table-column label="类型" width="90">
         <template #default="{ row }">
           <el-tag :type="row.type === 'REPAIR' ? 'warning' : row.type === 'COMPLAINT' ? 'danger' : 'info'">
-            {{ TYPE[row.type] }}
+            {{ TICKET_TYPE_LABEL[row.type] }}
           </el-tag>
         </template>
       </el-table-column>
@@ -43,7 +43,7 @@
       </el-table-column>
       <el-table-column label="状态" width="90">
         <template #default="{ row }">
-          <el-tag :type="STATUS_TAG[row.status]">{{ STATUS[row.status] }}</el-tag>
+          <el-tag :type="STATUS_TAG[row.status]">{{ TICKET_STATUS_LABEL[row.status] }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="assigneeName" label="负责人" width="90" />
@@ -106,7 +106,7 @@ import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
-import { useCommunities } from '../composables';
+import { TICKET_STATUS_LABEL, TICKET_TYPE_LABEL, useCommunities } from '../composables';
 import { dt } from '../finance';
 import { refreshBadges } from '../badges';
 
@@ -123,8 +123,6 @@ interface Ticket {
   house?: { displayName: string };
 }
 
-const TYPE: Record<string, string> = { REPAIR: '报修', COMPLAINT: '投诉', SUGGESTION: '建议' };
-const STATUS: Record<string, string> = { PENDING: '待受理', PROCESSING: '处理中', DONE: '已办结', CLOSED: '已关闭' };
 const STATUS_TAG: Record<string, 'warning' | 'primary' | 'success' | 'info'> = {
   PENDING: 'warning', PROCESSING: 'primary', DONE: 'success', CLOSED: 'info',
 };
