@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Injectable, Ip, Post, UseGuards } from '@nestjs/common';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import * as bcrypt from 'bcryptjs';
 import { ErrorCode } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
@@ -15,20 +15,24 @@ const IP_MAX = 30;
 
 class AdminLoginDto {
   @IsString()
+  @MaxLength(64)
   @IsNotEmpty()
   username!: string;
 
   @IsString()
+  @MaxLength(64)
   @IsNotEmpty()
   password!: string;
 }
 
 class ChangePasswordDto {
   @IsString()
+  @MaxLength(64)
   @IsNotEmpty()
   oldPassword!: string;
 
   @IsString()
+  @MaxLength(64)
   @IsNotEmpty()
   newPassword!: string;
 }

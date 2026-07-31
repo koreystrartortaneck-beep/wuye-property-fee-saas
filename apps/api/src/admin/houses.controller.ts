@@ -1,15 +1,6 @@
 import { Body, Controller, Get, Injectable, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import {
-  IsArray,
-  IsIn,
-  IsNotEmpty,
-  IsNumber,
-  IsOptional,
-  IsString,
-  Min,
-  ValidateNested,
-} from 'class-validator';
+import { IsArray, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
 import { HOUSE_TYPES, HouseType } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { RolesGuard } from '../auth/roles.decorator';
@@ -22,21 +13,26 @@ class HouseRowDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   building?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   unit?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   room?: string;
 
   @IsString()
+  @MaxLength(64)
   @IsNotEmpty()
   code!: string;
 
   @IsString()
+  @MaxLength(100)
   @IsNotEmpty()
   displayName!: string;
 
@@ -47,10 +43,12 @@ class HouseRowDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   ownerName?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   ownerPhone?: string;
 }
 
@@ -82,6 +80,7 @@ class ListHousesQuery extends PageQuery {
 class UpdateHouseDto {
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   displayName?: string;
 
   @IsOptional()
@@ -91,10 +90,12 @@ class UpdateHouseDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   ownerName?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   ownerPhone?: string;
 
   @IsOptional()

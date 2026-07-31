@@ -29,7 +29,12 @@ class CreateOrderDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(200)
+  /*
+   * 191 是数据库列宽（Prisma 对 String 的默认映射 VARCHAR(191)）。
+   * 原先写 200：业主填 192–200 字能通过 DTO 校验，却在写库时被 Prisma 以 P2000
+   * 拒绝，接口返回「服务器内部错误」。上限必须不超过列容量，否则标了也白标。
+   */
+  @MaxLength(191)
   remark?: string;
 }
 

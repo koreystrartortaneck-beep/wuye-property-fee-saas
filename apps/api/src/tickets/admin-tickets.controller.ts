@@ -22,6 +22,7 @@ class AdminListQuery extends PageQuery {
 
 class ProcessDto {
   @IsString()
+  @MaxLength(100)
   @IsNotEmpty()
   assigneeName!: string;
 }

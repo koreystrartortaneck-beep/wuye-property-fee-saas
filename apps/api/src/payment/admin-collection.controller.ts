@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Put, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { IsDate, IsIn, IsOptional, IsString } from 'class-validator';
+import { IsDate, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { COLLECTION_POLICY_STATUSES, CollectionPolicyStatus, ErrorCode } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
@@ -13,6 +13,7 @@ class UpdatePolicyDto {
   status!: CollectionPolicyStatus;
 
   @IsString()
+  @MaxLength(191)
   reason!: string;
 
   @IsOptional()

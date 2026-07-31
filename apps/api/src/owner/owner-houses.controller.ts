@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Injectable, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { BINDING_RELATIONS, BindingRelation, ErrorCode } from '@pf/shared';
 import { Current, CurrentOwner } from '../auth/current.decorator';
 import { OwnerGuard } from '../auth/owner.guard';
@@ -15,6 +15,7 @@ class ApplyBindingDto {
   relation!: BindingRelation;
 
   @IsString()
+  @MaxLength(100)
   @IsNotEmpty()
   applicantName!: string;
 }

@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Injectable, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDate, IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsDate, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { RECONCILIATION_BILL_TYPES, ReconciliationBillType } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
@@ -11,14 +11,17 @@ import { ReconciliationService } from './reconciliation.service';
 
 class TriggerReconcileDto {
   @IsString()
+  @MaxLength(64)
   @IsNotEmpty()
   merchantAccountId!: string;
 
   @IsString()
+  @MaxLength(64)
   @IsNotEmpty()
   mchid!: string;
 
   @IsString()
+  @MaxLength(64)
   @IsNotEmpty()
   appid!: string;
 
@@ -48,6 +51,7 @@ class ResolveItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(191)
   remark?: string;
 }
 

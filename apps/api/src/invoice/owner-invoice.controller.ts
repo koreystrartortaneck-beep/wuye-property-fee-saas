@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { INVOICE_TITLE_TYPES, InvoiceTitleType } from '@pf/shared';
 import { Current, CurrentOwner } from '../auth/current.decorator';
 import { OwnerGuard } from '../auth/owner.guard';
@@ -14,14 +14,17 @@ class ApplyInvoiceDto {
   titleType!: InvoiceTitleType;
 
   @IsString()
+  @MaxLength(100)
   @IsNotEmpty()
   title!: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   taxNo?: string;
 
   @IsString()
+  @MaxLength(64)
   @IsNotEmpty()
   deliveryMethod!: string;
 

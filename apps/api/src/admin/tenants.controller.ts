@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Injectable, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { IsIn, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import * as bcrypt from 'bcryptjs';
 import { ErrorCode } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
@@ -11,26 +11,32 @@ import { PrismaService } from '../prisma/prisma.service';
 
 class CreateTenantDto {
   @IsString()
+  @MaxLength(100)
   @IsNotEmpty()
   name!: string;
 
   @IsString()
+  @MaxLength(64)
   @IsNotEmpty()
   code!: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   contactName?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   contactPhone?: string;
 
   @IsString()
+  @MaxLength(64)
   @IsNotEmpty()
   adminUsername!: string;
 
   @IsString()
+  @MaxLength(64)
   @MinLength(6)
   adminPassword!: string;
 }
@@ -38,14 +44,17 @@ class CreateTenantDto {
 class UpdateTenantDto {
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   name?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   contactName?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   contactPhone?: string;
 
   @IsOptional()

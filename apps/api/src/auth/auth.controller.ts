@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Headers, Post, UseGuards } from '@nestjs/common';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { ErrorCode } from '@pf/shared';
 import { BizException } from '../common/biz.exception';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,12 +9,14 @@ import { OwnerGuard } from './owner.guard';
 
 class WxLoginDto {
   @IsString()
+  @MaxLength(64)
   @IsNotEmpty()
   code!: string;
 }
 
 class PhoneDto {
   @IsString()
+  @MaxLength(64)
   @IsNotEmpty()
   code!: string;
 }

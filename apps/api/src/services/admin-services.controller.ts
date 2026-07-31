@@ -30,6 +30,7 @@ class CreateItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   category?: string;
 
   @Type(() => Number)
@@ -39,6 +40,7 @@ class CreateItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   unit?: string;
 
   @IsOptional()
@@ -48,6 +50,7 @@ class CreateItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(191)
   coverImage?: string;
 
   @IsOptional()
@@ -59,10 +62,12 @@ class CreateItemDto {
 class UpdateItemDto {
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   name?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   category?: string;
 
   @IsOptional()
@@ -73,14 +78,18 @@ class UpdateItemDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   unit?: string;
 
   @IsOptional()
   @IsString()
+  // 与 CreateItemDto 一致：description 是 Text 列，不受 VARCHAR(191) 限制
+  @MaxLength(500)
   description?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(191)
   coverImage?: string;
 
   @IsOptional()

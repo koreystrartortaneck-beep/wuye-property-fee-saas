@@ -12,6 +12,7 @@ import {
 import { Response } from 'express';
 import { ErrorCode } from '@pf/shared';
 import { BizException } from './biz.exception';
+import { Prisma } from '@prisma/client';
 
 /**
  * 全局异常 → 统一 {code,message} 响应，HTTP 始终 200（spec §7）。
@@ -120,6 +121,45 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       res.status(200).json({ code: 40000 + exception.getStatus(), message: exception.message });
       return;
+    }
+
+    /*
+     * Prisma 已知错误必须翻译成可操作的提示，而不是一句「服务器内部错误」。
+     *
+     * 实测：给小区名称或退款原因塞 300 个汉字，接口返回 50000——物业完全不知道
+     * 为什么失败。退款那条尤其糟：一次资金操作失败却只给「服务器内部错误」。
+     *
+     * 这是兜底层。DTO 上也在补 @MaxLength，但字段近百个、手工标注必然有遗漏，
+     * 所以这里保证「无论漏了哪个字段，用户看到的都是能照着改的提示」。
+     */
+    if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      const meta = (exception.meta ?? {}) as { target?: unknown; column_name?: unknown; modelName?: unknown };
+      const field = String(meta.column_name ?? (Array.isArray(meta.target) ? meta.target.join('、') : meta.target ?? ''));
+      switch (exception.code) {
+        case 'P2000': // 字段值超出数据库列长度
+          res.status(200).json({
+            code: ErrorCode.VALIDATION.code,
+            message: field ? `「${field}」内容过长，请缩短后重试` : '有字段内容过长，请缩短后重试',
+          });
+          return;
+        case 'P2002': // 唯一约束冲突
+          res.status(200).json({
+            code: ErrorCode.VALIDATION.code,
+            message: field ? `「${field}」已存在，不能重复` : '该记录已存在，不能重复',
+          });
+          return;
+        case 'P2003': // 外键约束失败
+          res.status(200).json({
+            code: ErrorCode.VALIDATION.code,
+            message: '关联的数据不存在或已被删除，请刷新后重试',
+          });
+          return;
+        case 'P2025': // 目标记录不存在
+          res.status(200).json(ErrorCode.NOT_FOUND);
+          return;
+        default:
+          break; // 其余仍走下面的兜底，避免把未知问题伪装成参数错误
+      }
     }
 
     this.logger.error(exception instanceof Error ? exception.stack : String(exception));

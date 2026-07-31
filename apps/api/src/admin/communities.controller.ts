@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Injectable, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { AdminGuard } from '../auth/admin.guard';
 import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
@@ -7,29 +7,35 @@ import { PrismaService } from '../prisma/prisma.service';
 
 class CreateCommunityDto {
   @IsString()
+  @MaxLength(100)
   @IsNotEmpty()
   name!: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(191)
   address?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   servicePhone?: string;
 }
 
 class UpdateCommunityDto {
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   name?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(191)
   address?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   servicePhone?: string;
 
   @IsOptional()

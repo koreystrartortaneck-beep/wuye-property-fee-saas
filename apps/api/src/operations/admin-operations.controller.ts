@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ErrorCode } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
@@ -29,6 +29,7 @@ class ListIncidentsDto extends PageQuery {
 class TransitionDto {
   @IsOptional()
   @IsString()
+  @MaxLength(191)
   reason?: string;
 }
 

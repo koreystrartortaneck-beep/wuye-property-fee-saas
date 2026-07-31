@@ -1,7 +1,7 @@
 import { Body, Controller, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ErrorCode } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
@@ -45,6 +45,7 @@ class ImportDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   title?: string;
 
   @IsOptional()

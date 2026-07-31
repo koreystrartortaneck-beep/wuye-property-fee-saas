@@ -1,15 +1,5 @@
 import { Body, Controller, Get, Injectable, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import {
-  IsBoolean,
-  IsIn,
-  IsInt,
-  IsNotEmpty,
-  IsObject,
-  IsOptional,
-  IsString,
-  Max,
-  Min,
-} from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ErrorCode, HOUSE_TYPES, HouseType, RULE_PERIODS, RULE_TYPES, RulePeriod, RuleType } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
@@ -29,6 +19,7 @@ class CreateFeeRuleDto {
   communityId!: string;
 
   @IsString()
+  @MaxLength(100)
   @IsNotEmpty()
   name!: string;
 
@@ -60,6 +51,7 @@ class CreateFeeRuleDto {
 class UpdateFeeRuleDto {
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   name?: string;
 
   @IsOptional()

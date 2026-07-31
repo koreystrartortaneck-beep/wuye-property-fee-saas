@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { Roles, RolesGuard } from '../auth/roles.decorator';
@@ -12,6 +12,7 @@ class CreateRefundDto {
   orderNo!: string;
 
   @IsString()
+  @MaxLength(191)
   @IsNotEmpty()
   reason!: string;
 

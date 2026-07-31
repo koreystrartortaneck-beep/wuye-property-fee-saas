@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { AdminGuard } from '../auth/admin.guard';
 import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery } from '../common/pagination';
@@ -12,6 +12,7 @@ class AdminPassQuery extends PageQuery {
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   code?: string;
 
   @IsOptional()

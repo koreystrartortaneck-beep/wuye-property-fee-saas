@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Injectable, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { IsDate, IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsDate, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { PAYMENT_CHANNELS, PAYMENT_STATUSES, PaymentChannel, PaymentStatus } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
@@ -15,6 +15,7 @@ class SettleOfflineDto {
   billId!: string;
 
   @IsString()
+  @MaxLength(64)
   @IsNotEmpty()
   voucherNo!: string;
 
@@ -24,10 +25,12 @@ class SettleOfflineDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   payerName?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(191)
   remark?: string;
 
   @IsString()
@@ -37,6 +40,7 @@ class SettleOfflineDto {
 
 class ReverseOfflineDto {
   @IsString()
+  @MaxLength(191)
   @IsNotEmpty()
   reason!: string;
 

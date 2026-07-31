@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Injectable, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { IsIn, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { BILL_BATCH_STATUSES, BILL_STATUSES, BillBatchStatus, BillStatus } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
@@ -20,6 +20,7 @@ class TriggerRunDto {
 
 class CancelBillDto {
   @IsString()
+  @MaxLength(191)
   @IsNotEmpty()
   reason!: string;
 
@@ -37,6 +38,7 @@ class PublishBatchDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(191)
   reason?: string;
 }
 

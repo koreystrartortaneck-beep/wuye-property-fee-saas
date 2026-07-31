@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Injectable, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { BINDING_STATUSES, BindingStatus, ErrorCode } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
@@ -20,6 +20,7 @@ class ReviewDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(191)
   rejectReason?: string;
 }
 

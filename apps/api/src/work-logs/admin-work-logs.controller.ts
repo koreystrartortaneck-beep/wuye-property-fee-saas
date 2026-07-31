@@ -42,6 +42,7 @@ class CreateWorkLogDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   staffName?: string;
 }
 
