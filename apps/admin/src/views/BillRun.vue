@@ -200,6 +200,17 @@
   <!-- 新建收费标准 -->
   <el-dialog v-model="ruleDialog" title="设置收费标准" width="min(480px, 92vw)">
     <el-form label-width="96px">
+      <!--
+        小区必须显式选择。原先 saveRule 里写死 communities.value[0]?.id，
+        多小区的物业公司会把规则建到列表里第一个小区上，而界面上没有任何地方
+        显示这条规则属于哪个小区——出账时才会发现选不到它。
+        单小区时不显示这一项，避免多一次无意义的点击。
+      -->
+      <el-form-item v-if="communities.length > 1" label="所属小区">
+        <el-select v-model="ruleForm.communityId" placeholder="请选择小区" style="width: 100%">
+          <el-option v-for="c in communities" :key="c.id" :label="c.name" :value="c.id" />
+        </el-select>
+      </el-form-item>
       <el-form-item label="名称">
         <el-input v-model="ruleForm.name" placeholder="自己起名，如 住宅物业费 / 车位管理费" />
       </el-form-item>
@@ -502,6 +513,7 @@ async function publish() {
 const ruleDialog = ref(false);
 const savingRule = ref(false);
 const ruleForm = ref({
+  communityId: '',
   name: '',
   houseType: 'RESIDENCE',
   mode: 'AREA_PRICE' as 'AREA_PRICE' | 'FIXED',
@@ -510,13 +522,24 @@ const ruleForm = ref({
 });
 
 function openRuleDialog() {
-  ruleForm.value = { name: '', houseType: 'RESIDENCE', mode: 'AREA_PRICE', value: 2.5, dueDays: 30 };
+  ruleForm.value = {
+    // 单小区时自动填上；多小区时留空，强制选择
+    communityId: communities.value.length === 1 ? communities.value[0].id : '',
+    name: '',
+    houseType: 'RESIDENCE',
+    mode: 'AREA_PRICE',
+    value: 2.5,
+    dueDays: 30,
+  };
   ruleDialog.value = true;
 }
 
 async function saveRule() {
-  const communityId = communities.value[0]?.id;
-  if (!communityId) return ElMessage.warning('请先在「设置 → 小区信息」创建小区');
+  if (communities.value.length === 0) {
+    return ElMessage.warning('请先在「设置 → 小区信息」创建小区');
+  }
+  const communityId = ruleForm.value.communityId;
+  if (!communityId) return ElMessage.warning('请选择这条收费标准所属的小区');
   if (!ruleForm.value.name.trim()) return ElMessage.warning('请填写名称');
   if (!ruleForm.value.value || ruleForm.value.value <= 0) return ElMessage.warning('金额必须大于 0');
   savingRule.value = true;

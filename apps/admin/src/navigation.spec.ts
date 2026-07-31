@@ -242,3 +242,75 @@ describe('批量操作的选择态', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * 加载失败必须留下一条能重试的路，且不能把「什么都没有」显示成「什么都没发生」。
+ *
+ * 两个真实例子：
+ *  · Operations 的「重新检查」按钮长在 v-if="metrics" 的结论块里，而 metrics 拉失败
+ *    时正好是 null —— 于是失败之后页面上再没有任何重试入口，只能刷新整页。而运维页
+ *    恰恰是出问题时才来看的。它还用 Promise.all 同时拉指标与就绪度，任一失败会让
+ *    两块一起消失。
+ *  · MeterReadings / Reconciliations / BillRun / HouseProfile 的加载失败会渲染成
+ *    「全部录完」「无差异」「没有规则」「房屋不存在」——把故障显示成好消息。
+ */
+describe('加载失败的可恢复性', () => {
+  /** 用 api<...>() 拉数据的页面（排除纯展示与弹窗组件） */
+  const pages = vueFiles(SRC).filter((f) => {
+    const src = fs.readFileSync(f, 'utf8');
+    return /\bapi<[^>]*>\(/.test(src) && f.includes('views');
+  });
+
+  it('存在待检查的数据页（否则本条空转）', () => {
+    expect(pages.length).toBeGreaterThan(10);
+  });
+
+  it('并列拉多个互不依赖的接口时用 allSettled，一个失败不牵连其它', () => {
+    const offenders: string[] = [];
+    for (const file of pages) {
+      const src = stripComments(fs.readFileSync(file, 'utf8'));
+      const rel = path.relative(SRC, file);
+      for (const m of src.matchAll(/await Promise\.all\(\[([\s\S]*?)\]\)/g)) {
+        // 只看「一次并列拉 ≥2 个接口」的情况
+        const calls = [...m[1].matchAll(/api<[^>]*>\(/g)].length;
+        if (calls >= 2) {
+          offenders.push(`${rel} → Promise.all 并列拉了 ${calls} 个接口`);
+        }
+      }
+    }
+    if (offenders.length) {
+      throw new Error(
+        '以下页面用 Promise.all 并列拉多个互不依赖的接口，任一失败会让所有块一起不显示：\n  ' +
+          offenders.join('\n  ') +
+          '\n请改用 Promise.allSettled，逐个判断 status。',
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('失败提示不得嵌在「有数据才渲染」的块里（否则失败时重试入口一起消失）', () => {
+    const offenders: string[] = [];
+    for (const file of pages) {
+      const src = fs.readFileSync(file, 'utf8');
+      const rel = path.relative(SRC, file);
+      const tpl = src.match(/<template>([\s\S]*)<\/template>/);
+      if (!tpl) continue;
+      // 找出失败横幅（type="error"/"warning" 且带重试按钮）所在位置
+      for (const m of tpl[1].matchAll(/<el-alert[\s\S]{0,600}?<\/el-alert>/g)) {
+        if (!/loadError|error/.test(m[0])) continue;
+        if (!/@click="(load|reload|retry\w*)"/.test(m[0])) continue;
+        // 该横幅之前不得有仍未闭合的 v-if="<数据变量>"
+        const before = tpl[1].slice(0, m.index as number);
+        const opens = [...before.matchAll(/<div v-if="(\w+)"/g)].map((x) => x[1]);
+        const closes = (before.match(/<\/div>/g) ?? []).length;
+        if (opens.length > closes && opens.length > 0) {
+          offenders.push(`${rel} → 失败横幅位于 v-if="${opens[opens.length - 1]}" 内部`);
+        }
+      }
+    }
+    if (offenders.length) {
+      throw new Error('失败提示被数据条件挡住了：\n  ' + offenders.join('\n  '));
+    }
+    expect(offenders).toEqual([]);
+  });
+});

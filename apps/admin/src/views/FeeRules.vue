@@ -264,12 +264,16 @@ async function load() {
 }
 
 async function loadFormulaReport() {
-  const [report, gate] = await Promise.all([
+  /*
+   * allSettled 而不是 all：两个接口互不依赖，用 all 时任一失败会让**两块**都不显示。
+   * 而「公式规则报告」与「上线就绪度」正是在配置有问题时才需要看的东西。
+   */
+  const [report, gate] = await Promise.allSettled([
     api<FormulaReportItem[]>('/admin/fee-rules/formula-report'),
     api<{ ready: boolean; unresolvedFormulaRules: unknown[] }>('/admin/fee-rules/launch-readiness'),
   ]);
-  formulaRules.value = report;
-  readiness.value = gate;
+  if (report.status === 'fulfilled') formulaRules.value = report.value;
+  if (gate.status === 'fulfilled') readiness.value = gate.value;
 }
 
 function communityName(id: string): string {

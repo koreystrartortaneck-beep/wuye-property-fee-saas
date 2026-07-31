@@ -1,5 +1,24 @@
 <template>
   <div v-loading="loading">
+    <!--
+      加载失败的横幅独立于内容块，且自带重试。
+      原先「重新检查」按钮在 v-if="metrics" 的结论块里，metrics 拉失败时这块不渲染，
+      页面上就没有任何重试入口了。
+    -->
+    <el-alert
+      v-if="loadError"
+      type="error"
+      show-icon
+      :closable="false"
+      class="mb"
+      :title="`${loadError}加载失败`"
+      description="可能是后端暂时不可用或网络问题。下方显示的是上一次成功获取的数据（若有）。"
+    >
+      <template #default>
+        <el-button size="small" :loading="loading" @click="load">重新检查</el-button>
+      </template>
+    </el-alert>
+
     <!-- 总体结论：这套系统现在能不能安心收钱 -->
     <div v-if="metrics" class="verdict" :class="metrics.overallPass ? 'ok' : 'bad'">
       <div>
@@ -270,6 +289,12 @@ const INCIDENT_STATUS_LABEL: Record<string, string> = {
 };
 
 const metrics = ref<Metrics | null>(null);
+/*
+ * 加载失败必须有自己的状态与重试入口。
+ * 原先失败时 metrics 保持 null，而「重新检查」按钮长在 v-if="metrics" 的那块里，
+ * 于是失败之后页面上再没有任何地方能重试——只能刷新整页。
+ */
+const loadError = ref('');
 const readiness = ref<Readiness | null>(null);
 
 interface WxProbe {
@@ -429,13 +454,23 @@ async function transition(row: Incident, action: 'acknowledge' | 'resolve') {
 async function load() {
   if (loading.value) return;
   loading.value = true;
+  loadError.value = '';
   try {
-    const [m, r] = await Promise.all([
+    /*
+     * allSettled 而不是 all：两个接口互不依赖，用 all 时任一失败会让**两块**都不
+     * 显示——而运维页恰恰是出问题时才来看的，指标接口失败往往正说明后端有事，
+     * 此时更需要看到就绪度那一块。
+     */
+    const [m, r] = await Promise.allSettled([
       api<Metrics>('/admin/operations/metrics'),
       api<Readiness>('/admin/operations/readiness'),
     ]);
-    metrics.value = m;
-    readiness.value = r;
+    if (m.status === 'fulfilled') metrics.value = m.value;
+    if (r.status === 'fulfilled') readiness.value = r.value;
+    const failed: string[] = [];
+    if (m.status === 'rejected') failed.push('运行指标');
+    if (r.status === 'rejected') failed.push('配置就绪度');
+    if (failed.length) loadError.value = failed.join('、');
   } finally {
     loading.value = false;
   }
