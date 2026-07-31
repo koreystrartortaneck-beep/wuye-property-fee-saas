@@ -11,6 +11,30 @@ import { wxApiUrl } from './wx-endpoint';
  *   WX_TMPL_BILL_CREATED / WX_TMPL_DUE_SOON / WX_TMPL_OVERDUE
  * 订阅消息跳转页 WX_SUBSCRIBE_PAGE（默认账单页）。
  */
+/**
+ * 订阅消息错误码转人话。
+ *
+ * 微信原文会误导运维：43101 的 errmsg 是 "user refuse to accept the msg"，
+ * 看起来像「业主拒收」，实际最常见的原因是**一次性订阅的额度用完了**——
+ * 业主授权一次只能收一条，收过就没了。物业看到「拒收」会以为业主关了通知，
+ * 从而放弃催缴，而真相是需要引导业主再授权一次。
+ *
+ * 保留原始 errcode 便于排查，同时给出中文解释与处置方向。
+ */
+function describeSubscribeError(errcode: number, errmsg?: string): string {
+  const raw = `${errcode} ${errmsg ?? ''}`.trim();
+  const explain: Record<number, string> = {
+    43101: '业主没有可用的订阅额度（一次性订阅：授权一次只能收一条），需引导业主在小程序「我的 → 缴费提醒」再次授权',
+    43102: '模板类型不匹配：该模板不是一次性订阅模板',
+    43104: '模板 ID 不属于本小程序，检查 WX_TMPL_* 环境变量',
+    47003: '模板参数不合法：字段名或取值格式与模板不符',
+    40003: 'openid 无效，该业主的绑定可能已失效',
+    45009: '接口调用超过频率限制',
+  };
+  const hint = explain[errcode];
+  return hint ? `${hint}（微信原文：${raw}）` : raw;
+}
+
 @Injectable()
 export class RealWxService implements WxApi {
   constructor(private readonly wxCloud: WxCloudService) {}
@@ -111,7 +135,7 @@ export class RealWxService implements WxApi {
       });
       const out = (await res.json()) as { errcode?: number; errmsg?: string };
       if (out.errcode && out.errcode !== 0) {
-        return { ok: false, error: `${out.errcode} ${out.errmsg}` };
+        return { ok: false, error: describeSubscribeError(out.errcode, out.errmsg) };
       }
       return { ok: true };
     } catch (e) {

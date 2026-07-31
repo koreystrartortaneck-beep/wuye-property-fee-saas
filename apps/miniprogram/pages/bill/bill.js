@@ -1,6 +1,7 @@
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
 const labels = require('../../utils/labels');
+const { accrueSubscribeQuota } = require('../../utils/subscribe');
 const STATUS_LABEL = labels.BILL_STATUS;
 
 const THEMES = ['sapphire', 'emerald', 'amber'];
@@ -187,6 +188,13 @@ Page({
 
   /** 整卡点击 → 账单详情 */
   goDetailById(e) {
+    /*
+     * 顺带累积订阅额度。物业类目拿不到微信「长期订阅」，只能用一次性订阅——
+     * 业主授权一次只能收一条。但授权弹窗有「总是保持以上选择，不再询问」，
+     * 勾过之后后续调用自动通过且不弹窗，所以在业主本来就要点的地方多调一次，
+     * 对勾过的人完全无感，额度却能持续累积。不 await，不影响跳转。
+     */
+    accrueSubscribeQuota();
     wx.navigateTo({ url: `/pages/bill-detail/bill-detail?id=${e.currentTarget.dataset.id}` });
   },
 

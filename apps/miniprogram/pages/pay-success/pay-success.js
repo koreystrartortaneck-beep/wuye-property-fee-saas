@@ -1,5 +1,6 @@
 const { request } = require('../../utils/request');
 const { canApplyInvoice } = require('../../utils/invoice');
+const { accrueSubscribeQuota } = require('../../utils/subscribe');
 
 Page({
   data: {
@@ -42,6 +43,8 @@ Page({
   },
 
   backHome() {
+    // 刚缴完费，是业主最愿意接收后续提醒的时刻；顺带累积一次额度（见 utils/subscribe 说明）
+    accrueSubscribeQuota();
     wx.switchTab({ url: '/pages/index/index' });
   },
 

@@ -20,8 +20,15 @@ const SUBSCRIBE_TEMPLATE_BY_EVENT: Record<string, NotifyType> = {
   'bill.overdue': 'OVERDUE',
 };
 
-/** 用户未订阅/拒收：不可重试，跳过即可（微信 43101 等）。 */
-const SUBSCRIPTION_DENIED_RE = /43101|not\s*subscribed|未订阅|拒收|拒绝|reject/i;
+/**
+ * 用户未订阅/额度不足：不可重试，跳过即可（微信 43101 等）。
+ *
+ * 注意必须同时匹配翻译后的中文文案——wx.real 会把 43101 转成
+ * 「业主没有可用的订阅额度…（微信原文：43101 …）」，原文仍在括号里，
+ * 所以数字 43101 依然能命中；但若哪天翻译改成不带原文，这里会漏判成「可重试」，
+ * 于是一条永远发不出去的通知会被反复重试到耗尽。加「订阅额度」一并兜住。
+ */
+const SUBSCRIPTION_DENIED_RE = /43101|订阅额度|not\s*subscribed|未订阅|拒收|拒绝|reject/i;
 
 /**
  * 账单通知服务（spec §6.3 / §10）。

@@ -1,6 +1,7 @@
 const { request } = require('../../utils/request');
 const { imageUrl } = require('../../utils/upload');
 const { loadMyHouses } = require('../../utils/auth');
+const { accrueSubscribeQuota } = require('../../utils/subscribe');
 
 const WORK_CAT = { INSPECTION: '巡检', CLEANING: '保洁', GREENING: '绿化', SECURITY: '安保', REPAIR: '维修', OTHER: '公示' };
 
@@ -176,6 +177,8 @@ Page({
 
   /** 英雄卡主按钮：单账单单支付，统一进入账单列表逐张缴费 */
   heroAction() {
+    // 首页主按钮：业主点它就是要处理账单，顺带累积一次额度（见 utils/subscribe 说明）
+    accrueSubscribeQuota();
     this.goBill();
   },
 });

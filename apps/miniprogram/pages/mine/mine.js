@@ -1,12 +1,14 @@
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
-const { requestSubscribe } = require('../../utils/subscribe');
+const { requestSubscribe, getSubscribeState } = require('../../utils/subscribe');
 
 const RELATION_LABEL = { OWNER: '业主', FAMILY: '家属', TENANT: '租客' };
 
 Page({
   data: {
     nav: { spacerPx: 48, rowPx: 32 },
+    /** 订阅授权状态：accept/reject/ban/unknown，决定「缴费提醒」的说明与点击行为 */
+    notifyState: 'unknown',
     userName: '业主',
     phone: '',
     avatarText: '宅',
@@ -30,7 +32,7 @@ Page({
        * 一处请求授权，于是从没缴过费的业主永远没有额度、永远收不到出账与催缴通知
        * ——而最需要催缴的恰恰是这批人。这里给一个主动开启的入口。
        */
-      { key: 'notify', title: '缴费提醒', desc: '开启后账单生成与到期前微信提醒你' },
+      { key: 'notify', title: '缴费提醒', desc: '开启后账单生成与到期前微信提醒你' },  // desc 会在 refreshNotifyState 里按真实状态改写
     ],
   },
 
@@ -39,6 +41,8 @@ Page({
   },
 
   async onShow() {
+    // 放在 onShow：业主去微信「设置 → 订阅消息」改完再回来，这里要能刷新
+    void this.refreshNotifyState();
     const app = getApp();
     await app.loginReady;
     try {
@@ -136,8 +140,39 @@ Page({
    * 必须在用户点击的手势上下文中同步调用 wx.requestSubscribeMessage，
    * 所以这里不 await 任何网络请求再调，直接走 requestSubscribe。
    */
+  /**
+   * 按真实授权状态改写菜单说明。
+   *
+   * 微信的一次性订阅：业主授权一次只能收一条（物业类目拿不到长期订阅）。
+   * 如果业主勾过「总是保持以上选择，不再询问」，状态就是 accept，后续调用会静默
+   * 通过、额度持续累积——这时该告诉他「已开启」，而不是让他反复点。
+   * 若是 ban（在设置里关了总开关），点按钮也没用，必须引导去右上角设置。
+   */
+  async refreshNotifyState() {
+    const state = await getSubscribeState();
+    const desc = {
+      accept: '已开启，账单生成与到期前会微信提醒你',
+      reject: '你之前拒绝过，点此重新开启',
+      ban: '已在微信设置里关闭，需从右上角 ··· → 设置 → 订阅消息 开启',
+      unknown: '开启后账单生成与到期前微信提醒你',
+    }[state] || '开启后账单生成与到期前微信提醒你';
+    const menus = this.data.menus.map((m) => (m.key === 'notify' ? { ...m, desc } : m));
+    this.setData({ menus, notifyState: state });
+  },
+
   async enableNotify() {
+    // ban = 微信设置里关了总开关，再弹也弹不出来，直接给正确路径
+    if (this.data.notifyState === 'ban') {
+      wx.showModal({
+        title: '需在微信设置里开启',
+        content: '你在微信里关闭了本小程序的订阅消息总开关。请点右上角 ··· → 设置 → 订阅消息，把「缴费业务通知」打开。',
+        showCancel: false,
+        confirmText: '知道了',
+      });
+      return;
+    }
     const accepted = await requestSubscribe();
+    await this.refreshNotifyState();
     if (accepted) {
       wx.showToast({ title: '已开启缴费提醒', icon: 'success' });
       return;
