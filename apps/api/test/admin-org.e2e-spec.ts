@@ -57,10 +57,32 @@ describe('管理端组织管理（租户/小区/房产导入/绑定审核）', (
     expect(res.body.code).toBe(0);
     tenantId = res.body.data.id;
 
-    const login = await request(app.getHttpServer())
+    /*
+     * 新建的租户管理员是「受限会话」：tenants.controller 建号时置 mustChangePassword，
+     * AdminGuard 只放行改密端点。所以必须先改密再拿可用的令牌 ——
+     * 这正是真实运营的第一步（超管给出初始密码，管理员首次登录必须改掉）。
+     *
+     * 原来的测试跳过了这一步，于是后续每个请求都是 40100「请先修改初始密码」，
+     * 本文件 6 条全红。**这不是产品回归，是测试没跟上那次安全加固** ——
+     * 而它一直没被发现，因为整套 e2e 因缺 ALLOW_MOCK_WX 根本跑不起来。
+     */
+    const firstLogin = await request(app.getHttpServer())
       .post('/api/v1/admin/auth/login')
       .send({ username: 'org-t8-admin', password: 'AdminOrg123456' });
+    expect(firstLogin.body.code).toBe(0);
+    expect(firstLogin.body.data.mustChangePassword).toBe(true);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/admin/auth/change-password')
+      .set('Authorization', `Bearer ${firstLogin.body.data.token}`)
+      .send({ oldPassword: 'AdminOrg123456', newPassword: 'AdminOrg654321' })
+      .expect(200);
+
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/admin/auth/login')
+      .send({ username: 'org-t8-admin', password: 'AdminOrg654321' });
     expect(login.body.code).toBe(0);
+    expect(login.body.data.mustChangePassword).toBeFalsy();
     tenantAdminToken = login.body.data.token;
   });
 

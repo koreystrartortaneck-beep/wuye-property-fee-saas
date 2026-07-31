@@ -105,6 +105,16 @@ describe('通知模块：出账推送与提醒去重', () => {
       .send({ requestId: 'ntf-pub-1' })
       .expect(200);
 
+    /*
+     * 发布只入 Outbox，真正投递由 scheduledOutboxDispatch 那一轮完成 ——
+     * 这是刻意收成单一投递路径的结果（此前 Outbox 走另一套代码，
+     * 导致「通知记录」页看不到经 Outbox 发出的任何一条，还会把费用名退化成账期）。
+     *
+     * 所以断言前必须先驱动一轮投递，否则查到的是 0 条。
+     * 原测试假设发布时同步发送，那个前提已经不成立了。
+     */
+    await app.get(NotifyService).scheduledOutboxDispatch();
+
     const logs = await prisma.raw.notifyLog.findMany({ where: { tenantId, type: 'BILL_CREATED' } });
     expect(logs).toHaveLength(2);
     const sent = logs.find((l) => l.status === 'SENT');

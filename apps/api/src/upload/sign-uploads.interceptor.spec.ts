@@ -257,3 +257,38 @@ describe('库里只能存裸路径', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('上传接口的响应不能被签名', () => {
+  /*
+   * 上传返回的 url 是**入库标识**，契约是裸路径（预览用 viewUrl）。
+   * 统一签名把它也签了，客户端存下来的就是带 10 分钟令牌的地址 ——
+   * 正是这套机制一开始要防的事。入口侧剥签名虽然能兜回来，
+   * 但让「返回入库标识」的接口先破坏契约、再靠另一处修正，是把两个机制拧在一起。
+   * 这条是 e2e 报出来后补的守卫（e2e 里断言 url 必须匹配 ^/uploads/\d{6}/.+\.png$）。
+   */
+  function run(pathname: string, body: unknown) {
+    const req = { body: {}, path: pathname, url: pathname };
+    const ctx = { switchToHttp: () => ({ getRequest: () => req }) } as never;
+    let out: unknown;
+    const next = { handle: () => ({ pipe: (op: unknown) => { void op; return { __piped: true }; } }) } as never;
+    // 直接判断是否走了 pipe：走了说明会被签名
+    const res = new UploadPathsInterceptor().intercept(ctx, next) as { __piped?: boolean };
+    out = body;
+    void out;
+    return !!res.__piped;
+  }
+
+  it('/owner/upload 与 /admin/upload 的响应不过签名管道', () => {
+    expect(run('/api/v1/owner/upload', {})).toBe(false);
+    expect(run('/api/v1/admin/upload', {})).toBe(false);
+  });
+
+  it('其它接口照常签名', () => {
+    expect(run('/api/v1/owner/tickets', {})).toBe(true);
+    expect(run('/api/v1/admin/work-logs', {})).toBe(true);
+  });
+
+  it('带查询串也能正确识别上传接口', () => {
+    expect(run('/api/v1/admin/upload?x=1', {})).toBe(false);
+  });
+});

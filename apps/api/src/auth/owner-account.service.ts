@@ -123,16 +123,30 @@ export class OwnerAccountService {
    * 逐条改而不是 updateMany：payerName 在 Json 列内部，需要读出来改再写回。
    * 单个业主的线下缴费笔数是个位数到几十，逐条可接受。
    */
+  /*
+   * tx 用 Prisma 自己的事务客户端类型，不要写成 `{ findMany: Function }`。
+   *
+   * 原来那个写法让 TypeScript 完全放弃检查这个调用的参数 ——
+   * 于是下面 where 里的 Json 过滤写错（`NOT: { offlinePayerSnapshot: null }`，
+   * Json 列不接受裸 null）编译期毫无提示，**注销账号整个功能在线上报 50000**。
+   * 单测里 tx 是 mock，不校验 Prisma 参数；能发现它的只有 e2e，
+   * 而 e2e 因为缺一个环境变量长期跑不起来 —— 三层都漏了。
+   */
   private async anonymizeOfflinePayerNames(
-    tx: { payment: { findMany: Function; update: Function } },
+    tx: Pick<Prisma.TransactionClient, 'payment'>,
     ownerId: string,
   ): Promise<void> {
-    const rows = (await tx.payment.findMany({
-      where: { wxUserId: ownerId, NOT: { offlinePayerSnapshot: null } },
+    /*
+     * 「该列不为空」在 Json 列上必须写成 `{ not: Prisma.DbNull }`。
+     * DbNull 是数据库层的 NULL，JsonNull 是 JSON 里的 null 值 —— 两者不同，
+     * 而裸 null 两者都不是，Prisma 直接判参数非法。
+     */
+    const rows = await tx.payment.findMany({
+      where: { wxUserId: ownerId, offlinePayerSnapshot: { not: Prisma.DbNull } },
       select: { id: true, offlinePayerSnapshot: true },
-    })) as Array<{ id: string; offlinePayerSnapshot: Record<string, unknown> | null }>;
+    });
     for (const r of rows) {
-      const snap = r.offlinePayerSnapshot;
+      const snap = r.offlinePayerSnapshot as Record<string, unknown> | null;
       if (!snap || typeof snap.payerName !== 'string' || !snap.payerName) continue;
       await tx.payment.update({
         where: { id: r.id },

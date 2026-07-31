@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import * as bcrypt from 'bcryptjs';
 import { createTestApp } from './test-app';
+import { shanghaiToday } from '../src/visitors/visitors.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('公告可见范围 + 访客核销 + 管家电话', () => {
@@ -103,8 +104,17 @@ describe('公告可见范围 + 访客核销 + 管家电话', () => {
   });
 
   it('访客通行证：创建 → 当日核销 → 重复核销被拒', async () => {
-    const today = new Date();
-    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    /*
+     * 到访日期必须按**北京日**算，不能用运行机器的本地日。
+     *
+     * 后端的判定是「不早于北京今天」（物业在国内，门口按北京日核销 ——
+     * 为「北京的昨天」发的码本来就没法用）。而这里原先用 new Date().getFullYear()
+     * 取本地日：在洛杉矶时区的机器上跑，本地是 7-31 而北京已经是 8-1，
+     * 于是这条正常用例被判成「到访日期不能早于今天」。
+     *
+     * 用与产品同一个口径（shanghaiToday），测试就与运行机器的时区无关。
+     */
+    const dateStr = shanghaiToday();
     const created = await request(app.getHttpServer())
       .post('/api/v1/owner/visitor-passes')
       .set('Authorization', `Bearer ${ownerToken}`)

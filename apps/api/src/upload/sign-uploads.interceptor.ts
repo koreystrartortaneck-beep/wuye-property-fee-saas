@@ -103,12 +103,25 @@ export function stripUploadSignaturesDeep(value: unknown, depth = 0): unknown {
 @Injectable()
 export class UploadPathsInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const req = context.switchToHttp().getRequest<{ body?: unknown }>();
+    const req = context.switchToHttp().getRequest<{ body?: unknown; path?: string; url?: string }>();
     if (req && req.body !== undefined) {
       const stripped = stripUploadSignaturesDeep(req.body);
       // 只在真有改动时赋值：避免给 rawBody 之类的特殊请求体换引用
       if (stripped !== req.body) req.body = stripped;
     }
+    /*
+     * 上传接口的响应**不能**签。
+     *
+     * 它返回的 url 是入库标识，契约就是裸路径（预览用另一个字段 viewUrl）。
+     * 统一签名把 url 也签了，客户端拿到并存下来的就是带 10 分钟令牌的地址 ——
+     * 正是这套机制一开始要防的东西。
+     *
+     * （入口侧的剥签名会在提交时把它还原，所以库里最终仍是裸路径；
+     * 但让「返回入库标识」的接口先破坏自己的契约、再靠另一处兜回来，
+     * 是把两个机制拧在一起 —— e2e 一跑就报了出来。）
+     */
+    const path = (req?.path || req?.url || '').split('?')[0];
+    if (path.endsWith('/upload')) return next.handle();
     return next.handle().pipe(map((body) => signUploadsDeep(body)));
   }
 }

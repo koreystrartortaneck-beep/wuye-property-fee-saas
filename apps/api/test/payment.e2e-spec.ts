@@ -112,7 +112,21 @@ describe('支付闭环：出账 → 查账 → 合并支付 → PAID', () => {
       .send({ username: 'pay-t15-adm', password: 'p123456' });
     adminToken = adminLogin.body.data.token;
 
-    // 抄表
+    /*
+     * 抄表：必须先有**上期**读数，本期才能算出用量。
+     *
+     * bill-run 在上期读数缺失（prevValue === null）时会跳过该户而不是把上期当 0 ——
+     * 那是刻意的：把累计表数当本月用量会造成巨额多收。
+     * 原来的测试只录一期读数就期望出账，于是水费那张永远 skip（METER_READING_MISSING），
+     * 汇总从 3 笔变 2 笔。**这不是产品回归，是测试没跟上那次防多收的修正。**
+     *
+     * 这里补一期 0 起表（新装水表的真实场景），本期 20 → 用量仍是 20，
+     * 期望值 262.00 不变。
+     */
+    await request(app.getHttpServer())
+      .post('/api/v1/admin/meter-readings')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ houseId, meterType: 'WATER', period: '2026-06', value: 0 });
     await request(app.getHttpServer())
       .post('/api/v1/admin/meter-readings')
       .set('Authorization', `Bearer ${adminToken}`)

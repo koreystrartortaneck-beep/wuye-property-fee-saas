@@ -117,15 +117,29 @@ describe('退款闭环：全额退款 / 幂等 / 失败恢复 / 历史订单', (
         confirmedBy: 'WXPAY_QUERY',
       },
     });
+    /*
+     * 历史「一笔订单对多张账单」只能通过 PaymentBill 关联表表达。
+     *
+     * Bill.paymentId 是 @unique（单账单单支付的契约），所以第二张账单不能再写同一个
+     * paymentId —— 原测试给每张都写，第二次直接撞唯一约束
+     * （Bill_paymentId_key），整条用例连编排都跑不完。
+     *
+     * 正确的历史形状：第一张账单保留 paymentId（兼容旧读取路径），
+     * 其余账单只进 PaymentBill。payment.service 的注释也是这么写的：
+     * 「同时保留 PaymentBill 以兼容历史多账单读取」。
+     */
+    let first = true;
     for (const cid of opts.communityIds) {
       const hId = cid === communityId ? houseId : house2Id;
       const bill = await prisma.raw.bill.create({
         data: {
           tenantId, communityId: cid, houseId: hId, period: '2026-07',
           title: '物业费', snapshot: {}, amount: '1.00', status: 'PAID',
-          dueDate: new Date(), paidAt: new Date(), paymentId: payment.id,
+          dueDate: new Date(), paidAt: new Date(),
+          ...(first ? { paymentId: payment.id } : {}),
         },
       });
+      first = false;
       await prisma.raw.paymentBill.create({ data: { paymentId: payment.id, billId: bill.id } });
     }
     return orderNo;
