@@ -61,6 +61,19 @@
       <el-button :disabled="!rows.length" size="small" @click="doExport">导出本页</el-button>
     </div>
     <el-table :data="rows" v-loading="loading" size="small">
+      <!--
+        房号列。这个列表原先不显示房屋，物业处理时无从判断是哪户的哪笔费用
+        ——而单号/抬头都对不上房号。走 HouseCell 可点直达业主档案。
+      -->
+      <el-table-column label="房屋 / 费用" min-width="180">
+        <template #default="{ row }">
+          <HouseCell
+            :house-id="row.bill?.house?.id ?? null"
+            :text="row.bill?.house?.displayName || '—'"
+            :sub="row.bill?.title"
+          />
+        </template>
+      </el-table-column>
       <el-table-column prop="orderNo" label="订单号" min-width="180" />
       <el-table-column label="金额（元）" width="100">
         <template #default="{ row }">{{ yuan(row.totalAmount) }}</template>
@@ -177,6 +190,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { api, qs, type Page } from '../api';
+import HouseCell from '../components/HouseCell.vue';
 import { useCommunities } from '../composables';
 import {
   PAYMENT_CHANNEL_LABEL,
@@ -196,6 +210,13 @@ import {
 import { exportCsv } from '../export';
 
 interface Payment {
+  /*
+   * 房屋与费用名称。后端在列表里带出来（NotifyLog 因为没有到 Bill 的 Prisma 关系，
+   * 是按当页 billId 去重后一次批量补的），前端据此显示可点的房号列——
+   * 原先这些列表只有内部单号，物业无从判断是哪户的哪笔费用。
+   */
+  bill?: { title: string; period: string; house: { id: string; code: string; displayName: string } | null } | null;
+
   /** 优惠券抵扣额；totalAmount 为业主实付，二者之和为账单原额 */
   discountAmount?: string | null;
   orderNo: string;

@@ -29,6 +29,19 @@
       <el-button @click="reload">查询</el-button>
     </div>
     <el-table :data="rows" v-loading="loading" size="small">
+      <!--
+        房号列。这个列表原先不显示房屋，物业处理时无从判断是哪户的哪笔费用
+        ——而单号/抬头都对不上房号。走 HouseCell 可点直达业主档案。
+      -->
+      <el-table-column label="房屋 / 费用" min-width="180">
+        <template #default="{ row }">
+          <HouseCell
+            :house-id="row.bill?.house?.id ?? null"
+            :text="row.bill?.house?.displayName || '—'"
+            :sub="row.bill?.title"
+          />
+        </template>
+      </el-table-column>
       <el-table-column label="类型" width="110">
         <template #default="{ row }">{{ TYPE[row.type] }}</template>
       </el-table-column>
@@ -76,9 +89,17 @@
 import EmptyState from '../components/EmptyState.vue';
 import { onMounted, ref } from 'vue';
 import { api, qs, type Page } from '../api';
+import HouseCell from '../components/HouseCell.vue';
 import { NOTIFY_CHANNEL_LABEL, dt } from '../finance';
 
 interface Log {
+  /*
+   * 房屋与费用名称。后端在列表里带出来（NotifyLog 因为没有到 Bill 的 Prisma 关系，
+   * 是按当页 billId 去重后一次批量补的），前端据此显示可点的房号列——
+   * 原先这些列表只有内部单号，物业无从判断是哪户的哪笔费用。
+   */
+  bill?: { title: string; period: string; house: { id: string; code: string; displayName: string } | null } | null;
+
   id: string;
   type: string;
   status: string;

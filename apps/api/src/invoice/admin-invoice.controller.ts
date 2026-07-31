@@ -48,7 +48,30 @@ export class AdminInvoiceService {
       ...(q.status ? { status: q.status } : {}),
     };
     const [list, total] = await Promise.all([
-      this.prisma.t.invoiceApplication.findMany({ where, ...pageArgs(q), orderBy: { appliedAt: 'desc' } }),
+      this.prisma.t.invoiceApplication.findMany({
+        where,
+        ...pageArgs(q),
+        orderBy: { appliedAt: 'desc' },
+        /*
+         * 带出房屋。开票申请只关联 payment，房屋要经 payment → bill → house 两跳。
+         * 原先列表里既没有房号也没有费用名称，物业处理开票时无从判断这是哪户的哪笔费用
+         * ——而抬头是业主自填的公司名或个人名，对不上房号。
+         */
+        include: {
+          payment: {
+            select: {
+              orderNo: true,
+              bill: {
+                select: {
+                  title: true,
+                  period: true,
+                  house: { select: { id: true, code: true, displayName: true } },
+                },
+              },
+            },
+          },
+        },
+      }),
       this.prisma.t.invoiceApplication.count({ where }),
     ]);
     return pageResult(list, total, q);

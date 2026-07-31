@@ -563,7 +563,11 @@ onMounted(async () => {
 }
 .hd-tag,
 .hd-select {
-  float: right;
+  /*
+   * .el-card__header 是 flex 容器（见 styles/ui.css），flex 子项上的 float 会被浏览器
+   * 完全忽略——这条 float: right 一直是空操作，元素其实是靠 flex 的默认排列落在那里的。
+   */
+  margin-left: auto;
 }
 .hd-select {
   width: 120px;

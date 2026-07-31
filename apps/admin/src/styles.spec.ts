@@ -447,4 +447,32 @@ describe('共享样式无死代码', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  it('flex 容器的子项不得用 float（浏览器直接忽略）', () => {
+    /*
+     * .el-card__header 是 flex 容器（ui.css 里就是这么定义的），而 Dashboard 的
+     * .hd-period 与 Operations 的 .hd-tag 都写了 float: right —— flex 子项上的 float
+     * 会被完全忽略，这两行一直是空操作，元素其实是靠 flex 默认排列落在那个位置的。
+     * 看起来「生效了」，所以没人发现；但一旦 header 的 flex 布局改动，这两处就会跟着漂。
+     */
+    const offenders: string[] = [];
+    for (const file of files) {
+      const src = fs.readFileSync(file, 'utf8');
+      const sty = src.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+      if (!sty) continue;
+      const css = sty[1].replace(/\/\*[\s\S]*?\*\//g, '');
+      for (const m of css.matchAll(/\n\.([\w-]+)[^{]*\{[^}]*float:\s*(left|right)/g)) {
+        offenders.push(`${path.relative(SRC, file)} → .${m[1]} 用了 float: ${m[2]}`);
+      }
+    }
+    if (offenders.length) {
+      throw new Error(
+        '以下类用了 float。后台的卡头、工具条、单元格都是 flex 容器，float 在 flex 子项上' +
+          '会被忽略，写了等于没写：\n  ' +
+          offenders.join('\n  ') +
+          '\n靠右请用 margin-left: auto。',
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
 });

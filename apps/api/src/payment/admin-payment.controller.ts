@@ -81,6 +81,18 @@ export class AdminPaymentsService {
         select: {
           orderNo: true, totalAmount: true, discountAmount: true, channel: true, status: true, paidAt: true,
           offlineVoucherNo: true, receiptNo: true, createdAt: true, billId: true,
+          /*
+           * 带出房屋与费用名称。原先这个列表只有「账单 ID」（一串 cuid）——
+           * 收费员核一笔款要拿这个 ID 去别处反查是哪户的哪笔费用，而后台界面上
+           * 根本不显示账单 ID。房号才是他们唯一认得的标识。
+           */
+          bill: {
+            select: {
+              title: true,
+              period: true,
+              house: { select: { id: true, code: true, displayName: true } },
+            },
+          },
         },
       }),
       this.prisma.t.payment.count({ where }),
