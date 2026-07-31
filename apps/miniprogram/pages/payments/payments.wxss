@@ -18,6 +18,12 @@
   font-weight: 800;
 }
 
+/* 退款：划掉并降饱和 —— 与右侧的「已退款」一起，两处都说明这笔钱不算 */
+.pay-item-amount.amount-refunded {
+  text-decoration: line-through;
+  color: #9a92a3;
+}
+
 .pay-item-status {
   font-size: 22rpx;
   color: #8b8199;

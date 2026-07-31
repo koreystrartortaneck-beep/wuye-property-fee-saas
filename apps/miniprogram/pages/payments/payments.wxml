@@ -17,7 +17,13 @@
     <block wx:for="{{list}}" wx:key="orderNo">
       <view class="pay-item card" data-index="{{index}}" bindtap="goReceipt">
         <view class="pay-item-top">
-          <view class="pay-item-amount amount">¥{{item.totalAmount}}</view>
+          <!--
+            已退款的金额要划掉。
+            原来只有右侧状态文字变红，金额仍是与成功支付一模一样的加粗大字 ——
+            扫一眼这份列表，一笔退回去的钱和一笔实付的钱同样醒目，
+            业主会把它算进「我交了多少」。
+          -->
+          <view class="pay-item-amount amount {{item.refunded ? 'amount-refunded' : ''}}">¥{{item.totalAmount}}</view>
           <view class="pay-item-status {{item.success ? 'ok' : ''}} {{item.refunded ? 'refunded' : ''}}">{{item.statusLabel}}{{item.success ? ' · 收据 ›' : ''}}</view>
         </view>
         <view class="pay-item-bills">{{item.billTitles}}</view>
