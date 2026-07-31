@@ -1,12 +1,17 @@
 <template>
   <el-card class="mb">
     <template #header>发起对账</template>
+    <!--
+      商户参数不再要求手输。它们只存在于服务端环境变量里，其中「商户账户 ID」
+      实际上是商户 API 证书的序列号（一串十六进制），后台没有任何地方能查到——
+      于是这个功能事实上不可用。而每日定时对账本来就是从同一批环境变量读的。
+      这里只显示服务端配了哪个商户（脱敏），让操作者知道会用哪套凭据。
+    -->
     <el-form inline>
-      <el-form-item label="商户账户 ID">
-        <el-input v-model="trigger.merchantAccountId" placeholder="merchantAccountId" style="width: 180px" />
+      <el-form-item label="对账商户">
+        <span v-if="cfg?.configured" class="cell-sub">商户号 {{ cfg.mchid }} · 小程序 {{ cfg.appid }}</span>
+        <span v-else class="cell-sub is-bad">服务端未配置商户参数</span>
       </el-form-item>
-      <el-form-item label="mchid"><el-input v-model="trigger.mchid" style="width: 140px" /></el-form-item>
-      <el-form-item label="appid"><el-input v-model="trigger.appid" style="width: 150px" /></el-form-item>
       <el-form-item label="账单类型">
         <el-select v-model="trigger.billType" style="width: 130px">
           <el-option v-for="(label, val) in RECON_BILL_TYPE_LABEL" :key="val" :label="label" :value="val" />
@@ -15,7 +20,16 @@
       <el-form-item label="账单日期">
         <el-date-picker v-model="trigger.businessDate" type="date" placeholder="账单日" style="width: 150px" />
       </el-form-item>
-      <el-button type="primary" :loading="triggering" @click="doTrigger">对账</el-button>
+      <el-form-item label="强制重跑">
+        <!--
+          force 此前在界面上完全没有入口，但后端一直支持，而前端无论如何都提示
+          「对账已发起」——已完成的账期实际会被幂等跳过，操作者以为重跑了。
+        -->
+        <el-switch v-model="trigger.force" />
+      </el-form-item>
+      <el-button type="primary" :loading="triggering" :disabled="!cfg?.configured" @click="doTrigger">
+        对账
+      </el-button>
     </el-form>
     <el-alert type="info" :closable="false" title="每日对账通常由定时任务自动执行；此处用于手动补对某个账单日。微信账单一般次日才可下载。" />
   </el-card>
@@ -160,10 +174,11 @@ const total = ref(0);
 const page = ref(1);
 const loading = ref(false);
 
-const trigger = ref<{ merchantAccountId: string; mchid: string; appid: string; billType: string; businessDate: string }>({
-  merchantAccountId: '',
-  mchid: '',
-  appid: '',
+/** 服务端配置的对账商户（脱敏），用于显示与禁用按钮 */
+const cfg = ref<{ configured: boolean; mchid: string; appid: string } | null>(null);
+
+const trigger = ref<{ billType: string; businessDate: string; force: boolean }>({
+  force: false,
   billType: 'TRANSACTION',
   businessDate: '',
 });
@@ -179,7 +194,20 @@ const resolving = ref(false);
 const currentItem = ref<Item | null>(null);
 const resolve = ref({ status: 'MANUALLY_CLOSED', remark: '' });
 
-onMounted(load);
+onMounted(() => {
+  // 两个请求互不依赖，任一失败不应让另一块消失
+  void Promise.allSettled([load(), loadConfig()]);
+});
+
+async function loadConfig() {
+  try {
+    cfg.value = await api<{ configured: boolean; mchid: string; appid: string }>(
+      '/admin/reconciliations/config',
+    );
+  } catch {
+    cfg.value = { configured: false, mchid: '', appid: '' };
+  }
+}
 
 async function load() {
   loading.value = true;
@@ -198,22 +226,40 @@ function money(v: string | null): string {
 
 async function doTrigger() {
   const t = trigger.value;
-  if (!t.merchantAccountId.trim() || !t.mchid.trim() || !t.appid.trim() || !t.businessDate) {
-    return ElMessage.warning('请填写商户账户、mchid、appid 与账单日期');
-  }
+  if (!t.businessDate) return ElMessage.warning('请选择账单日期');
   triggering.value = true;
   try {
-    await api('/admin/reconciliations', {
-      method: 'POST',
-      body: {
-        merchantAccountId: t.merchantAccountId.trim(),
-        mchid: t.mchid.trim(),
-        appid: t.appid.trim(),
-        billType: t.billType,
-        businessDate: new Date(t.businessDate).toISOString(),
+    // 商户参数由服务端从环境变量取，与每日定时对账用的是同一套
+    const res = await api<{
+      runNo: string | null;
+      status: string;
+      differenceRecordCount: number;
+      alreadyDone: boolean;
+      busy: boolean;
+    }>(
+      '/admin/reconciliations',
+      {
+        method: 'POST',
+        body: {
+          billType: t.billType,
+          businessDate: new Date(t.businessDate).toISOString(),
+          force: t.force,
+        },
       },
-    });
-    ElMessage.success('对账已发起');
+    );
+    /*
+     * 如实反映结果。原先无论如何都提示「对账已发起」，而已完成的账期会被幂等跳过
+     * ——操作者以为重跑了，实际什么都没发生；发现差异时也不提示，还要自己去翻列表。
+     */
+    if (res.alreadyDone) {
+      ElMessage.info('该账单日已对过账，未重复执行。需要重新核对请打开「强制重跑」。');
+    } else if (res.busy) {
+      ElMessage.info('该账单日正在对账中，请稍后刷新查看结果。');
+    } else if (res.differenceRecordCount > 0) {
+      ElMessage.warning(`对账完成，发现 ${res.differenceRecordCount} 笔差异，请在下方批次里处置`);
+    } else {
+      ElMessage.success('对账完成，未发现差异');
+    }
     await load();
   } finally {
     triggering.value = false;

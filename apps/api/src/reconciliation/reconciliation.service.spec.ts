@@ -197,9 +197,35 @@ describe('ReconciliationService 每日对账', () => {
       prisma.raw.reconciliationRun.findFirst.mockResolvedValue(completedRun());
       const result = await makeService(prisma).reconcile(baseInput);
 
-      expect(result).toEqual({ runId: 'run-done', status: 'COMPLETED', differenceRecordCount: 2 });
+      /*
+       * alreadyDone 必须能被调用方区分出来。
+       * 原先「已完成被幂等跳过」与「刚刚跑完」都是 status: 'COMPLETED'，管理端无从
+       * 分辨，于是两种情况都提示「对账已发起」——操作者以为重跑了，实际什么都没发生。
+       */
+      expect(result).toMatchObject({ runId: 'run-done', status: 'COMPLETED', differenceRecordCount: 2 });
+      expect(result.alreadyDone).toBe(true);
+      expect(result.busy).toBe(false);
       expect(billProvider.downloadBill).not.toHaveBeenCalled();
       expect(prisma.raw.reconciliationItem.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('刚刚跑完的 alreadyDone 为 false（与幂等跳过区分）', async () => {
+      const prisma = makePrisma();
+      prisma.raw.reconciliationRun.findFirst.mockResolvedValue(null);
+      // 本 describe 的 downloadBill 桩无默认返回值，用例自备一份空账单
+      billProvider.downloadBill.mockResolvedValue({
+        billType: 'TRANSACTION',
+        businessDate: '2026-07-30',
+        fileHash: 'h',
+        recordCount: 0,
+        totalAmountCents: 0,
+        trades: [],
+        refunds: [],
+      });
+      const result = await makeService(prisma).reconcile(baseInput);
+      expect(result.status).toBe('COMPLETED');
+      expect(result.alreadyDone).toBe(false);
+      expect(billProvider.downloadBill).toHaveBeenCalled();
     });
 
     it('带 force：重新认领 COMPLETED 并重新下载账单', async () => {

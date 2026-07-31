@@ -161,10 +161,30 @@ describe('待办角标刷新', () => {
     for (const [key, rel] of Object.entries(BADGE_PAGES)) {
       const src = fs.readFileSync(path.join(SRC, rel), 'utf8');
       const imported = /import \{[^}]*refreshBadges[^}]*\} from '\.\.\/badges'/.test(src);
-      // 出现次数 > 1 才算真正调用（1 次只是那行 import）
-      const called = (src.match(/refreshBadges/g) ?? []).length > 1;
-      if (!imported) offenders.push(`${rel}（${key}）未导入 refreshBadges`);
-      else if (!called) offenders.push(`${rel}（${key}）导入了 refreshBadges 但从未调用，角标不会消`);
+      if (!imported) {
+        offenders.push(`${rel}（${key}）未导入 refreshBadges`);
+        continue;
+      }
+      /*
+       * 必须逐个动作检查，不能只看「出现次数 > 1」。
+       *
+       * Tickets.vue 里 assign/resolve 都刷了角标、close 漏了，而按出现次数判定时
+       * 这条守卫一直是绿的——关闭工单同样会改变待办数（badges 统计 PENDING 工单），
+       * 漏刷就让侧栏那个数字一直挂着，运维会反复点进去看已经处理过的东西。
+       *
+       * 判据：任何「调了写接口 + 提示成功」的函数，都必须刷角标。
+       */
+      const code = stripComments(src);
+      for (const m of code.matchAll(/async function (\w+)\s*\([^)]*\)\s*\{/g)) {
+        const at = m.index as number;
+        const body = code.slice(at, code.indexOf('\n}', at));
+        const writes = /method:\s*'(POST|PATCH|PUT|DELETE)'/.test(body);
+        const notifies = /ElMessage\.success\(/.test(body);
+        if (!writes || !notifies) continue;
+        if (!body.includes('refreshBadges')) {
+          offenders.push(`${rel}（${key}）→ ${m[1]}() 改了数据并提示成功，但没刷角标`);
+        }
+      }
     }
     if (offenders.length) {
       throw new Error('待办角标不会刷新：\n  ' + offenders.join('\n  '));

@@ -13,7 +13,13 @@ import { BizException } from '../common/biz.exception';
 import { AlertService } from '../operations/alert.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { runWithTenant } from '../tenant/tenant-cls';
-import { ChannelBill, WECHAT_BILL_PROVIDER, WechatBillProvider, shanghaiBillingDate } from './wechat-bill.provider';
+import {
+  ChannelBill,
+  WECHAT_BILL_PROVIDER,
+  WechatBillProvider,
+  shanghaiBillingDate,
+  shanghaiDayRangeUtc,
+} from './wechat-bill.provider';
 
 /** 对账过程中用于自动本地确认的支付恢复协作者（PaymentService 实现）。 */
 export const RECON_RECOVERY = Symbol('RECON_RECOVERY');
@@ -178,17 +184,45 @@ export class ReconciliationService {
     }
   }
 
-  async reconcile(input: ReconcileInput): Promise<{ runId: string; status: string; differenceRecordCount: number }> {
+  /**
+   * 返回值里的 alreadyDone / busy 必须让调用方能区分出来。
+   *
+   * 原先只返回 { runId, status, differenceRecordCount }，而「已完成被幂等跳过」和
+   * 「刚刚跑完」都是 status: 'COMPLETED'，管理端无从分辨，于是无论哪种都提示
+   * 「对账已发起」——操作者以为重跑了，实际什么都没发生。
+   */
+  async reconcile(input: ReconcileInput): Promise<{
+    runId: string;
+    runNo: string | null;
+    status: string;
+    differenceRecordCount: number;
+    alreadyDone: boolean;
+    busy: boolean;
+  }> {
     const businessDate = typeof input.businessDate === 'string' ? input.businessDate : shanghaiBillingDate(input.businessDate);
     const workerId = input.workerId ?? `recon-${process.pid}`;
 
     return runWithTenant(input.tenantId, async () => {
       const claim = await this.claimRun(input, businessDate, workerId);
       if ('done' in claim && claim.done) {
-        return { runId: claim.run.id, status: 'COMPLETED', differenceRecordCount: claim.run.differenceRecordCount };
+        return {
+          runId: claim.run.id,
+          runNo: claim.run.runNo ?? null,
+          status: 'COMPLETED',
+          differenceRecordCount: claim.run.differenceRecordCount,
+          alreadyDone: true,
+          busy: false,
+        };
       }
       if ('busy' in claim && claim.busy) {
-        return { runId: claim.run.id, status: claim.run.status, differenceRecordCount: claim.run.differenceRecordCount };
+        return {
+          runId: claim.run.id,
+          runNo: claim.run.runNo ?? null,
+          status: claim.run.status,
+          differenceRecordCount: claim.run.differenceRecordCount,
+          alreadyDone: false,
+          busy: true,
+        };
       }
       const run = claim.run;
 
@@ -230,7 +264,14 @@ export class ReconciliationService {
             summary: `账期 ${businessDate} ${input.billType} 存在 ${openCount} 条差异`,
           });
         }
-        return { runId: run.id, status: 'COMPLETED', differenceRecordCount: openCount };
+        return {
+          runId: run.id,
+          runNo: run.runNo ?? null,
+          status: 'COMPLETED',
+          differenceRecordCount: openCount,
+          alreadyDone: false,
+          busy: false,
+        };
       } catch (error) {
         await this.prisma.raw.reconciliationRun.updateMany({
           where: { id: run.id, status: 'RUNNING' },
@@ -243,11 +284,22 @@ export class ReconciliationService {
 
   private async compareTrades(input: ReconcileInput, businessDate: string, bill: ChannelBill): Promise<DifferenceDraft[]> {
     const drafts: DifferenceDraft[] = [];
-    const localSuccess = await this.prisma.raw.payment.findMany({
-      where: { tenantId: input.tenantId, channel: 'WXPAY', status: { in: ['SUCCESS', 'REFUNDED'] } },
+    /*
+     * 日期下推到 SQL。原实现把该租户**全部**历史微信支付拉进内存再逐行比对账期：
+     * 3000 户、缴费率 90% → 第一年 32400 行、第三年 97200 行，而当日只用约 90 行，
+     * 有效率 0.09%。配合新增的 Payment(tenantId,channel,status,paidAt) 索引，
+     * 现在只扫当日那几十行。
+     */
+    const { start, end } = shanghaiDayRangeUtc(businessDate);
+    const localOnDate = await this.prisma.raw.payment.findMany({
+      where: {
+        tenantId: input.tenantId,
+        channel: 'WXPAY',
+        status: { in: ['SUCCESS', 'REFUNDED'] },
+        paidAt: { gte: start, lt: end },
+      },
       select: { id: true, orderNo: true, totalAmount: true, status: true, paidAt: true },
     });
-    const localOnDate = localSuccess.filter((p) => p.paidAt && shanghaiBillingDate(p.paidAt) === businessDate);
     const channelByOrder = new Map(bill.trades.map((t) => [t.outTradeNo, t]));
     const localByOrder = new Map(localOnDate.map((p) => [p.orderNo, p]));
 
@@ -286,11 +338,18 @@ export class ReconciliationService {
 
   private async compareRefunds(input: ReconcileInput, businessDate: string, bill: ChannelBill): Promise<DifferenceDraft[]> {
     const drafts: DifferenceDraft[] = [];
+    const { start: rStart, end: rEnd } = shanghaiDayRangeUtc(businessDate);
     const localRefunds = await this.prisma.raw.refund.findMany({
-      where: { tenantId: input.tenantId, channel: 'WXPAY', status: 'SUCCESS' },
+      where: {
+        tenantId: input.tenantId,
+        channel: 'WXPAY',
+        status: 'SUCCESS',
+        refundedAt: { gte: rStart, lt: rEnd },
+      },
       select: { id: true, refundNo: true, refundAmount: true, status: true, refundedAt: true },
     });
-    const localOnDate = localRefunds.filter((r) => r.refundedAt && shanghaiBillingDate(r.refundedAt) === businessDate);
+    // 日期已在 SQL 里筛过，不再做内存过滤
+    const localOnDate = localRefunds;
     const channelByRefund = new Map(bill.refunds.map((r) => [r.outRefundNo, r]));
     const localByRefund = new Map(localOnDate.map((r) => [r.refundNo, r]));
 
@@ -322,13 +381,33 @@ export class ReconciliationService {
   }
 
   private async localTotals(input: ReconcileInput, businessDate: string, billType: ReconciliationBillType): Promise<{ count: number; cents: number }> {
+    /*
+     * 同样下推日期。这里原先是**第二次**拉同一份全表数据（compareTrades 已经拉过
+     * 一遍，只是 select 的字段不同），runDaily 又对 TRANSACTION 与 REFUND 各跑一次，
+     * 合计 4 次全表扫。
+     */
+    const { start, end } = shanghaiDayRangeUtc(businessDate);
     if (billType === 'REFUND') {
-      const refunds = await this.prisma.raw.refund.findMany({ where: { tenantId: input.tenantId, channel: 'WXPAY', status: 'SUCCESS' }, select: { refundAmount: true, refundedAt: true } });
-      const onDate = refunds.filter((r) => r.refundedAt && shanghaiBillingDate(r.refundedAt) === businessDate);
+      const onDate = await this.prisma.raw.refund.findMany({
+        where: {
+          tenantId: input.tenantId,
+          channel: 'WXPAY',
+          status: 'SUCCESS',
+          refundedAt: { gte: start, lt: end },
+        },
+        select: { refundAmount: true },
+      });
       return { count: onDate.length, cents: onDate.reduce((s, r) => s + toCents(String(r.refundAmount)), 0) };
     }
-    const payments = await this.prisma.raw.payment.findMany({ where: { tenantId: input.tenantId, channel: 'WXPAY', status: { in: ['SUCCESS', 'REFUNDED'] } }, select: { totalAmount: true, paidAt: true } });
-    const onDate = payments.filter((p) => p.paidAt && shanghaiBillingDate(p.paidAt) === businessDate);
+    const onDate = await this.prisma.raw.payment.findMany({
+      where: {
+        tenantId: input.tenantId,
+        channel: 'WXPAY',
+        status: { in: ['SUCCESS', 'REFUNDED'] },
+        paidAt: { gte: start, lt: end },
+      },
+      select: { totalAmount: true },
+    });
     return { count: onDate.length, cents: onDate.reduce((s, p) => s + toCents(String(p.totalAmount)), 0) };
   }
 

@@ -52,6 +52,26 @@ export function shanghaiBillingDate(date: Date): string {
   }).format(date);
 }
 
+/**
+ * 上海账期（YYYY-MM-DD）对应的 UTC 时间半开区间 [start, end)。
+ *
+ * 用来把日期过滤下推到 SQL。原实现是把该租户**全部**历史微信支付拉进内存，
+ * 再用 shanghaiBillingDate 逐行比对账期：
+ *   3000 户、缴费率 90%、每月 1 笔 → 第一年 32400 行、第三年 97200 行
+ *   每天 10:30 的对账把这 97200 行全部读出来，只为用其中当日约 90 行（有效率 0.09%）
+ * 而且 localTotals 会**再查一遍**同一份数据，runDaily 又对 TRANSACTION 与 REFUND
+ * 两种类型各跑一次，合计 4 次全表扫。
+ *
+ * 上海固定 +8 且无夏令时，所以直接按 -8 小时换算即可，不需要 Intl。
+ */
+export function shanghaiDayRangeUtc(businessDate: string): { start: Date; end: Date } {
+  const [y, m, d] = businessDate.split('-').map(Number);
+  if (!y || !m || !d) throw new Error(`账期格式非法：${businessDate}`);
+  // 该日上海 00:00:00 == UTC 前一日 16:00:00
+  const start = new Date(Date.UTC(y, m - 1, d, -8, 0, 0, 0));
+  return { start, end: new Date(start.getTime() + 86_400_000) };
+}
+
 function centsFromYuan(yuan: string): number {
   return Math.round(Number(yuan) * 100);
 }

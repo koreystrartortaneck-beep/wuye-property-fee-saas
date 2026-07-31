@@ -8,22 +8,49 @@ import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReconciliationService } from './reconciliation.service';
+import { BizException } from '../common/biz.exception';
+import { ErrorCode } from '@pf/shared';
+
+/**
+ * 对账用的商户参数来源：与每日 runDaily 完全一致的那三个环境变量。
+ * 单独抽出来，避免两处读法漂移（cron 用一套、手动触发用另一套就会出现
+ * 「自动对账正常、手动对账报商户不匹配」这种极难排查的情况）。
+ */
+function merchantFromEnv() {
+  return {
+    merchantAccountId: process.env.WX_PAY_MERCHANT_SERIAL,
+    mchid: process.env.WX_PAY_MCH_ID,
+    appid: process.env.WX_PAY_APP_ID ?? process.env.WX_APPID,
+  };
+}
 
 class TriggerReconcileDto {
+  /*
+   * 三个商户参数改为可选，缺省时由服务端从环境变量取。
+   *
+   * 原先是必填，而物业**无从知道**这三个值：它们只存在于服务端环境变量里，
+   * merchantAccountId 实际上是商户 API 证书的序列号（一串十六进制），
+   * 后台界面上没有任何地方能查到。于是「手动对账」这个功能事实上不可用——
+   * 而每日 02:00 的 runDaily 恰恰是从同一批环境变量读的
+   * （WX_PAY_MERCHANT_SERIAL / WX_PAY_MCH_ID / WX_PAY_APP_ID），
+   * 说明服务端本来就知道，只是没告诉这个端点。
+   *
+   * 保留可选传入：超管为另一个商户号补跑历史账期时仍可显式指定。
+   */
+  @IsOptional()
   @IsString()
   @MaxLength(64)
-  @IsNotEmpty()
-  merchantAccountId!: string;
+  merchantAccountId?: string;
 
+  @IsOptional()
   @IsString()
   @MaxLength(64)
-  @IsNotEmpty()
-  mchid!: string;
+  mchid?: string;
 
+  @IsOptional()
   @IsString()
   @MaxLength(64)
-  @IsNotEmpty()
-  appid!: string;
+  appid?: string;
 
   @IsOptional()
   @IsString()
@@ -99,15 +126,42 @@ export class AdminReconciliationController {
     return this.read.listItems(runId, q);
   }
 
+  /**
+   * 当前配置的对账商户（脱敏）。
+   * 让界面能显示「将用商户 16xxxx89 对账」而不是要求物业自己输一串证书序列号。
+   */
+  @Get('config')
+  config() {
+    const m = merchantFromEnv();
+    const mask = (v?: string) => (v && v.length > 6 ? `${v.slice(0, 2)}****${v.slice(-4)}` : v ?? '');
+    return {
+      configured: !!(m.merchantAccountId && m.mchid && m.appid),
+      mchid: mask(m.mchid),
+      appid: mask(m.appid),
+      merchantAccountId: mask(m.merchantAccountId),
+    };
+  }
+
   @Post()
   trigger(@Current() cur: CurrentAdmin, @Body() dto: TriggerReconcileDto) {
+    const env = merchantFromEnv();
+    const merchantAccountId = dto.merchantAccountId ?? env.merchantAccountId;
+    const mchid = dto.mchid ?? env.mchid;
+    const appid = dto.appid ?? env.appid;
+    if (!merchantAccountId || !mchid || !appid) {
+      throw new BizException(
+        ErrorCode.VALIDATION,
+        '服务端未配置微信支付商户参数，无法对账。请在云托管环境变量里设置 ' +
+          'WX_PAY_MERCHANT_SERIAL / WX_PAY_MCH_ID / WX_PAY_APP_ID 后重试。',
+      );
+    }
     return this.service.reconcile({
       tenantId: cur.tenantId as string,
       communityId: dto.communityId ?? null,
-      merchantAccountId: dto.merchantAccountId,
+      merchantAccountId,
       force: dto.force ?? false,
-      mchid: dto.mchid,
-      appid: dto.appid,
+      mchid,
+      appid,
       businessDate: isoDate(dto.businessDate),
       billType: dto.billType,
       adminId: cur.adminId,

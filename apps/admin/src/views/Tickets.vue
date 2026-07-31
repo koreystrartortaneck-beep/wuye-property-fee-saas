@@ -236,7 +236,10 @@ async function doDone() {
 async function close(row: Ticket) {
   await api(`/admin/tickets/${row.id}/close`, { method: 'POST' });
   ElMessage.success('已关闭');
-  await load();
+  // 关闭工单同样会改变待办数（badges 统计 PENDING 工单），不刷侧栏那个数字就一直挂着。
+  // 同文件另外两个动作早就刷了，只有这一处漏了；而现有守卫只按「出现次数 > 1」判定，
+  // 所以它一直是绿的。
+  await Promise.all([load(), refreshBadges()]);
 }
 
 onMounted(load);

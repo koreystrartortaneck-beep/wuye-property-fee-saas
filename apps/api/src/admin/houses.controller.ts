@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Injectable, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { IsArray, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
 import { HOUSE_TYPES, HouseType } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { RolesGuard } from '../auth/roles.decorator';
@@ -57,7 +57,13 @@ class ImportHousesDto {
   @IsNotEmpty()
   communityId!: string;
 
+  /*
+   * 行数上限。原先没有任何限制，只被 Express 默认 100KB 的 body 限制间接卡在约
+   * 600 行——超过就返回 413，物业看到的是一个无法理解的错误而不是业务提示。
+   * 2000 行覆盖一栋楼到一个中型小区，且批量化改造后写入耗时可控。
+   */
   @IsArray()
+  @ArrayMaxSize(2000, { message: '单次最多导入 2000 行，请拆分文件' })
   @ValidateNested({ each: true })
   @Type(() => HouseRowDto)
   rows!: HouseRowDto[];
@@ -121,28 +127,51 @@ export class HousesService {
     let updated = 0;
     const failed: { index: number; reason: string }[] = [];
 
+    /*
+     * 一次查出已存在的房号，新增走 createMany，只有确实要改的行才逐条 update。
+     *
+     * 原实现每行 2-3 次数据库往返（findFirst + update/create）：
+     *   600 行 → 约 1200 次 ≈ 3.6s
+     *  2000 行 → 约 4000 次 ≈ 12s，请求很可能撞网关超时，而此时后台还在继续写，
+     *            物业不知道到底导进去多少
+     * 现在是 2 次 + 需更新的行数。
+     */
+    const valid: HouseRowDto[] = [];
     for (let i = 0; i < dto.rows.length; i++) {
-      const row = dto.rows[i];
-      const reason = this.validateRow(row);
-      if (reason) {
-        failed.push({ index: i, reason });
-        continue;
-      }
+      const reason = this.validateRow(dto.rows[i]);
+      if (reason) failed.push({ index: i, reason });
+      else valid.push(dto.rows[i]);
+    }
+
+    const existing = valid.length
+      ? await this.prisma.t.house.findMany({
+          where: { communityId: dto.communityId, code: { in: valid.map((r) => r.code) } },
+          select: { id: true, code: true },
+        })
+      : [];
+    const idByCode = new Map(existing.map((h) => [h.code, h.id]));
+
+    const toCreate = valid.filter((r) => !idByCode.has(r.code));
+    if (toCreate.length) {
+      const res = await this.prisma.t.house.createMany({
+        data: toCreate.map((r) => ({ ...r, communityId: dto.communityId })) as never,
+        // 兜住 @@unique([communityId, code])：同一次导入里文件内重复的房号
+        skipDuplicates: true,
+      });
+      created = res.count;
+    }
+
+    for (const row of valid) {
+      const id = idByCode.get(row.code);
+      if (!id) continue;
       try {
-        const exists = await this.prisma.t.house.findFirst({
-          where: { communityId: dto.communityId, code: row.code },
-        });
-        if (exists) {
-          await this.prisma.t.house.update({ where: { id: exists.id }, data: { ...row } });
-          updated++;
-        } else {
-          await this.prisma.t.house.create({
-            data: { ...row, communityId: dto.communityId } as never,
-          });
-          created++;
-        }
+        await this.prisma.t.house.update({ where: { id }, data: { ...row } });
+        updated++;
       } catch (e) {
-        failed.push({ index: i, reason: e instanceof Error ? e.message : '未知错误' });
+        failed.push({
+          index: dto.rows.indexOf(row),
+          reason: e instanceof Error ? e.message : '未知错误',
+        });
       }
     }
     return { created, updated, failed };
