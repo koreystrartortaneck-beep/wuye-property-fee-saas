@@ -80,3 +80,56 @@ describe('ArrearsService 欠费清单', () => {
     );
   });
 });
+
+/**
+ * 催缴通知类型必须按账单实际是否逾期来选。
+ *
+ * 线上实测（业主手机截图）：给一张 2026-08-26 到期的账单发催缴，业主 7 月 31 日
+ * 就收到「已逾期，请尽快处理」——离到期还有 26 天。原实现无条件发 OVERDUE，
+ * 这是直接对业主说假话，会引发投诉。
+ */
+describe('ArrearsService 催缴通知类型', () => {
+  const DAY = 86_400_000;
+
+  function makeService(bills: unknown[]) {
+    const prisma = { t: { bill: { findMany: jest.fn().mockResolvedValue(bills) } } };
+    const idempotency = {
+      reserve: jest.fn().mockResolvedValue({ outcome: 'RESERVED', recordId: 'idem-1' }),
+      complete: jest.fn().mockResolvedValue(undefined),
+      fail: jest.fn().mockResolvedValue(undefined),
+    };
+    const notifier = { onReminder: jest.fn().mockResolvedValue(undefined), onBillCreated: jest.fn() };
+    return {
+      service: new ArrearsService(prisma as never, idempotency as never, notifier as never),
+      notifier,
+    };
+  }
+
+  /** dueDate 存的是「到期那天上海 23:59:59」换算的 UTC 时刻 */
+  function bill(id: string, dueInDays: number) {
+    return { id, houseId: 'h1', dueDate: new Date(Date.now() + dueInDays * DAY) };
+  }
+
+  it('未到期的账单发 DUE_SOON，绝不能发 OVERDUE', async () => {
+    const { service, notifier } = makeService([bill('b-future', 26)]);
+    await service.dun('admin-1', 't1', { houseIds: ['h1'], requestId: 'r1' });
+
+    expect(notifier.onReminder).toHaveBeenCalledWith(expect.objectContaining({ id: 'b-future' }), 'DUE_SOON');
+    expect(notifier.onReminder).not.toHaveBeenCalledWith(expect.anything(), 'OVERDUE');
+  });
+
+  it('已过到期时刻的账单发 OVERDUE', async () => {
+    const { service, notifier } = makeService([bill('b-past', -1)]);
+    await service.dun('admin-1', 't1', { houseIds: ['h1'], requestId: 'r2' });
+
+    expect(notifier.onReminder).toHaveBeenCalledWith(expect.objectContaining({ id: 'b-past' }), 'OVERDUE');
+  });
+
+  it('同一批里逾期与未逾期各按自己的类型发', async () => {
+    const { service, notifier } = makeService([bill('b-past', -3), bill('b-future', 10)]);
+    await service.dun('admin-1', 't1', { houseIds: ['h1'], requestId: 'r3' });
+
+    expect(notifier.onReminder).toHaveBeenCalledWith(expect.objectContaining({ id: 'b-past' }), 'OVERDUE');
+    expect(notifier.onReminder).toHaveBeenCalledWith(expect.objectContaining({ id: 'b-future' }), 'DUE_SOON');
+  });
+});

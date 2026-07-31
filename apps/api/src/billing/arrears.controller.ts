@@ -183,13 +183,25 @@ export class ArrearsService {
       });
       let notified = 0;
       let skipped = 0;
+      /*
+       * 通知类型必须按账单**实际**是否逾期来选，不能一律发 OVERDUE。
+       *
+       * 线上实测：给一张 2026-08-26 到期的账单发催缴，业主 7 月 31 日就收到
+       * 「已逾期，请尽快处理」——离到期还有 26 天。这是直接对业主说假话，会引发投诉。
+       *
+       * dueDate 存的是「到期那天的上海 23:59:59」换算成的 UTC 时刻，所以
+       * dueDate < now 即为已逾期，无需再做时区换算；这也与定时提醒
+       * runReminders 里 `dueDate: { lt: now }` 的判定保持一致。
+       */
+      const now = new Date();
       for (const bill of bills) {
         if (!this.notifier) {
           skipped += 1;
           continue;
         }
         try {
-          await this.notifier.onReminder(bill as never, 'OVERDUE');
+          const overdue = bill.dueDate.getTime() < now.getTime();
+          await this.notifier.onReminder(bill as never, overdue ? 'OVERDUE' : 'DUE_SOON');
           notified += 1;
         } catch {
           // 单笔失败不阻断整批（通知本就是尽力而为）

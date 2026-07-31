@@ -53,6 +53,23 @@ describe('订阅消息字段映射', () => {
     expect(data.time3).toBe('2026年8月26日');
   });
 
+  /*
+   * 线上实测（业主手机截图）：金额显示成「￥2.5」。bill.amount 是 Decimal，
+   * toString() 把 2.50 输出成 "2.5"，少一位小数，不像正式账单。
+   */
+  it('金额必须补齐两位小数：Decimal 的 2.50 会 toString 成 "2.5"', () => {
+    expect(buildSubscribeData('OVERDUE', { ...bill, amount: '2.5' }).amount4).toBe('￥2.50');
+    expect(buildSubscribeData('OVERDUE', { ...bill, amount: '1' }).amount4).toBe('￥1.00');
+    expect(buildSubscribeData('OVERDUE', { ...bill, amount: '1000' }).amount4).toBe('￥1000.00');
+    expect(buildSubscribeData('OVERDUE', { ...bill, amount: '0.01' }).amount4).toBe('￥0.01');
+  });
+
+  it('DUE_SOON 文案对「3 天后到期」和「26 天后到期」都成立，不说「即将到期」', () => {
+    const tip = buildSubscribeData('DUE_SOON', bill).thing11;
+    expect(tip).not.toContain('即将到期');
+    expect(tip.length).toBeLessThanOrEqual(20);
+  });
+
   it('到期日期按上海时区格式化：UTC 16:00 属于次日，不能少算一天', () => {
     // 2026-08-26T16:00:00Z = 上海 2026-08-27 00:00
     const data = buildSubscribeData('BILL_CREATED', {

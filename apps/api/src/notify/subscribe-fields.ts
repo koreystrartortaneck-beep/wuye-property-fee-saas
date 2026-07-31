@@ -63,7 +63,12 @@ export function subscribeFieldNames(): SubscribeFieldNames {
  */
 const TIP_BY_TYPE: Record<NotifyType, string> = {
   BILL_CREATED: '账单已生成，请及时缴纳',
-  DUE_SOON: '即将到期，请尽快缴纳',
+  /*
+   * DUE_SOON 有两个调用方：定时提醒（到期前 3 天）与人工催缴（可能距到期还很远）。
+   * 原文案「即将到期」对后者不准确——给一张 26 天后到期的账单说「即将到期」很怪。
+   * 改成对两种场景都成立的说法。
+   */
+  DUE_SOON: '尚未缴纳，请在到期日前缴纳',
   OVERDUE: '已逾期，请尽快处理',
 };
 
@@ -81,7 +86,13 @@ export interface BillFacts {
  * 微信自己的示例卡片渲染成「￥100」，这里照同一形态给，避免格式被判非法。
  */
 function formatAmount(yuan: string): string {
-  return `￥${yuan}`;
+  /*
+   * 必须补齐两位小数：bill.amount 是 Decimal，toString() 把 2.50 输出成 "2.5"，
+   * 业主手机上就显示成「￥2.5」——金额少一位小数，不像正式账单。
+   * 用 Number 转换后 toFixed(2)：金额已是 Decimal(12,2)，两位小数内不会有精度问题。
+   */
+  const n = Number(yuan);
+  return `￥${Number.isFinite(n) ? n.toFixed(2) : yuan}`;
 }
 
 /**
