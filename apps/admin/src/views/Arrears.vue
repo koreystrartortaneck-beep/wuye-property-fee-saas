@@ -286,7 +286,7 @@ function doExport() {
     { header: '房屋', value: (r) => r.displayName },
     { header: '业主', value: (r) => r.ownerName },
     { header: '手机号', value: (r) => r.ownerPhone },
-    { header: '欠费金额(元)', value: (r) => yuan(r.unpaidAmount) },
+    { header: '欠费金额（元）', value: (r) => yuan(r.unpaidAmount) },
     { header: '笔数', value: (r) => r.unpaidCount },
     { header: '欠费账期', value: (r) => r.periods.join(' ') },
     { header: '逾期天数', value: (r) => r.overdueDays },

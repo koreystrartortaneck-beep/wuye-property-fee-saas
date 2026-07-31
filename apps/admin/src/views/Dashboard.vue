@@ -41,7 +41,7 @@
         待我处理
         <span v-if="today.todoTotal > 0" class="hd-count">{{ today.todoTotal }}</span>
       </template>
-      <div v-if="today.todos.length" class="todos">
+      <div v-if="today.todos.length" class="card-grid">
         <button v-for="t in today.todos" :key="t.key" class="todo" @click="router.push(t.to)">
           <span class="todo-count">{{ t.count }}</span>
           <span class="todo-label">{{ t.label }}</span>
@@ -52,7 +52,7 @@
     </el-card>
 
     <!-- 本月收缴 + 欠费 -->
-    <div v-if="today" class="grid">
+    <div v-if="today" class="card-grid-wide">
       <el-card class="block">
         <template #header>{{ periodLabel }}收缴进度</template>
         <div class="stat-row">
@@ -308,7 +308,7 @@ onMounted(load);
 }
 .lk-title {
   font-size: var(--fs-15);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-primary);
 }
 .lk-desc {
@@ -390,11 +390,6 @@ onMounted(load);
   width: 150px;
 }
 
-.todos {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: var(--sp-2);
-}
 .todo {
   display: flex;
   align-items: center;
@@ -434,13 +429,6 @@ onMounted(load);
   color: var(--text-secondary);
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  /* 与 ui.css 的 .card-grid 一致，避免首屏和其它页面疏密不同 */
-  gap: var(--sp-4);
-  margin-top: var(--sp-4);
-}
 .grid .block {
   margin-top: 0;
 }

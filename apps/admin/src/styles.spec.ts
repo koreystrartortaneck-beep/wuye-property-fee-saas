@@ -338,3 +338,113 @@ describe('卡片令牌一致', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * ui.css 里不得留下零使用的类。
+ *
+ * 死的共享 CSS 正是「各页手写孪生」的成因：`.card-grid` / `.card-grid-wide` 定义好
+ * 却没人用，于是 Dashboard 自己写了 220px auto-fill 的待办网格、Operations 自己写了
+ * 一份**值完全相同**的指标网格、Dashboard 又写了 320px auto-fit 的宽卡网格 ——
+ * 同类卡片在不同页面换行宽度不一样，而共享类就摆在那里没人碰。
+ *
+ * 32 个共享类里有 7 个零使用（另 4 个是 Element Plus 的类，本来就不在模板里手写）。
+ * 处理方式：能消除真实分化的就接上（两处 220px 网格 → 一个类），
+ * 确实没人需要的就删掉（.card-head-extra / .toolbar-field / .card-interactive /
+ * .card-stack），不留「以后也许有用」的死代码。
+ */
+describe('共享样式无死代码', () => {
+  /** Element Plus 的类由全局样式接管，模板里本来就不会手写 */
+  const EP_OVERRIDES = /^el-/;
+
+  it('ui.css 的每个共享类都至少被一个模板用到', () => {
+    const templateClasses = new Set<string>();
+    for (const file of files) {
+      const src = fs.readFileSync(file, 'utf8');
+      const tpl = src.match(/<template>([\s\S]*)<\/template>/);
+      if (!tpl) continue;
+      for (const c of staticClasses(tpl[1])) templateClasses.add(c);
+    }
+    const dead = [...shared]
+      .filter((c) => !EP_OVERRIDES.test(c))
+      .filter((c) => !templateClasses.has(c))
+      .sort();
+    if (dead.length) {
+      throw new Error(
+        'styles/ui.css 里以下类没有任何模板使用。死的共享 CSS 会让人以为「没有现成的」' +
+          '而各页另写一份，同一种结构就此分化：\n  .' +
+          dead.join('\n  .') +
+          '\n请接上（若某页手写了等价物）或删掉（若确实没人需要）。',
+      );
+    }
+    expect(dead).toEqual([]);
+  });
+
+  it('页面不得手写与共享网格等价的 grid（断点会各自漂移）', () => {
+    const offenders: string[] = [];
+    for (const file of files) {
+      const src = fs.readFileSync(file, 'utf8');
+      const sty = src.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+      if (!sty) continue;
+      const css = sty[1].replace(/\/\*[\s\S]*?\*\//g, '');
+      for (const m of css.matchAll(/grid-template-columns:\s*repeat\(\s*auto-(?:fit|fill)\s*,\s*minmax\(/g)) {
+        offenders.push(`${path.relative(SRC, file)}（第 ${css.slice(0, m.index).split('\n').length} 行附近）`);
+      }
+    }
+    if (offenders.length) {
+      throw new Error(
+        '以下页面手写了自适应卡片网格。ui.css 已提供 .card-grid（220px 平铺）与 ' +
+          '.card-grid-wide（320px 宽卡），各写一份会让同类卡片在不同页面的换行宽度不一样：\n  ' +
+          offenders.join('\n  '),
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('字重一律走令牌，不写裸数字', () => {
+    /*
+     * Dashboard 的 .lk-title 写的是 font-weight: 600，而全站其余都用
+     * var(--fw-semibold)。数值恰好相同，所以看不出问题——但令牌一改它就掉队。
+     */
+    const offenders: string[] = [];
+    for (const file of files) {
+      const src = fs.readFileSync(file, 'utf8');
+      const sty = src.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+      if (!sty) continue;
+      const css = sty[1].replace(/\/\*[\s\S]*?\*\//g, '');
+      for (const m of css.matchAll(/font-weight:\s*(\d{3})\b/g)) {
+        offenders.push(`${path.relative(SRC, file)} → font-weight: ${m[1]}`);
+      }
+    }
+    if (offenders.length) {
+      throw new Error(
+        '字重要用 var(--fw-*) 令牌，裸数字在令牌调整后会掉队：\n  ' + offenders.join('\n  '),
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('导出表头与屏幕列头用同一种括号', () => {
+    /*
+     * 屏幕上是「欠费金额（元）」，导出的 CSV 里是「欠费金额(元)」——
+     * 同一列两种写法。收费员把 CSV 发给领导时，表头与系统截图对不上。
+     * 全站全角括号 117 处、半角包中文 6 处，全在导出表头里。
+     */
+    const offenders: string[] = [];
+    for (const file of files) {
+      const src = fs.readFileSync(file, 'utf8');
+      for (const m of src.matchAll(/header: '([^']*[（(][^']*)'/g)) {
+        if (/\([^)]*[一-龥][^)]*\)|[一-龥]\(/.test(m[1])) {
+          offenders.push(`${path.relative(SRC, file)} → ${m[1]}`);
+        }
+      }
+    }
+    if (offenders.length) {
+      throw new Error(
+        '导出表头用了半角括号，而屏幕列头是全角，同一列两种写法：\n  ' +
+          offenders.join('\n  ') +
+          '\n中文语境统一用全角（）。',
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
+});

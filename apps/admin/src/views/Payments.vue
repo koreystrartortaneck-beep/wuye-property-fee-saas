@@ -270,8 +270,8 @@ function reload() {
 function doExport() {
   exportCsv(`收款流水-${day(new Date())}`, rows.value, [
     { header: '订单号', value: (p) => p.orderNo },
-    { header: '实付金额(元)', value: (p) => yuan(p.totalAmount) },
-    { header: '券抵扣(元)', value: (p) => (Number(p.discountAmount) > 0 ? yuan(p.discountAmount) : '') },
+    { header: '实付金额（元）', value: (p) => yuan(p.totalAmount) },
+    { header: '券抵扣（元）', value: (p) => (Number(p.discountAmount) > 0 ? yuan(p.discountAmount) : '') },
     { header: '渠道', value: (p) => PAYMENT_CHANNEL_LABEL[p.channel] || p.channel },
     { header: '状态', value: (p) => PAYMENT_STATUS_LABEL[p.status] || p.status },
     { header: '缴费时间', value: (p) => dt(p.paidAt) },
@@ -408,7 +408,7 @@ async function showRefund(row: Payment) {
 }
 .json-title {
   margin: 12px 0 6px;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-primary);
 }
 </style>

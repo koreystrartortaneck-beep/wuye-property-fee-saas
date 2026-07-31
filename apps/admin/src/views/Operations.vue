@@ -83,7 +83,7 @@
       -->
       <div class="probe">
         <div class="probe-head">
-          <b class="probe-title">微信开放接口连通性</b>
+          <b class="section-title">微信开放接口连通性</b>
           <span class="probe-desc">订阅消息、云存储都依赖 api.weixin.qq.com；发不出通知时先测这里</span>
           <el-button size="small" :loading="probing" @click="runProbe">开始检测</el-button>
         </div>
@@ -111,7 +111,7 @@
     <!-- 六项灰度指标 -->
     <el-card v-if="metrics" class="block">
       <template #header>关键指标（近 {{ metrics.windowDays }} 天）</template>
-      <div class="metrics">
+      <div class="card-grid">
         <div v-for="m in metricCards" :key="m.key" class="metric" :class="{ bad: !m.pass }">
           <div class="m-head">
             <span class="m-name">{{ m.name }}</span>
@@ -494,10 +494,6 @@ onMounted(async () => {
   gap: var(--sp-2);
   flex-wrap: wrap;
 }
-.probe-title {
-  font-size: var(--fs-13);
-  font-weight: var(--fw-semibold);
-}
 .probe-desc {
   flex: 1;
   min-width: 0;
@@ -611,11 +607,6 @@ onMounted(async () => {
   line-height: var(--lh-normal);
 }
 
-.metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: var(--sp-2);
-}
 .metric {
   padding: var(--sp-3);
   border: 1px solid var(--border);

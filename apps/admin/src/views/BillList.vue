@@ -267,7 +267,7 @@ function doExport() {
     { header: '房屋', value: (b) => b.house?.displayName ?? '' },
     { header: '费用', value: (b) => b.title },
     { header: '怎么算的', value: (b) => calcText(b) },
-    { header: '金额(元)', value: (b) => yuan(b.amount) },
+    { header: '金额（元）', value: (b) => yuan(b.amount) },
     { header: '状态', value: (b) => statusText(b) },
     { header: '到期日', value: (b) => day(b.dueDate) },
     { header: '缴费时间', value: (b) => (b.paidAt ? day(b.paidAt) : '') },

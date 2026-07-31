@@ -306,7 +306,7 @@ async function submitResolve() {
 <style scoped>
 .warn {
   color: var(--danger-text);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .sub {
   color: var(--text-secondary);

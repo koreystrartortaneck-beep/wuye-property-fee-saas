@@ -143,7 +143,7 @@ function pretty(v: unknown): string {
 }
 .json-title {
   margin: 10px 0 4px;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-primary);
 }
 .json {

@@ -49,19 +49,7 @@
   padding: var(--sp-4);
 }
 
-/* 只有真正可点的卡片才抬起，否则鼠标一扫全页乱动，反而廉价 */
-.card-interactive {
-  cursor: pointer;
-}
-.card-interactive:hover {
-  box-shadow: var(--shadow-card-hover);
-  transform: translateY(-1px);
-}
 
-/* 卡片之间的纵向节奏：页面里连续多张卡片时统一间距 */
-.card-stack > * + * {
-  margin-top: var(--sp-4);
-}
 
 /*
  * 卡片网格：auto-fit 让卡片数量变化时自动重排，
@@ -70,24 +58,20 @@
 .card-grid {
   display: grid;
   gap: var(--sp-4);
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  /*
+   * 220px + auto-fill：取自 Dashboard 的待办网格与 Operations 的指标网格——
+   * 这两处原先各自手写、值恰好相同，属于同一种「小方块平铺」。
+   * auto-fill 而非 auto-fit：只有两三个方块时不该被拉宽占满整行。
+   */
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 .card-grid-wide {
   display: grid;
   gap: var(--sp-4);
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  /* 320px + auto-fit：取自 Dashboard 的宽卡网格（原先手写在页面里） */
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 
-/* 卡片右上角的次要操作/说明，靠右不抢标题 */
-.card-head-extra {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  font-weight: var(--fw-regular);
-  font-size: var(--fs-12);
-  color: var(--text-tertiary);
-}
 
 /* ══════════════ 工具条：筛选 + 操作 ══════════════ */
 
@@ -109,17 +93,6 @@
   min-width: 0;
 }
 
-/* 带标签的筛选项：标签在上、控件在下，窄屏也不会挤成一行 */
-.toolbar-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-}
-.toolbar-field > label {
-  font-size: var(--fs-11);
-  color: var(--text-tertiary);
-  line-height: 1;
-}
 
 @media (max-width: 720px) {
   /* 窄屏：筛选控件占满整行，避免被压成不可点的窄条 */

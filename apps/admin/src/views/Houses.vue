@@ -278,7 +278,7 @@ async function doImport() {
 <style scoped>
 .row-tip b {
   color: var(--text-secondary);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 /* 整行可点：给出光标与悬停反馈，否则用户不知道能点 */
 .clickable-rows :deep(.el-table__row) {
