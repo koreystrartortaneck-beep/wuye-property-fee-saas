@@ -116,7 +116,21 @@ Page({
       (status ? `&status=${status}` : '') +
       (activeRuleId ? `&ruleId=${activeRuleId}` : '');
     const myToken = token === undefined ? this._reqToken : token;
-    const res = await request(`/owner/bills?${qs}`);
+    /*
+     * 分组头部的「N 笔 · ¥X」必须来自权威接口。
+     *
+     * 列表按 status/createdAt 排序而**不按账期**，同一账期的账单散落在不同分页里，
+     * 所以按已加载页算出来的小计是偏小的错数 —— 而它长得像个权威数字。
+     * 业主想知道「5 月欠多少」，读到的就是错的。
+     *
+     * 只在第一页拉一次：翻页不改变筛选条件，小计不会变。
+     */
+    const [res, periodTotals] = await Promise.all([
+      request(`/owner/bills?${qs}`),
+      page === 1
+        ? request(`/owner/bills/by-period?${qs}`, { silent: true }).catch(() => null)
+        : Promise.resolve(this._periodTotals || null),
+    ]);
     // 过期响应直接丢弃，避免覆盖当前筛选结果
     if (myToken !== this._reqToken) return;
     const now = new Date();
@@ -140,6 +154,7 @@ Page({
         theme: THEMES[i % THEMES.length],
       };
     });
+    this._periodTotals = periodTotals;
     const bills = page === 1 ? mapped : this.data.bills.concat(mapped);
     // 注意：待缴合计/笔数由 loadSummary() 从权威接口取，这里不再按当前页估算
     this.setData({
@@ -150,26 +165,40 @@ Page({
     });
   },
 
-  /** 按账期分组（保持服务端排序，组内小计） */
+  /**
+   * 按账期分组。
+   *
+   * 组内小计取权威接口的数字，不按当前已加载页算 —— 列表不按账期排序，
+   * 已加载页里的同账期账单往往只是一部分，按它求和会给出偏小的错数。
+   *
+   * 权威数字拿不到时（接口失败）不显示小计，只显示已加载的笔数并注明。
+   * 宁可少一个数字，也不能显示一个看起来权威的错数 —— 这是钱。
+   */
   buildGroups(bills) {
     const order = [];
     const map = {};
     for (const b of bills) {
       if (!map[b.periodKey]) {
-        map[b.periodKey] = { period: b.periodKey, items: [], cents: 0 };
+        map[b.periodKey] = { period: b.periodKey, items: [] };
         order.push(b.periodKey);
       }
       map[b.periodKey].items.push(b);
-      map[b.periodKey].cents += Math.round(Number(b.amount) * 100);
     }
     // 账期倒序（新的在上）
     order.sort((a, b) => (a < b ? 1 : -1));
-    return order.map((k) => ({
-      period: map[k].period,
-      count: map[k].items.length,
-      subtotal: (map[k].cents / 100).toFixed(2),
-      items: map[k].items,
-    }));
+    const totals = {};
+    for (const t of this._periodTotals || []) totals[t.period] = t;
+    return order.map((k) => {
+      const t = totals[k];
+      return {
+        period: map[k].period,
+        // 有权威数字就用它；没有就退化成「已加载 N 笔」，不给小计
+        count: t ? t.count : map[k].items.length,
+        subtotal: t ? Number(t.amount).toFixed(2) : '',
+        partial: !t,
+        items: map[k].items,
+      };
+    });
   },
 
   async onReachBottom() {
