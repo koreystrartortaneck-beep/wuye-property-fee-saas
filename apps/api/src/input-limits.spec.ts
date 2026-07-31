@@ -132,11 +132,13 @@ describe('全局过滤器翻译 Prisma 错误', () => {
     });
   }
 
-  it('P2000（字段超长）→ 参数错误 + 指出是哪个字段', () => {
+  it('P2000（字段超长）→ 参数错误 + 指出是哪个字段（中文名）', () => {
     const r = run(prismaError('P2000', { column_name: 'name' }));
     expect(r.code).toBe(40000);
     expect(r.message).toContain('过长');
-    expect(r.message).toContain('name');
+    // 译成中文，不把英文列名甩给物业
+    expect(r.message).toContain('名称');
+    expect(r.message).not.toContain('name');
   });
 
   it('P2000 缺字段名时仍给可读提示，不退化成 500', () => {
@@ -149,6 +151,25 @@ describe('全局过滤器翻译 Prisma 错误', () => {
     const r = run(prismaError('P2002', { target: ['code'] }));
     expect(r.code).toBe(40000);
     expect(r.message).toContain('已存在');
+    // 字段名要译成中文，不能把英文列名甩给物业
+    expect(r.message).toContain('编号');
+  });
+
+  /*
+   * P2002 的 meta.target 是索引涉及的全部列。@@unique([tenantId, name]) 会给出
+   * ['tenantId','name']，直接拼出来是「「tenantId、name」已存在」——对物业是天书。
+   * 必须译名并剔除租户 ID 这种用户不该看到的内部维度。
+   */
+  it('复合唯一索引：字段名译中文并剔除 tenantId', () => {
+    const r = run(prismaError('P2002', { target: ['tenantId', 'name'] }));
+    expect(r.message).toContain('名称');
+    expect(r.message).not.toContain('tenantId');
+    expect(r.message).toContain('已存在');
+  });
+
+  it('P2000 的字段名同样译成中文', () => {
+    const r = run(prismaError('P2000', { column_name: 'reason' }));
+    expect(r.message).toContain('原因');
   });
 
   it('P2025（记录不存在）→ 404 而不是 500', () => {

@@ -134,7 +134,21 @@ export class GlobalExceptionFilter implements ExceptionFilter {
      */
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       const meta = (exception.meta ?? {}) as { target?: unknown; column_name?: unknown; modelName?: unknown };
-      const field = String(meta.column_name ?? (Array.isArray(meta.target) ? meta.target.join('、') : meta.target ?? ''));
+      /*
+       * 字段名要译成中文，且剔除 tenantId 这类内部字段。
+       *
+       * Prisma 的 P2002 meta.target 是索引涉及的全部列，例如
+       * @@unique([tenantId, name]) 会给出 ['tenantId','name']——直接拼出来是
+       * 「「tenantId、name」已存在」，对物业来说是天书。复用 FIELD_CN 译名，
+       * 并去掉租户 ID（用户不关心、也不该看到内部维度）。
+       */
+      const rawFields = Array.isArray(meta.target)
+        ? (meta.target as unknown[]).map(String)
+        : [String(meta.column_name ?? meta.target ?? '')].filter(Boolean);
+      const field = rawFields
+        .filter((f) => f !== 'tenantId' && f !== 'id')
+        .map((f) => fieldCn(f))
+        .join('、');
       switch (exception.code) {
         case 'P2000': // 字段值超出数据库列长度
           res.status(200).json({

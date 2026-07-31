@@ -347,6 +347,11 @@ model Community {
   invoiceApplications InvoiceApplication[]       @relation("InvoiceCommunity")
   collectionPolicy    CommunityCollectionPolicy?
 
+  /// 同一物业公司内小区名不得重复。
+  /// 起因：House 有 @@unique([communityId, code]) 防重复房号，而小区名没有任何约束。
+  /// 审计时手滑建了第二个「金港城」并成功——业主端搜索会看到两个一模一样的小区，
+  /// 选错就绑到空小区去，物业还得人工发现。房号都防重了，小区名更该防。
+  @@unique([tenantId, name])
   @@unique([tenantId, id])
   @@index([tenantId])
 }
