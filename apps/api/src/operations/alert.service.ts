@@ -28,7 +28,88 @@ export interface AlertDispatcher {
   deliver(payload: AlertDeliveryPayload): Promise<AlertDeliveryResult>;
 }
 
-/** 默认 HTTPS Webhook 投递器：POST 到 OPS_ALERT_WEBHOOK（仅允许 https）。适配器可替换。 */
+/** 群机器人的 JSON 形状。按 webhook 域名自动判定，不需要额外配置项。 */
+export type WebhookFlavor = 'wecom' | 'dingtalk' | 'raw';
+
+export function detectWebhookFlavor(url: string): WebhookFlavor {
+  /*
+   * 自动判定而不是加一个 OPS_ALERT_WEBHOOK_FORMAT 环境变量：
+   * 运维只需把机器人地址粘进来，少一个能填错的地方。
+   */
+  if (url.includes('qyapi.weixin.qq.com')) return 'wecom';
+  if (url.includes('oapi.dingtalk.com')) return 'dingtalk';
+  return 'raw';
+}
+
+/** 告警渲染成一行文本，供群机器人展示 */
+export function renderAlertText(payload: AlertDeliveryPayload): string {
+  const lines = [
+    `【${payload.severity}】${payload.title}`,
+    payload.summary ? `说明：${payload.summary}` : '',
+    `类型：${payload.alertType}　累计：${payload.occurrences} 次`,
+  ].filter(Boolean);
+  return lines.join('\n');
+}
+
+export function buildWebhookBody(payload: AlertDeliveryPayload, flavor: WebhookFlavor): string {
+  /*
+   * 形状必须按目的地来。企业微信/钉钉群机器人只认自己的结构，
+   * 收到别的 JSON 会返回 200 + errcode，消息其实没发出去 ——
+   * 而调用方只看状态码的话会把它记成「已投递」。
+   */
+  if (flavor === 'wecom') {
+    return JSON.stringify({ msgtype: 'text', text: { content: renderAlertText(payload) } });
+  }
+  if (flavor === 'dingtalk') {
+    return JSON.stringify({ msgtype: 'text', text: { content: renderAlertText(payload) } });
+  }
+  return JSON.stringify(payload);
+}
+
+/**
+ * 判断响应是否真的投递成功。
+ *
+ * **不能只看 HTTP 状态码**：企业微信与钉钉的群机器人在参数错误、机器人被移出群、
+ * 触发频率限制时，返回的都是 HTTP 200 + `{"errcode":93000,"errmsg":"..."}`。
+ * 只看状态码会把这些全记成「告警已投递」——于是真出事时没人收到通知，
+ * 而系统的记录显示一切正常。这比没有告警更糟。
+ */
+export function interpretWebhookResponse(
+  statusCode: number,
+  rawBody: string,
+): { ok: boolean; error?: string } {
+  if (statusCode < 200 || statusCode >= 300) {
+    return { ok: false, error: `HTTP ${statusCode}` };
+  }
+  const trimmed = (rawBody || '').trim();
+  if (!trimmed) return { ok: true };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    // 非 JSON 响应：只能以状态码为准（自建 webhook 常直接回 OK 文本）
+    return { ok: true };
+  }
+  if (typeof parsed !== 'object' || parsed === null) return { ok: true };
+  const body = parsed as { errcode?: unknown; errmsg?: unknown };
+  if (body.errcode === undefined || body.errcode === null) return { ok: true };
+  const code = Number(body.errcode);
+  if (Number.isFinite(code) && code !== 0) {
+    const msg = typeof body.errmsg === 'string' && body.errmsg ? body.errmsg : '未知错误';
+    return { ok: false, error: `errcode=${code} ${msg}` };
+  }
+  return { ok: true };
+}
+
+/** 读取响应体的上限：只用来判成败，不需要全量 */
+const MAX_RESPONSE_BYTES = 2048;
+
+/**
+ * 默认 HTTPS Webhook 投递器：POST 到 OPS_ALERT_WEBHOOK（仅允许 https）。适配器可替换。
+ *
+ * 按域名自动适配企业微信/钉钉群机器人的消息结构 —— 物业公司最可能用的就是这两种，
+ * 直接粘地址即可，不必再配格式。
+ */
 @Injectable()
 export class WebhookAlertDispatcher implements AlertDispatcher {
   private readonly logger = new Logger('AlertDispatcher');
@@ -45,16 +126,28 @@ export class WebhookAlertDispatcher implements AlertDispatcher {
     if (!this.configured()) {
       return Promise.resolve({ ok: false, error: '告警目的地未配置' });
     }
-    const body = JSON.stringify(payload);
+    const body = buildWebhookBody(payload, detectWebhookFlavor(this.url));
     return new Promise((resolve) => {
       try {
         const req = httpsRequest(
           this.url,
           { method: 'POST', headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }, timeout: 8000 },
           (res) => {
-            res.resume();
             const code = res.statusCode ?? 0;
-            resolve({ ok: code >= 200 && code < 300, statusCode: code });
+            let raw = '';
+            res.setEncoding('utf8');
+            res.on('data', (chunk: string) => {
+              // 只收前 2KB：足够判成败，又不会被超大响应拖住
+              if (raw.length < MAX_RESPONSE_BYTES) raw += chunk;
+            });
+            res.on('end', () => {
+              const verdict = interpretWebhookResponse(code, raw);
+              if (!verdict.ok) {
+                this.logger.warn(`告警投递未成功：${verdict.error ?? '未知'}`);
+              }
+              resolve({ ok: verdict.ok, statusCode: code, error: verdict.error });
+            });
+            res.on('error', (err: Error) => resolve({ ok: false, statusCode: code, error: err.message }));
           },
         );
         req.on('timeout', () => req.destroy(new Error('告警投递超时')));
