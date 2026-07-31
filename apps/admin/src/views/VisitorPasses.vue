@@ -155,9 +155,6 @@ onMounted(load);
   color: var(--text-primary);
   font-size: var(--fs-13);
 }
-.ml {
-  margin-left: 6px;
-}
 .used-at {
   color: var(--text-tertiary);
   font-size: var(--fs-12);

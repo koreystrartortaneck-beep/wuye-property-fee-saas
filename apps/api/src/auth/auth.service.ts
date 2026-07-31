@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
 import { ErrorCode } from '@pf/shared';
 import { AuditService } from '../audit/audit.service';
@@ -175,6 +176,31 @@ export class AuthService {
 }
 
 /** 强口令策略：≥12 位，且至少包含字母与数字，不得为纯重复字符（Task 3）。 */
+/**
+ * bcrypt 成本因子。
+ *
+ * 原先各处硬编码 10。提到 12 是 4 倍计算量（约 +200ms），管理端登录完全可接受，
+ * 而离线爆破的代价同步提高 4 倍。抽成常量是为了避免「改了登录那处、漏了建号那处」
+ * ——两处不一致时，新建的账号会用更弱的成本因子，而这种差异不会有任何报错。
+ */
+export const BCRYPT_COST = 12;
+
+/**
+ * 生成一次性初始口令。
+ *
+ * 用于超管重置租户管理员密码：不由超管自己指定口令，避免「超管长期知道每个租户
+ * 管理员的密码」。取 crypto 随机而非 Math.random（后者不是密码学随机）。
+ * 字符集去掉了容易看错的 0/O/1/l/I —— 这个口令要靠电话或纸条传给对方。
+ */
+export function generateInitialPassword(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const bytes = randomBytes(16);
+  let out = '';
+  for (const b of bytes) out += alphabet[b % alphabet.length];
+  // 保证同时含字母与数字，满足 assertStrongPassword
+  return `${out}7a`;
+}
+
 export function assertStrongPassword(pw: string): void {
   const ok =
     typeof pw === 'string' &&

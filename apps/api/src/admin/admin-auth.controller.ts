@@ -3,7 +3,7 @@ import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import * as bcrypt from 'bcryptjs';
 import { ErrorCode } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
-import { AuthService, assertStrongPassword } from '../auth/auth.service';
+import { AuthService, assertStrongPassword, BCRYPT_COST} from '../auth/auth.service';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { BizException } from '../common/biz.exception';
 import { PrismaService } from '../prisma/prisma.service';
@@ -132,7 +132,7 @@ export class AdminAuthService {
       throw new BizException(ErrorCode.VALIDATION, '新密码不能与原密码相同');
     }
     assertStrongPassword(newPassword);
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_COST);
     const updated = await this.prisma.raw.adminUser.update({
       where: { id: adminId },
       data: {

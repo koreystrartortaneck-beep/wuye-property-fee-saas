@@ -13,10 +13,35 @@
           <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'">{{ row.status === 'ACTIVE' ? '启用' : '停用' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="100">
+      <el-table-column label="管理员账号" min-width="180">
+        <template #default="{ row }">
+          <div v-for="a in row.admins" :key="a.id" class="cell-main">
+            {{ a.username }}
+            <!-- 强制改密状态要可见：否则超管不知道对方到底改过没有 -->
+            <el-tag v-if="a.mustChangePassword" type="warning" size="small" effect="light" class="ml">
+              待首次改密
+            </el-tag>
+          </div>
+          <span v-if="!row.admins?.length" class="cell-sub">无</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" min-width="190">
         <template #default="{ row }">
           <el-button size="small" :type="row.status === 'ACTIVE' ? 'warning' : 'success'" @click="toggle(row)">
             {{ row.status === 'ACTIVE' ? '停用' : '启用' }}
+          </el-button>
+          <!--
+            重置密码。此前后台完全没有这个功能：管理员忘记密码时只能直连数据库改哈希，
+            或者用灰度期那个后门模块的 mkadmin（能造超管、绕强口令、不写审计）。
+            缺失的合法通道会长期把不安全的通道留在代码里。
+          -->
+          <el-button
+            v-for="a in row.admins"
+            :key="a.id"
+            size="small"
+            @click="resetPassword(row, a)"
+          >
+            重置密码
           </el-button>
         </template>
       </el-table-column>
@@ -60,6 +85,11 @@ interface Tenant {
   contactName: string | null;
   contactPhone: string | null;
   status: string;
+  /*
+   * 该租户的管理员账号。重置密码需要 adminId，而列表原先只有租户本身——
+   * 端点存在但界面上拿不到参数，等于没有入口。
+   */
+  admins?: { id: string; username: string; mustChangePassword: boolean; status: string }[];
 }
 
 const rows = ref<Tenant[]>([]);
@@ -94,6 +124,41 @@ async function save() {
   } finally {
     saving.value = false;
   }
+}
+
+/**
+ * 重置某租户管理员的密码。
+ *
+ * 口令由服务端随机生成、只在这一次响应里返回，所以必须让超管当场抄走——
+ * 关掉弹窗就再也拿不到了。用 ElMessageBox 展示而不是 ElMessage：后者会自动消失。
+ */
+async function resetPassword(tenant: Tenant, admin: { id: string; username: string }) {
+  try {
+    await ElMessageBox.confirm(
+      `将重置「${tenant.name}」的管理员账号 ${admin.username} 的密码。\n` +
+        '系统会生成一个一次性口令，对方登录后必须立即修改；该账号当前全部登录会话会失效。',
+      '重置密码',
+      { type: 'warning', confirmButtonText: '生成新口令', cancelButtonText: '取消' },
+    );
+  } catch {
+    return;
+  }
+  const res = await api<{ username: string; password: string }>(
+    `/admin/tenants/${tenant.id}/admins/${admin.id}/reset-password`,
+    { method: 'POST' },
+  );
+  await ElMessageBox.alert(
+    `账号：${res.username}\n一次性口令：${res.password}`,
+    '请立即抄下并转交对方',
+    {
+      confirmButtonText: '我已记录',
+      // 口令只返回一次，关掉就拿不到了，所以不允许点遮罩误关
+      closeOnClickModal: false,
+      closeOnPressEscape: false,
+      dangerouslyUseHTMLString: false,
+    },
+  );
+  await load();
 }
 
 async function toggle(row: Tenant) {
