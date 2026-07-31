@@ -36,11 +36,35 @@ export class ServicesService {
     await this.houses.assertOwnerHouse(ownerId, dto.houseId);
     const house = await this.prisma.raw.house.findUnique({ where: { id: dto.houseId } });
     const item = await this.prisma.raw.serviceItem.findUnique({ where: { id: dto.serviceItemId } });
-    if (!item || !item.enabled || item.tenantId !== house!.tenantId) {
+    /*
+     * 小区范围必须在**下单时**校验，不能只靠列表接口过滤。
+     *
+     * availableItems 按 (communityId = 本小区 或 null) 过滤，但下单原本只比 tenantId ——
+     * 业主把另一个小区的 serviceItemId 传进来就能预约不属于自己小区的服务。
+     * 服务价格按小区定，也可能是某小区的专属福利，所以这是实打实的越权，
+     * 不只是「看到了不该看的」。
+     *
+     * 券的消费路径（consumeCouponInTx）本来就做了同一件事 —— 做对了一处、漏了这处。
+     */
+    const scopeOk = item && (item.communityId === null || item.communityId === house!.communityId);
+    if (!item || !item.enabled || item.tenantId !== house!.tenantId || !scopeOk) {
       throw new BizException(ErrorCode.SERVICE_UNAVAILABLE);
     }
-    const expectDate = new Date(dto.expectDate);
+    /*
+     * 期望日期按北京时间的「日」比较，且不接受过去的日期。
+     *
+     * DTO 只校验了 YYYY-MM-DD 的形状。传 2020-01-01 会建出一个「期望上门日期已过」
+     * 的订单：物业的待接单列表里排在最前面（按 expectDate 排序），
+     * 接了也没法上门，只能手工作废。
+     *
+     * 用 +8 偏移取当天而不是 Intl：与小程序侧的 fmtDate 口径一致。
+     */
+    const expectDate = new Date(`${dto.expectDate}T00:00:00+08:00`);
     if (Number.isNaN(expectDate.getTime())) throw new BizException(ErrorCode.VALIDATION, 'expectDate 非法');
+    const todayCn = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
+    if (dto.expectDate < todayCn) {
+      throw new BizException(ErrorCode.VALIDATION, '期望上门日期不能早于今天');
+    }
 
     return this.prisma.raw.serviceOrder.create({
       data: {
