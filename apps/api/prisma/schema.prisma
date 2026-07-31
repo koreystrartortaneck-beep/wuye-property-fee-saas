@@ -279,7 +279,7 @@ model Tenant {
 
   admins           AdminUser[]
   communities      Community[]
-  auditLogs         AuditLog[] @relation("AuditLogTenant")
+  auditLogs        AuditLog[]              @relation("AuditLogTenant")
   collectionPolicy TenantCollectionPolicy?
 }
 
@@ -410,12 +410,12 @@ model WxUser {
 }
 
 model HouseBinding {
-  id            String          @id @default(cuid())
-  tenantId      String
-  wxUserId      String
-  houseId       String
-  relation      BindingRelation @default(OWNER)
-  status        BindingStatus   @default(PENDING)
+  id             String          @id @default(cuid())
+  tenantId       String
+  wxUserId       String
+  houseId        String
+  relation       BindingRelation @default(OWNER)
+  status         BindingStatus   @default(PENDING)
   source         BindingSource
   applicantName  String?
   reviewedBy     String?
@@ -432,6 +432,8 @@ model HouseBinding {
   @@unique([wxUserId, houseId])
   @@index([tenantId])
   @@index([houseId])
+  // 实名审核列表：按状态筛 + createdAt desc 排序
+  @@index([tenantId, status, createdAt])
 }
 
 // ---------- 计费与账单 ----------
@@ -536,7 +538,7 @@ model Bill {
   /// （createPayment 明确拒绝数组入参），两处写入都是按 id 单条更新 + count 校验。
   /// 加上唯一索引后，万一将来有代码把两张账单指向同一笔支付，会在写入时立刻失败，
   /// 而不是静默产生一笔钱销两张账单的脏数据。可空列的唯一索引在 MySQL 允许多个 NULL。
-  paymentId      String?    @unique
+  paymentId      String?     @unique
   canceledAt     DateTime?
   canceledBy     String?
   cancelReason   String?
@@ -570,6 +572,13 @@ model Bill {
   @@index([batchId])
   @@index([houseId, status])
   @@index([status, dueDate])
+  // 欠费清单 / 催缴 / 收缴统计的实际查询组合。原先 status 落不到索引，
+  // 3000 户小区单月 12000+ 张未缴账单要靠 @@index([tenantId]) 之后逐行过滤。
+  @@index([tenantId, status, communityId])
+  // stats/summary、stats/by-community、today 都按账期查，而 period 此前完全无索引
+  @@index([tenantId, period, status])
+  // 账单列表默认 ORDER BY createdAt desc，无此索引每次翻页都要对全量行做 filesort
+  @@index([tenantId, createdAt])
 }
 
 // ---------- 支付与通知 ----------
@@ -630,6 +639,10 @@ model Payment {
   @@index([communityId, status])
   @@index([channel, status, createdAt])
   @@index([tenantId, offlineOperatorId])
+  // 对账按「租户 + 渠道 + 状态 + 到账时刻」取当日流水。
+  // 现有 ([channel, status, createdAt]) 前缀不含 tenantId，paidAt 更是完全无索引，
+  // 于是每天 10:30 的对账在租户内做全表扫（第三年约 9.7 万行）。
+  @@index([tenantId, channel, status, paidAt])
 }
 
 model PaymentBill {
@@ -734,6 +747,10 @@ model Refund {
   @@index([tenantId, requestedBy])
   @@index([paymentOrderNo])
   @@index([billId])
+  // 对账的退款侧：channel/status/refundedAt 此前全无索引
+  @@index([tenantId, channel, status, refundedAt])
+  // 退款恢复任务每 10 分钟按 channel+status 扫一次并按 requestedAt 排序
+  @@index([channel, status, requestedAt])
 }
 
 model RefundAttempt {
@@ -1078,6 +1095,9 @@ model NotifyLog {
 
   @@index([tenantId])
   @@index([billId, type, status])
+  // 通知记录列表按 sentAt desc 排序；NotifyLog 是增长最快的表之一
+  // （3000 户 × 3 类提醒 × 1.2 人/月 ≈ 每月 1 万行），无此索引即 filesort
+  @@index([tenantId, sentAt])
 }
 
 // ---------- 二期：工单 / 访客 / 公告 ----------
@@ -1167,6 +1187,8 @@ model Announcement {
   publishedAt DateTime           @default(now())
 
   @@index([tenantId])
+  // 业主端每次进首页都查：状态 + 置顶 + 发布时间
+  @@index([tenantId, status, pinned, publishedAt])
 }
 
 // ---------- 三期：工作照片墙 / 生活服务 / 卡券 ----------

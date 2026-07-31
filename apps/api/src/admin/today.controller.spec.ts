@@ -9,6 +9,24 @@ describe('TodayService 今日概览', () => {
     return { toString: () => v };
   }
 
+  /** 把未缴账单按 houseId 聚合；overdueOnly 时只算已过到期时刻的 */
+  function groupByHouse(
+    bills: unknown[],
+    overdueOnly: boolean,
+  ): Array<{ houseId: string; _sum: { amount: { toString(): string } } }> {
+    const now = Date.now();
+    const byHouse = new Map<string, number>();
+    for (const b of bills as Array<{ amount: { toString(): string }; dueDate?: Date; houseId: string }>) {
+      if (overdueOnly && !(b.dueDate && b.dueDate.getTime() < now)) continue;
+      const cents = Math.round(Number(b.amount.toString()) * 100);
+      byHouse.set(b.houseId, (byHouse.get(b.houseId) ?? 0) + cents);
+    }
+    return [...byHouse.entries()].map(([houseId, cents]) => ({
+      houseId,
+      _sum: { amount: amt((cents / 100).toFixed(2)) },
+    }));
+  }
+
   /** counts 顺序：绑定/工单/开票/红冲/对账差异/草稿批次/待确认支付 */
   function makePrisma(
     counts: number[],
@@ -29,11 +47,40 @@ describe('TodayService 今日概览', () => {
         reconciliationItem: { count: jest.fn().mockResolvedValue(rc) },
         billBatch: { count: jest.fn().mockResolvedValue(db) },
         payment: { count: jest.fn().mockResolvedValue(sp) },
+        /*
+         * 三次 groupBy 的结果由账单行**推导**，而不是手写聚合数据——手写等于绕过
+         * 被测的分组与累加逻辑（本会话已因「复刻式守卫」栽过多次）。
+         *
+         * 顺序与 overview() 里 Promise.all 的顺序一致：
+         *   ① 本月账单按 status 分组（收缴进度）
+         *   ② 全账期未缴按 houseId 分组（欠费金额 + 欠费户数）
+         *   ③ 同上但只含已过到期时刻的（逾期金额 + 逾期户数）
+         */
         bill: {
-          findMany: jest
+          groupBy: jest
             .fn()
-            .mockImplementationOnce(() => Promise.resolve(periodBills))
-            .mockImplementationOnce(() => Promise.resolve(unpaidBills)),
+            // ① 本月账单按 status
+            .mockImplementationOnce(() => {
+              const byStatus = new Map<string, { cents: number; count: number }>();
+              for (const b of periodBills as Array<{ amount: { toString(): string }; status: string }>) {
+                const cents = Math.round(Number(b.amount.toString()) * 100);
+                const cur = byStatus.get(b.status) ?? { cents: 0, count: 0 };
+                cur.cents += cents;
+                cur.count += 1;
+                byStatus.set(b.status, cur);
+              }
+              return Promise.resolve(
+                [...byStatus.entries()].map(([status, v]) => ({
+                  status,
+                  _sum: { amount: amt((v.cents / 100).toFixed(2)) },
+                  _count: { _all: v.count },
+                })),
+              );
+            })
+            // ② 未缴按 houseId
+            .mockImplementationOnce(() => Promise.resolve(groupByHouse(unpaidBills, false)))
+            // ③ 已逾期未缴按 houseId
+            .mockImplementationOnce(() => Promise.resolve(groupByHouse(unpaidBills, true))),
         },
       },
     };

@@ -60,8 +60,9 @@ export class TodayService {
       openReconItems,
       draftBatches,
       stuckPayments,
-      periodBills,
-      unpaidBills,
+      periodGroups,
+      arrearsByHouse,
+      overdueByHouse,
     ] = await Promise.all([
       this.prisma.t.houseBinding.count({ where: { status: 'PENDING' } }),
       this.prisma.t.ticket.count({ where: { status: 'PENDING', ...communityWhere } }),
@@ -71,26 +72,45 @@ export class TodayService {
       this.prisma.t.billBatch.count({ where: { status: 'DRAFT', period, ...communityWhere } }),
       // 结果待确认的订单：定时任务会兜底，但停留过久需要人工关注
       this.prisma.t.payment.count({ where: { status: 'PREPAY_UNKNOWN', ...communityWhere } }),
-      this.prisma.t.bill.findMany({
+      /*
+       * 聚合下推。原实现把账单整表拉进内存再 for 循环累加：本月账单 + 全账期未缴，
+       * 按 3000 户 × 4 条规则估算，第一年 14400 行、第三年 43200 行，
+       * 而这是**登录后首屏**，每次进后台都跑一次。43200 个 Decimal 对象的反序列化
+       * 是数百毫秒的纯 CPU，单实例期间处理不了其它请求。
+       *
+       * 未缴那份按 houseId 分组：既拿到金额合计，也拿到欠费户数（原先用 Set 去重），
+       * 进内存的行数从「账单数」降到「欠费户数」。
+       */
+      this.prisma.t.bill.groupBy({
+        by: ['status'],
         where: { period, status: { in: ['UNPAID', 'PAID'] }, ...communityWhere },
-        select: { amount: true, status: true },
-      }),
-      this.prisma.t.bill.findMany({
+        _sum: { amount: true },
+        _count: { _all: true },
+      }) as unknown as Promise<Array<{ status: string; _sum: { amount: { toString(): string } | null }; _count: { _all: number } }>>,
+      this.prisma.t.bill.groupBy({
+        by: ['houseId'],
         where: { status: 'UNPAID', ...communityWhere },
-        select: { amount: true, dueDate: true, houseId: true },
-      }),
+        _sum: { amount: true },
+      }) as unknown as Promise<Array<{ houseId: string; _sum: { amount: { toString(): string } | null } }>>,
+      this.prisma.t.bill.groupBy({
+        by: ['houseId'],
+        where: { status: 'UNPAID', dueDate: { lt: today }, ...communityWhere },
+        _sum: { amount: true },
+      }) as unknown as Promise<Array<{ houseId: string; _sum: { amount: { toString(): string } | null } }>>,
     ]);
 
     // 本月收缴进度
     let billCents = 0;
+    let billCount = 0;
     let paidCents = 0;
     let paidCount = 0;
-    for (const b of periodBills) {
-      const c = toCents(b.amount.toString());
+    for (const g of periodGroups) {
+      const c = toCents((g._sum.amount ?? 0).toString());
       billCents += c;
-      if (b.status === 'PAID') {
+      billCount += g._count._all;
+      if (g.status === 'PAID') {
         paidCents += c;
-        paidCount += 1;
+        paidCount += g._count._all;
       }
     }
     const rate = billCents > 0 ? Math.round((paidCents / billCents) * 1000) / 10 : 0;
@@ -98,23 +118,17 @@ export class TodayService {
     // 欠费（全部账期，不限本月）
     let arrearsCents = 0;
     let overdueCents = 0;
-    const arrearsHouses = new Set<string>();
-    const overdueHouses = new Set<string>();
-    for (const b of unpaidBills) {
-      const c = toCents(b.amount.toString());
-      arrearsCents += c;
-      arrearsHouses.add(b.houseId);
-      if (b.dueDate && b.dueDate < today) {
-        overdueCents += c;
-        overdueHouses.add(b.houseId);
-      }
-    }
+    for (const g of arrearsByHouse) arrearsCents += toCents((g._sum.amount ?? 0).toString());
+    for (const g of overdueByHouse) overdueCents += toCents((g._sum.amount ?? 0).toString());
+    // 分组行数即户数，不必再用 Set 去重
+    const arrearsHouseCount = arrearsByHouse.length;
+    const overdueHouseCount = overdueByHouse.length;
 
     const todos = [
       { key: 'bindings', label: '业主实名待审核', count: pendingBindings, to: '/bindings' },
       { key: 'tickets', label: '报事报修待受理', count: pendingTickets, to: '/tickets' },
       { key: 'invoices', label: '开票申请待处理', count: pendingInvoices, to: '/invoices' },
-      { key: 'reversal', label: '发票待红冲', count: reversalInvoices, to: '/invoices' },
+      { key: 'reversal', label: '发票待作废重开', count: reversalInvoices, to: '/invoices' },
       { key: 'recon', label: '对账差异待处置', count: openReconItems, to: '/reconciliations' },
       { key: 'draftBatch', label: '本月账单已生成待发布', count: draftBatches, to: '/bill-run' },
       { key: 'stuckPayment', label: '支付结果待确认', count: stuckPayments, to: '/payments' },
@@ -125,9 +139,9 @@ export class TodayService {
      * 依次判断，让首屏直接告诉用户下一步做什么。
      */
     let phase: 'NEED_BILLING' | 'NEED_PUBLISH' | 'DUNNING' | 'RECONCILE' | 'CLEAR';
-    if (periodBills.length === 0 && draftBatches === 0) phase = 'NEED_BILLING';
+    if (billCount === 0 && draftBatches === 0) phase = 'NEED_BILLING';
     else if (draftBatches > 0) phase = 'NEED_PUBLISH';
-    else if (arrearsHouses.size > 0) phase = 'DUNNING';
+    else if (arrearsHouseCount > 0) phase = 'DUNNING';
     else if (openReconItems > 0) phase = 'RECONCILE';
     else phase = 'CLEAR';
 
@@ -139,15 +153,15 @@ export class TodayService {
       collection: {
         billAmount: centsToStr(billCents),
         paidAmount: centsToStr(paidCents),
-        billCount: periodBills.length,
+        billCount,
         paidCount,
         rate,
       },
       arrears: {
         amount: centsToStr(arrearsCents),
-        houses: arrearsHouses.size,
+        houses: arrearsHouseCount,
         overdueAmount: centsToStr(overdueCents),
-        overdueHouses: overdueHouses.size,
+        overdueHouses: overdueHouseCount,
       },
     };
   }

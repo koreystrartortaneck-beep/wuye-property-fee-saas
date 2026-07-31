@@ -196,11 +196,38 @@ export class BillRunService {
         });
       }
     } else {
+      /*
+       * 抄表读数一次批量取回，不再每户查一次。
+       *
+       * 原实现在循环里调 meter.getDiff(house.id, ...)，每户 1 次数据库往返。
+       * 3000 户的 METER 规则 = 3000 次额外往返 ≈ 9 秒，叠加逐户 create 后总计约
+       * 6007 次往返 ≈ 18 秒。每日 02:00 的 cron 对 4 条规则串行跑，单小区就占住
+       * 事件循环 45-75 秒；手动触发则是一个 HTTP 请求挂 9-18 秒，很可能撞网关超时，
+       * 而此时后台仍在继续写，前端却已认定生成失败。
+       *
+       * @@unique([houseId, meterType, period]) 支持这个 IN 批查。
+       * 判定逻辑与 getDiff 保持一致：缺本期读数、或缺上期读数（prevValue 为 null）
+       * 一律返回 null → calcOne 以 METER_READING_MISSING 跳过该户。
+       * 后者是小区上线首月的必然路径：若按 0 计会把累计读数当本期用量，
+       * 读数 1234、单价 3.5 时开出 ¥4319 而实际应约 ¥105。
+       */
+      const meterType = rule.ruleType === 'METER' ? (rule.params as { meterType: MeterType }).meterType : null;
+      const diffByHouse = new Map<string, number>();
+      if (meterType) {
+        const readings = await this.prisma.t.meterReading.findMany({
+          where: { period, meterType, houseId: { in: houses.map((h) => h.id) } },
+          select: { houseId: true, value: true, prevValue: true },
+        });
+        for (const r of readings) {
+          if (r.prevValue === null) continue; // 缺上期基准 → 跳过该户，绝不按 0 计
+          diffByHouse.set(r.houseId, Number(r.value) - Number(r.prevValue));
+        }
+      }
+
       for (const house of houses) {
         let readingDiff: number | null | undefined;
-        if (rule.ruleType === 'METER') {
-          const meterType = (rule.params as { meterType: MeterType }).meterType;
-          readingDiff = await this.meter.getDiff(house.id, meterType, period);
+        if (meterType) {
+          readingDiff = diffByHouse.has(house.id) ? (diffByHouse.get(house.id) as number) : null;
         }
         const result = calcOne({
           ruleType: rule.ruleType as RuleType,
