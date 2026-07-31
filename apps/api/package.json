@@ -8,7 +8,9 @@
     "start": "node dist/apps/api/src/main.js",
     "test": "jest",
     "test:e2e": "prisma generate && prisma validate && jest --config test/jest-e2e.json --runInBand",
-    "seed": "ts-node --transpile-only prisma/seed.ts"
+    "seed": "ts-node --transpile-only prisma/seed.ts",
+    "test:all": "jest --config jest.all.json --runInBand",
+    "test:cov:all": "jest --config jest.all.json --runInBand --coverage"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

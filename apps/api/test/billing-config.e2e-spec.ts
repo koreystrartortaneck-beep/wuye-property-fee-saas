@@ -108,6 +108,105 @@ describe('计费配置：规则/抄表/公摊', () => {
     expect(n).toBe(1);
   });
 
+  /*
+   * 规则的改 / 转换 / 退役此前完全没有行为覆盖（fee-rules.controller 126-191 行）。
+   * 这几条路径直接决定账单怎么算：改错单价、把停用的旧公式规则重新启用，
+   * 后果都是全小区金额错一整期。合并覆盖率里它是唯一「涉及钱且还能测」的缺口。
+   */
+  describe('规则的改 / 转换 / 退役', () => {
+    let fixedId: string;
+    let formulaId: string;
+
+    beforeAll(async () => {
+      const created = await post('/fee-rules', {
+        communityId, name: '可改规则', houseType: 'RESIDENCE', ruleType: 'FIXED',
+        params: { amount: 30 }, period: 'MONTHLY', billDay: 1, dueDays: 15,
+      });
+      fixedId = created.body.data.id;
+      /*
+       * FORMULA 规则已停用（create 直接拒），只能由历史数据存在 ——
+       * 所以这里绕过 API 直接建，模拟迁移前遗留的那些规则。
+       */
+      const legacy = await prisma.raw.feeRule.create({
+        data: {
+          tenantId, communityId, name: '遗留公式规则', houseType: 'RESIDENCE',
+          ruleType: 'FORMULA', params: { expr: 'area * 2' }, period: 'MONTHLY',
+          billDay: 1, dueDays: 15, enabled: false,
+        },
+      });
+      formulaId = legacy.id;
+    });
+
+    const patch = (url: string, body: object) =>
+      request(app.getHttpServer()).patch(`/api/v1/admin${url}`).set('Authorization', `Bearer ${token}`).send(body);
+
+    it('改单价：params 会被重新校验', async () => {
+      const ok = await patch(`/fee-rules/${fixedId}`, { params: { amount: 55 } });
+      expect(ok.body.code).toBe(0);
+      expect(ok.body.data.params).toEqual({ amount: 55 });
+
+      // 负数金额必须被拒 —— 否则一期账单全变负数
+      const bad = await patch(`/fee-rules/${fixedId}`, { params: { amount: -1 } });
+      expect(bad.body.code).toBe(42001);
+    });
+
+    it('FORMULA 规则不可重新启用', async () => {
+      const res = await patch(`/fee-rules/${formulaId}`, { enabled: true });
+      expect(res.body.code).toBe(42005);
+    });
+
+    it('FORMULA 规则不可编辑参数', async () => {
+      const res = await patch(`/fee-rules/${formulaId}`, { params: { expr: 'area * 3' } });
+      expect(res.body.code).toBe(42005);
+    });
+
+    it('转换 FORMULA → AREA_PRICE：落地后保持停用，需人工复核再启用', async () => {
+      const res = await post(`/fee-rules/${formulaId}/convert`, {
+        ruleType: 'AREA_PRICE',
+        params: { unitPrice: 2.5 },
+      });
+      expect(res.body.code).toBe(0);
+      expect(res.body.data.ruleType).toBe('AREA_PRICE');
+      /*
+       * enabled 必须是 false：转换等于改了计费口径，
+       * 直接接着出账会在无人复核的情况下改变全小区金额。
+       */
+      expect(res.body.data.enabled).toBe(false);
+    });
+
+    it('非 FORMULA 规则不能转换', async () => {
+      const res = await post(`/fee-rules/${fixedId}/convert`, {
+        ruleType: 'AREA_PRICE',
+        params: { unitPrice: 1 },
+      });
+      expect(res.body.code).toBe(40000);
+    });
+
+    it('退役 FORMULA 规则：永久停用并留下处置标记', async () => {
+      const legacy = await prisma.raw.feeRule.create({
+        data: {
+          tenantId, communityId, name: '待退役公式', houseType: 'RESIDENCE',
+          ruleType: 'FORMULA', params: { expr: 'area * 9' }, period: 'MONTHLY',
+          billDay: 1, dueDays: 15, enabled: false,
+        },
+      });
+      const res = await post(`/fee-rules/${legacy.id}/retire`, {});
+      expect(res.body.code).toBe(0);
+      expect(res.body.data.enabled).toBe(false);
+      // 处置标记要留在 params 里，供「公式规则处置报告」核对
+      expect((res.body.data.params as Record<string, unknown>).__disposition).toBeTruthy();
+    });
+
+    it('处置报告列出全部 FORMULA 规则及其处置状态', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/admin/fee-rules/formula-report')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(res.body.code).toBe(0);
+      expect(Array.isArray(res.body.data.rules ?? res.body.data)).toBe(true);
+    });
+  });
+
   it('公摊总额 upsert', async () => {
     const rule = await prisma.raw.feeRule.findFirst({ where: { tenantId, ruleType: 'SHARE' } });
     const res1 = await request(app.getHttpServer())

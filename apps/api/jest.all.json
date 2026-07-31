@@ -1,0 +1,12 @@
+{
+  "//": "单测 + e2e 一起跑，并统计合并覆盖率。需要本机 MySQL（见 README/package.json 说明）。",
+  "preset": "ts-jest",
+  "testEnvironment": "node",
+  "rootDir": ".",
+  "testRegex": "(src/.*\\.spec\\.ts|test/.*\\.e2e-spec\\.ts)$",
+  "setupFiles": ["<rootDir>/test/setup-env.ts"],
+  "moduleNameMapper": { "^@pf/shared$": "<rootDir>/../../packages/shared/src" },
+  "//timeout": "60s 而不是 30s：开覆盖率插桩后几条重的 e2e 会踩 30s 上限，表现为随机 4 条失败——那是测量工具的抖动，不是产品问题",
+  "testTimeout": 60000,
+  "collectCoverageFrom": ["src/**/*.ts", "!src/**/*.spec.ts", "!src/main.ts"]
+}
