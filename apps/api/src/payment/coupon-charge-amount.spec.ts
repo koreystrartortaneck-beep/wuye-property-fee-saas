@@ -151,3 +151,64 @@ describe('券面额覆盖全额时的处理（真实代码路径）', () => {
     }
   });
 });
+
+/**
+ * 前后端必须对「哪些券可用」达成一致。
+ *
+ * ⚠️ 本组是**算术层**的对照，复刻了两侧的判定公式，改真实代码不会让它失败。
+ * 真正的守卫在 payment.service.spec.ts 的「quoteBill 可用券列表」——那里调用真实
+ * quoteBill。本组只用来说明「列表范围」与「接受范围」在公式上必须等价，
+ * 别把它当成回归防线（本会话已因误把复刻当守卫栽过三次）。
+ *
+ * 起因（我自己造成的不一致）：上一轮修好了 consumeCouponInTx——拒绝把应付降到 0
+ * （微信不接受 0 元订单，那个错误会让订单卡进 PREPAY_UNKNOWN、账单被占用、券被消耗）。
+ * 但没管小程序端：pay-confirm 的 recalc 用 Math.min(discount, total) 仍允许
+ * payAmount = 0，界面照样显示「确认支付 ¥0.00」并让业主点下去，点了才被后端拒。
+ *
+ * 正确做法是 quoteBill 就不把这类券返回给前端（单一真源），前端再加一道兜底。
+ * 这组用例锁住后端那一侧：可用券列表与 consumeCouponInTx 的接受范围必须一致。
+ */
+describe('可用券列表与实际接受范围一致', () => {
+  /** 复刻 quoteBill 的 usableCoupons 过滤（门槛 + 实付必须为正） */
+  function usable(billYuan: string, faceYuan: string, thresholdYuan = '0'): boolean {
+    const billCents = toCents(billYuan);
+    const face = toCents(faceYuan);
+    const threshold = toCents(thresholdYuan);
+    if (face <= 0) return false;
+    if (billCents < threshold) return false;
+    return Math.min(face, billCents) < billCents;
+  }
+
+  /** 复刻 consumeCouponInTx 的接受判定 */
+  function accepted(billYuan: string, faceYuan: string): boolean {
+    const billCents = toCents(billYuan);
+    return Math.min(toCents(faceYuan), billCents) < billCents;
+  }
+
+  const combos: Array<[string, string]> = [
+    ['250.00', '30.00'],
+    ['10.00', '10.00'],
+    ['1.00', '10.00'],
+    ['10.00', '9.99'],
+    ['0.02', '0.01'],
+    ['0.01', '0.01'],
+    ['2.50', '2.50'],
+  ];
+
+  it('列表里出现的券，后端一定接受；后端拒绝的券，一定不出现在列表里', () => {
+    for (const [bill, face] of combos) {
+      expect(usable(bill, face)).toBe(accepted(bill, face));
+    }
+  });
+
+  it('券面额覆盖全额时不进入可用列表（否则界面会显示「确认支付 ¥0.00」）', () => {
+    expect(usable('10.00', '10.00')).toBe(false);
+    expect(usable('1.00', '10.00')).toBe(false);
+    expect(usable('2.50', '2.50')).toBe(false);
+  });
+
+  it('门槛不满时也不进入列表', () => {
+    expect(usable('50.00', '10.00', '100.00')).toBe(false);
+    expect(usable('150.00', '10.00', '100.00')).toBe(true);
+  });
+});

@@ -63,22 +63,47 @@ Page({
     }
   },
 
-  /** 选择/取消优惠券 */
+  /**
+   * 选择/取消优惠券。
+   *
+   * 兜底：若某张券会把实付降到 0，后端 createPayment 会拒（微信不接受 0 元订单，
+   * 那个错误还会让订单卡进 PREPAY_UNKNOWN、账单被占用、券被消耗）。后端 quoteBill
+   * 已经不再返回这类券，但万一遇到旧版后端，这里不能让业主看着「确认支付 ¥0.00」
+   * 点下去才被拒——当场说清并取消选择。
+   */
   pickCoupon(e) {
     const id = e.currentTarget.dataset.id || '';
-    this.setData({ pickedCouponId: this.data.pickedCouponId === id ? '' : id });
+    const next = this.data.pickedCouponId === id ? '' : id;
+    if (next) {
+      const total = Number(this.data.totalAmount) || 0;
+      const picked = (this.data.coupons || []).find((c) => c.userCouponId === next);
+      const discount = picked ? Math.min(Number(picked.discount) || 0, total) : 0;
+      if (total - discount <= 0) {
+        wx.showModal({
+          title: '这张券暂不能用在本单',
+          content: '该券面额已覆盖本单全部金额，微信不支持 0 元支付。请把它用在金额更高的账单上。',
+          showCancel: false,
+          confirmText: '知道了',
+        });
+        return;
+      }
+    }
+    this.setData({ pickedCouponId: next });
     this.recalc();
   },
 
-  /** 按所选券重算实付金额（抵扣不超过账单金额） */
+  /** 按所选券重算实付金额（抵扣不超过账单金额，且实付必须为正——见 pickCoupon 说明） */
   recalc() {
     const total = Number(this.data.totalAmount) || 0;
     const picked = (this.data.coupons || []).find((c) => c.userCouponId === this.data.pickedCouponId);
     const discount = picked ? Math.min(Number(picked.discount) || 0, total) : 0;
-    this.setData({
-      discount: discount.toFixed(2),
-      payAmount: Math.max(0, total - discount).toFixed(2),
-    });
+    const payAmount = total - discount;
+    // 实付非正时视为未选券，绝不显示「确认支付 ¥0.00」
+    if (payAmount <= 0) {
+      this.setData({ pickedCouponId: '', discount: '0.00', payAmount: total.toFixed(2) });
+      return;
+    }
+    this.setData({ discount: discount.toFixed(2), payAmount: payAmount.toFixed(2) });
   },
 
   async submitPay() {

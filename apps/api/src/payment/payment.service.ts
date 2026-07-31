@@ -753,7 +753,15 @@ export class PaymentService {
       where: { billId: bill.id, payment: { status: { in: [...ACTIVE_PAYMENT_STATUSES] } } },
       select: { billId: true },
     });
-    // 该账单可用的优惠券：满足门槛、在有效期、适用本小区、未使用
+    /*
+     * 该账单可用的优惠券：满足门槛、在有效期、适用本小区、未使用，
+     * 且**抵扣后实付必须为正**。
+     *
+     * 最后这条是单一真源：consumeCouponInTx 会拒绝把应付降到 0（微信不接受 0 元
+     * 订单，且那个错误会让订单卡进 PREPAY_UNKNOWN、账单被占用、券被消耗）。若这里
+     * 仍把这类券返回给小程序，确认页会显示「确认支付 ¥0.00」并让业主点下去，点了
+     * 才被后端拒绝——业主看到的可选项必须与后端实际接受的一致。
+     */
     const billCents = toCents(bill.amount.toString());
     const now = new Date();
     const myCoupons = await this.prisma.raw.userCoupon.findMany({
@@ -770,7 +778,9 @@ export class PaymentService {
         const face = c.faceValue ? toCents(c.faceValue.toString()) : 0;
         if (face <= 0) return false;
         const threshold = c.threshold ? toCents(c.threshold.toString()) : 0;
-        return billCents >= threshold;
+        if (billCents < threshold) return false;
+        // 抵扣上限为账单金额；等于账单金额意味着实付 0 元，后端会拒，这里就不该给
+        return Math.min(face, billCents) < billCents;
       })
       .map((uc) => {
         const c = uc.coupon;

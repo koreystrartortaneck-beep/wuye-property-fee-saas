@@ -705,4 +705,92 @@ describe('PaymentService', () => {
       expect(res.receiptVoid).toBe(true);
     });
   });
+
+  /**
+   * quoteBill 的可用券列表必须与 consumeCouponInTx 的接受范围一致。
+   *
+   * 起因（后端改了前端没跟上，而且此前 quoteBill 完全没有测试）：
+   * consumeCouponInTx 已拒绝把应付降到 0（微信不接受 0 元订单，那个错误会让订单卡进
+   * PREPAY_UNKNOWN、账单被占用、券被消耗），但 quoteBill 仍把这类券返回给小程序，
+   * 确认页于是显示「确认支付 ¥0.00」并让业主点下去，点了才被拒。
+   *
+   * 这里调用**真实的** quoteBill，而不是复刻它的过滤条件——复刻出来的判定改不动
+   * 真实代码，起不到守卫作用（本会话已因此栽过三次）。
+   */
+  describe('quoteBill 可用券列表', () => {
+    function quotePrisma(billYuan: string, coupons: Array<{ face: string; threshold?: string | null }>) {
+      return {
+        raw: {
+          bill: {
+            findUnique: jest.fn().mockResolvedValue({
+              id: 'bill-1',
+              tenantId: 'tenant-1',
+              communityId: 'community-1',
+              houseId: 'house-1',
+              title: '物业费',
+              period: '2026-07',
+              amount: { toString: () => billYuan },
+              status: 'UNPAID',
+              dueDate: new Date('2026-08-26T15:59:59.000Z'),
+              house: { displayName: '1栋1单元101', community: { name: '金港城' } },
+            }),
+          },
+          houseBinding: { findFirst: jest.fn().mockResolvedValue({ id: 'b1', status: 'ACTIVE' }) },
+          paymentBill: { findFirst: jest.fn().mockResolvedValue(null) },
+          userCoupon: {
+            findMany: jest.fn().mockResolvedValue(
+              coupons.map((c, i) => ({
+                id: `uc-${i}`,
+                status: 'UNUSED',
+                coupon: {
+                  name: `券${i}`,
+                  enabled: true,
+                  communityId: null,
+                  faceValue: { toString: () => c.face },
+                  threshold: c.threshold === undefined || c.threshold === null
+                    ? null
+                    : { toString: () => c.threshold as string },
+                  validFrom: new Date(Date.now() - 86_400_000),
+                  validTo: new Date(Date.now() + 86_400_000),
+                },
+              })),
+            ),
+          },
+        },
+      };
+    }
+
+    async function usableFaces(billYuan: string, coupons: Array<{ face: string; threshold?: string | null }>) {
+      const prisma = quotePrisma(billYuan, coupons);
+      const res = (await makeService(prisma).quoteBill('owner-1', 'bill-1')) as {
+        usableCoupons?: Array<{ discount?: string; name?: string }>;
+      };
+      return (res.usableCoupons ?? []).map((c) => c.discount);
+    }
+
+    it('券面额覆盖账单全额时不进入可用列表（否则确认页会显示「确认支付 ¥0.00」）', async () => {
+      expect(await usableFaces('10.00', [{ face: '10.00' }])).toEqual([]);
+      expect(await usableFaces('1.00', [{ face: '10.00' }])).toEqual([]);
+      expect(await usableFaces('2.50', [{ face: '2.50' }])).toEqual([]);
+    });
+
+    it('面额小于账单金额时正常进入列表', async () => {
+      const faces = await usableFaces('10.00', [{ face: '9.99' }]);
+      expect(faces).toHaveLength(1);
+    });
+
+    it('混合场景：只保留实付为正的那些', async () => {
+      const faces = await usableFaces('10.00', [
+        { face: '10.00' }, // 覆盖全额 → 剔除
+        { face: '3.00' }, // 可用
+        { face: '20.00' }, // 超过账单 → 剔除
+      ]);
+      expect(faces).toHaveLength(1);
+    });
+
+    it('不满门槛的券也不进入列表', async () => {
+      expect(await usableFaces('50.00', [{ face: '10.00', threshold: '100.00' }])).toEqual([]);
+      expect(await usableFaces('150.00', [{ face: '10.00', threshold: '100.00' }])).toHaveLength(1);
+    });
+  });
 });
