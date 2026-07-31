@@ -6,6 +6,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { ErrorCode } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
+import { RolesGuard } from '../auth/roles.decorator';
 import { OwnerGuard } from '../auth/owner.guard';
 import { BizException } from '../common/biz.exception';
 import { signUploadUrl } from './upload-access';
@@ -137,8 +138,15 @@ export class UploadController {
 /** 管理端图片上传（照片墙、服务封面等场景）。
  *  云模式下转存微信云存储返回 cloud:// fileID，保证业主小程序真机也能显示；
  *  未配置云环境时回退磁盘。 */
+/*
+ * 必须同时挂 RolesGuard。
+ *
+ * 只读平台账号（PLATFORM_READONLY）的写操作拦截实现在 RolesGuard 里 —— 只挂
+ * AdminGuard 的控制器会**完全绕过**它。全库扫下来只有这一个这样的写端点，
+ * 但它正好是「往服务器写文件」。这一条由 platform-readonly.spec 的静态扫描守着。
+ */
 @Controller('admin/upload')
-@UseGuards(AdminGuard)
+@UseGuards(AdminGuard, RolesGuard)
 export class AdminUploadController {
   constructor(private readonly wxCloud: WxCloudService) {}
 

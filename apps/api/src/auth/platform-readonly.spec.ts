@@ -99,3 +99,60 @@ describe('平台视角的读范围', () => {
     expect(src).toMatch(/payload\.role === 'SUPER_ADMIN' \|\| payload\.role === 'PLATFORM_READONLY'/);
   });
 });
+
+/**
+ * 只读拦截的实现位置决定了它的覆盖面。
+ *
+ * PLATFORM_READONLY 的写操作拦截写在 RolesGuard 里 —— 只挂 @UseGuards(AdminGuard)
+ * 而不挂 RolesGuard 的控制器会**完全绕过**它。全库扫下来曾有一个这样的写端点：
+ * admin/upload（往服务器写文件）。这类漏洞不会有任何报错，只能靠静态扫描守住。
+ */
+describe('只读拦截不得被绕过', () => {
+  it('所有带写端点的管理端控制器都挂了 RolesGuard', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = require('node:fs') as typeof import('node:fs');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const path = require('node:path') as typeof import('node:path');
+    const SRC = path.join(__dirname, '..');
+
+    const files: string[] = [];
+    (function walk(dir: string) {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (e.name.endsWith('.controller.ts')) files.push(p);
+      }
+    })(SRC);
+    expect(files.length).toBeGreaterThan(15);
+
+    const offenders: string[] = [];
+    for (const file of files) {
+      const src = fs
+        .readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+      for (const m of src.matchAll(/@Controller\((.*?)\)([\s\S]{0,400}?)export class (\w+)/g)) {
+        const decorators = m[2];
+        if (!decorators.includes('AdminGuard')) continue;
+        if (decorators.includes('RolesGuard')) continue;
+        // 该控制器内有没有写端点
+        const start = (m.index as number) + m[0].length;
+        const next = src.indexOf('@Controller(', start);
+        const body = src.slice(start, next === -1 ? undefined : next);
+        const writes = (body.match(/@(Post|Patch|Put|Delete)\(/g) ?? []).length;
+        if (writes > 0) {
+          offenders.push(`${path.relative(SRC, file)} → ${m[3]}（${m[1].trim()}，${writes} 个写端点）`);
+        }
+      }
+    }
+    if (offenders.length) {
+      throw new Error(
+        '以下控制器有写端点但只挂了 AdminGuard，不挂 RolesGuard —— 只读平台账号的写操作' +
+          '拦截实现在 RolesGuard 里，这些端点会被完全绕过：\n  ' +
+          offenders.join('\n  ') +
+          '\n请改成 @UseGuards(AdminGuard, RolesGuard)。',
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
+});
