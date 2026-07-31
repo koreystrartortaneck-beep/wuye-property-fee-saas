@@ -7,9 +7,13 @@ import { runWithTenant } from '../tenant/tenant-cls';
 import { BillRunService } from './bill-run.service';
 import { currentPeriod } from './period';
 
+/** 运行时记录的保留天数。财务凭证与审计留痕不在清理范围内。 */
+const PURGE_RETAIN_DAYS = 90;
+
 /**
  * 定时任务（spec §6.3）：
  * - 每日 02:00 自动出账：billDay 命中 + 周期锚点命中的启用规则
+ * - 每日 04:00 清理过期的幂等记录与已投递的历史事件/通知日志
  * - 每日 09:00 催缴扫描：到期前 3 天 DUE_SOON、已逾期 OVERDUE
  * 单条规则/账单异常只记日志，不阻断其余。
  */
@@ -22,6 +26,49 @@ export class ScheduleService {
     private readonly billRun: BillRunService,
     @Optional() @Inject(BILL_NOTIFIER) private readonly notifier: BillNotifier = new NoopBillNotifier(),
   ) {}
+
+  /**
+   * 每日 04:00 清理不再需要的运行时记录。
+   *
+   * 全库此前**没有任何清理任务**（grep '@Cron' 只有 6 个，deleteMany 只有对账重跑
+   * 那一处）。而 IdempotencyRecord 有 expiresAt 字段和 @@index([expiresAt])——
+   * 索引建了、字段写了，却从来没有代码用它删过过期记录，说明设计意图明确但实现缺失。
+   *
+   * 按 3000 户估算的年增量：
+   *   IdempotencyRecord  约 4 万行（每笔支付/发布/作废/催缴一条，含 responseBody Json）
+   *   OutboxEvent        约 18 万行（出账 1.2 万/月 + 催缴，PUBLISHED 后永久保留，含 payload）
+   *   NotifyLog          约 13 万行（3000 户 × 3 类提醒 × 1.2 人/月）
+   *   PaymentEvent       约 15 万行（每笔支付 4-6 个事件）
+   * 不会立刻出问题，但让每次 count()、每次索引维护、每次备份都变重。
+   *
+   * 刻意**不清**的：AuditLog（审计留痕，且 DB 层有 append-only 触发器）、
+   * Payment / Refund / Bill / InvoiceApplication（财务凭证）。
+   * 只清「运行时中间态」——过期的幂等键、已投递完的事件、历史通知日志。
+   */
+  @Cron('0 0 4 * * *')
+  async purgeExpired(now: Date = new Date()): Promise<void> {
+    const cutoff = new Date(now.getTime() - PURGE_RETAIN_DAYS * 86_400_000);
+    try {
+      // 用上已有的 @@index([expiresAt])
+      const idem = await this.prisma.raw.idempotencyRecord.deleteMany({
+        where: { expiresAt: { lt: now } },
+      });
+      // 只删已成功投递的：PENDING/FAILED 还要重试，PROCESSING 可能正被别的实例持有
+      const outbox = await this.prisma.raw.outboxEvent.deleteMany({
+        where: { status: 'PUBLISHED', publishedAt: { lt: cutoff } },
+      });
+      const notify = await this.prisma.raw.notifyLog.deleteMany({
+        where: { sentAt: { lt: cutoff } },
+      });
+      this.logger.log(
+        `清理完成：幂等 ${idem.count} 条、已投递事件 ${outbox.count} 条、通知日志 ${notify.count} 条` +
+          `（保留最近 ${PURGE_RETAIN_DAYS} 天）`,
+      );
+    } catch (e) {
+      // 清理失败不影响业务，下一轮再来
+      this.logger.warn(`清理任务失败：${e instanceof Error ? e.message : e}`);
+    }
+  }
 
   @Cron('0 0 2 * * *')
   async runDailyBilling(now: Date = new Date()): Promise<void> {

@@ -1071,3 +1071,111 @@ describe('通知投递的单一实现', () => {
     expect(send).toHaveBeenCalledTimes(2);
   });
 });
+
+/**
+ * Outbox 投递不得给业主发重复通知。
+ *
+ * 这一类缺陷业主直接可感（同一条账单通知收到两遍），而系统侧看不出异常——
+ * 事件状态是「重试了一次然后成功」，日志里只有一行 warn。
+ *
+ * 原实现的失败链条：
+ *   一批 100 条 × 每条约 250ms（绑定查询 + 微信 HTTP + 日志写入）≈ 25 秒，
+ *   而租约只有 30 秒；微信侧稍慢（1s/次）单批就到 100 秒 → 批次后半段租约必然过期
+ *   → 收尾时 lockOwnedLease 校验失败抛错
+ *   → 而收尾在 try 之外，异常冒出 dispatchOutboxBatch、被上层 per-tenant catch 吞掉
+ *   → **本批剩余几十条全部不投、退回 PENDING**
+ *   → 而已发出的微信消息不会回滚，下一轮重投 = 给业主发第二条
+ */
+describe('Outbox 投递的重复推送防线', () => {
+  const src = readFileSync(join(__dirname, 'outbox.service.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const notifySrc = readFileSync(join(__dirname, 'notify.service.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+
+  it('租约时长相对单批预计耗时留足余量', () => {
+    const batch = Number(/DEFAULT_BATCH_SIZE\s*=\s*(\d+)/.exec(src)?.[1]);
+    const leaseExpr = /DEFAULT_LEASE_MS\s*=\s*([^;]+);/.exec(src)?.[1] ?? '';
+    // 支持 `30_000` 与 `5 * 60_000` 两种写法
+    const leaseMs = Number(
+      leaseExpr
+        .replace(/_/g, '')
+        .split('*')
+        .map((x) => Number(x.trim()))
+        .reduce((a, b) => a * b, 1),
+    );
+    expect(Number.isFinite(batch)).toBe(true);
+    expect(Number.isFinite(leaseMs)).toBe(true);
+
+    // 每条投递按 250ms 估（一次绑定查询 + 一次微信 HTTP + 一次日志写入）
+    const estimatedMs = batch * 250;
+    const headroom = leaseMs / estimatedMs;
+    if (headroom < 5) {
+      throw new Error(
+        `批量 ${batch} 条 × 250ms ≈ ${estimatedMs}ms，而租约 ${leaseMs}ms，余量只有 ` +
+          `${headroom.toFixed(1)} 倍。租约在批次中途过期会让本批剩余事件退回 PENDING，` +
+          '而微信消息已经发出，下一轮重投就是给业主发重复通知。请调大租约或调小批量。',
+      );
+    }
+    expect(headroom).toBeGreaterThanOrEqual(5);
+  });
+
+  it('收尾（markPublished/markFailed）在 try 内，单条失败不牵连整批', () => {
+    const at = notifySrc.indexOf('async dispatchOutboxBatch');
+    expect(at).toBeGreaterThan(-1);
+    const body = notifySrc.slice(at, notifySrc.indexOf('\n  }\n', at));
+    const loopAt = body.indexOf('for (const event of claimed)');
+    expect(loopAt).toBeGreaterThan(-1);
+    const loop = body.slice(loopAt);
+
+    /*
+     * 必须做真正的括号配对，不能只比字符位置。
+     *
+     * 本守卫第一版断言 indexOf('try {') < indexOf('markPublished') —— 而这两者的
+     * 先后顺序在「收尾被挪到 try 之后」的写法里依然成立：
+     *     try { outcome = await deliver(...) } catch { continue }
+     *     if (outcome === 'RETRY') { markFailed } else { markPublished }
+     * try 的位置照样更靠前，于是注入这个退化写法后守卫仍是绿的（实测）。
+     * 字符先后不等于嵌套关系。
+     */
+    const tryAt = loop.indexOf('try {');
+    expect(tryAt).toBeGreaterThan(-1);
+    let depth = 0;
+    let tryEnd = -1;
+    for (let i = loop.indexOf('{', tryAt); i < loop.length; i += 1) {
+      if (loop[i] === '{') depth += 1;
+      else if (loop[i] === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          tryEnd = i;
+          break;
+        }
+      }
+    }
+    expect(tryEnd).toBeGreaterThan(tryAt);
+    const tryBlock = loop.slice(tryAt, tryEnd);
+    if (!tryBlock.includes('markPublished') || !tryBlock.includes('markFailed')) {
+      throw new Error(
+        '投递收尾（markPublished / markFailed）没有被 try 包住。\n' +
+          '收尾会因租约过期而抛错（lockOwnedLease 校验 claimExpiresAt），异常冒出后被' +
+          '上层 per-tenant catch 吞掉，本批剩余事件全部退回 PENDING —— 而微信消息已经' +
+          '发出去了，下一轮重投就是给业主发第二条一模一样的通知。',
+      );
+    }
+
+    // catch 里不得 rethrow，否则同样会中断整批
+    const catchBody = /catch \(error\) \{([\s\S]{0,400}?)\n      \}/.exec(loop)?.[1] ?? '';
+    expect(catchBody).not.toContain('throw');
+  });
+
+  it('定时投递有实例内重入锁（cron 每 30 秒，单批可能更久）', () => {
+    expect(notifySrc).toMatch(/private dispatching = false/);
+    const at = notifySrc.indexOf('async scheduledOutboxDispatch');
+    const body = notifySrc.slice(at, notifySrc.indexOf('\n  }\n', at));
+    expect(body).toMatch(/if \(this\.dispatching\)/);
+    expect(body).toMatch(/this\.dispatching = true/);
+    // 必须在 finally 里释放，否则一次异常就永久锁死投递
+    expect(body).toMatch(/finally \{[\s\S]{0,120}?this\.dispatching = false/);
+  });
+});

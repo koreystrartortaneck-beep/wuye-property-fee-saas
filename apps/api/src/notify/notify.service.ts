@@ -193,21 +193,36 @@ export class NotifyService implements BillNotifier {
     const stats = { delivered: 0, skipped: 0, retried: 0 };
     for (const event of claimed) {
       const lease = { tenantId: input.tenantId, eventId: event.id, workerId: input.workerId, claimExpiresAt: event.claimExpiresAt! };
-      let outcome: OutboxDeliveryOutcome;
+      /*
+       * 收尾（markPublished / markFailed）必须也在 try 里。
+       *
+       * 原实现只把 deliverOutboxEvent 包在 try 内，收尾在外面。而收尾会因为租约过期
+       * 而抛错（outbox.service 的 lockOwnedLease 校验 claimExpiresAt），异常直接冒出
+       * dispatchOutboxBatch、被上层 per-tenant catch 吞掉 —— **本批剩余几十条事件全部
+       * 不投递、退回 PENDING**。而已经发出去的微信消息不会回滚，下一轮重投就是给业主
+       * 发第二条一模一样的通知。
+       *
+       * 租约过期在原配置下是必然的：一批 100 条、每条约 250ms（一次绑定查询 + 一次
+       * 微信 HTTP + 一次日志写入）≈ 25 秒，而租约只有 30 秒；微信侧稍慢（1s/次）单批
+       * 就到 100 秒，批次后半段的租约早就过期了。配比问题已在 outbox.service 里调整，
+       * 这里再兜一层：单条收尾失败只影响这一条。
+       */
       try {
-        outcome = await this.deliverOutboxEvent(event as DeliverableOutboxEvent);
+        const outcome: OutboxDeliveryOutcome = await this.deliverOutboxEvent(event as DeliverableOutboxEvent);
+        if (outcome === 'RETRY') {
+          await this.outbox.markFailed({ ...lease, error: '订阅消息投递暂时失败，稍后重试' });
+          stats.retried += 1;
+        } else {
+          await this.outbox.markPublished(lease);
+          if (outcome === 'DELIVERED') stats.delivered += 1;
+          else stats.skipped += 1;
+        }
       } catch (error) {
-        await this.outbox.markFailed({ ...lease, error });
+        // 收尾失败（典型是租约过期）：这一条留给下一轮，不牵连同批其余事件
+        this.logger.warn(
+          `Outbox 事件收尾失败 event=${event.id}: ${error instanceof Error ? error.message : error}`,
+        );
         stats.retried += 1;
-        continue;
-      }
-      if (outcome === 'RETRY') {
-        await this.outbox.markFailed({ ...lease, error: '订阅消息投递暂时失败，稍后重试' });
-        stats.retried += 1;
-      } else {
-        await this.outbox.markPublished(lease);
-        if (outcome === 'DELIVERED') stats.delivered += 1;
-        else stats.skipped += 1;
       }
     }
     return stats;
@@ -226,6 +241,27 @@ export class NotifyService implements BillNotifier {
   @Cron('30 * * * * *')
   async scheduledOutboxDispatch(): Promise<void> {
     if (process.env.OUTBOX_DISPATCH_ENABLED === 'false') return;
+    /*
+     * 实例内重入锁。cron 每 30 秒触发，而一批 50 条约 12.5 秒、微信侧慢时会更久，
+     * 而 @nestjs/schedule 不阻止重叠执行。数据库层的 FOR UPDATE SKIP LOCKED 能防止
+     * 两个周期领到同一批事件（所以不会重复投递），但重叠仍会让单实例的事件循环上
+     * 挂着两三倍的待处理 await，业主端缴费一起变慢。
+     */
+    if (this.dispatching) {
+      this.logger.debug('上一轮 Outbox 投递仍在进行，本轮跳过');
+      return;
+    }
+    this.dispatching = true;
+    try {
+      await this.dispatchAllTenants();
+    } finally {
+      this.dispatching = false;
+    }
+  }
+
+  private dispatching = false;
+
+  private async dispatchAllTenants(): Promise<void> {
     const workerId = `${process.env.HOSTNAME ?? 'notify'}-${process.pid}`;
     const tenants = await this.prisma.raw.outboxEvent.findMany({
       where: { status: { in: ['PENDING', 'FAILED', 'PROCESSING'] } },

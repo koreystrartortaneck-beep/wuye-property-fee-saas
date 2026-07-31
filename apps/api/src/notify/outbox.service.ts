@@ -50,8 +50,22 @@ export type OutboxTransaction = Pick<
 type OutboxWorkerTransaction = Pick<Prisma.TransactionClient, 'outboxEvent' | '$queryRaw'>;
 type StoredOutboxEvent = Prisma.OutboxEventGetPayload<Record<string, never>>;
 
-const DEFAULT_BATCH_SIZE = 100;
-const DEFAULT_LEASE_MS = 30_000;
+/*
+ * 批量大小与租约时长必须留出足够余量。
+ *
+ * 原配置是「一批 100 条 + 租约 30 秒」，而每条投递约 250ms（一次 HouseBinding 查询
+ * + 一次微信 HTTP + 一次 NotifyLog 写入），单批 ≈ 25 秒 —— 已经贴着 30 秒租约；
+ * 微信侧稍慢（1s/次）单批就到 100 秒，批次后半段的租约必然过期。
+ *
+ * 租约一过期，收尾时 lockOwnedLease 校验失败抛错，事件退回 PENDING，而微信消息
+ * **已经发出去了**：下一轮重投就是给业主发第二条一模一样的通知。
+ *
+ * 现在按「单批预计耗时 × 20 倍余量」定：50 条 × 250ms ≈ 12.5 秒，租约 5 分钟。
+ * 吞吐是 50 条/轮 × 每 30 秒一轮 = 100 条/分钟，发布 3000 户的账单通知约 30 分钟
+ * 排空——出账通知对这个延迟完全不敏感，而正确性不能让。
+ */
+const DEFAULT_BATCH_SIZE = 50;
+const DEFAULT_LEASE_MS = 5 * 60_000;
 /**
  * 最大重试次数。导出给监控复用：领取条件里有 `attempts < MAX`，
  * 若积压统计不带同样的限制，超次数却尚未被标记终态的事件会被误算成「待投递」，
