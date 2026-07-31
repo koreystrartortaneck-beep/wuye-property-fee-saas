@@ -1,0 +1,253 @@
+/**
+ * 把 WXML + WXSS 渲染成 HTML，用无头 Chrome 截图，**在没有微信开发者工具的情况下看界面**。
+ *
+ * 为什么需要：小程序有 24 个页面，而看不到界面就只能靠读代码猜排版。
+ * 本轮用它逐页看下来，找出 13 处业主看得见的缺陷（账单页显示 ¥0.00、
+ * 缴费确认页最大的数字是券前金额、收据明细对不上账、券显示成「¥券」、
+ * 卡片高度不齐、动态日期列左右跳、绑定第一步认不出可点……）。
+ *
+ * 用法：
+ *   node tools/wxml-preview.mjs <page.wxml> <page.wxss> <app.wxss> <data.json> <out.html> <标题>
+ *   然后用 Chrome 截图（375pt 宽）：
+ *   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+ *     --headless=new --disable-gpu --hide-scrollbars --window-size=375,900 \
+ *     --screenshot=out.png --default-background-color=FFFFFFFF "file://$PWD/out.html"
+ *
+ * ── 保真度：它是近似，不是真机 ──
+ *
+ * rpx 按 1rpx = 0.5px 换算（375pt 宽）。WXSS 本身就是标准 CSS，所以颜色、间距、
+ * flex 布局、字号这些是可信的；而它**骗过我三次**，每次都差点让我把工具的毛病
+ * 当成产品缺陷。这三条写在这里，是因为下一个用它的人一定会再撞上：
+ *
+ *   1) 标签解析必须引号感知。属性值里有 `>` 很常见（wx:if="{{item.count > 1}}"），
+ *      早期版本用 `[^>]*?` 匹配属性，会在表达式里的 `>` 处提前结束标签 ——
+ *      那个元素及其后续结构从截图里静默消失。我据此以为「共 N 张实拍」整行没实现。
+ *
+ *   2) disabled 之类的属性必须透传。不传的话 `[disabled]` 这类属性选择器永远
+ *      匹配不到，我据此以为「禁用态样式没生效」，而真机上是生效的。
+ *
+ *   3) 元素名要映射进 CSS 选择器。`.wd-imgs image { min-height: … }` 这种后代选择器
+ *      在渲染成 div 之后匹配不上，图片区高度 0、整段消失 ——
+ *      我据此以为「公示详情不显示照片」，而产品早就写了 min-height 与占位底色。
+ *      （试过输出 <image> 标签，但 HTML 解析器把它当 <img> 的别名，元素名仍是 img，
+ *      所以最终是在 CSS 预处理里把 image/text/view/scroll-view 映射成 img/span/div。）
+ *
+ * 还有一类不是工具的问题但同样会误判：**自己造的测试数据不自洽**。
+ * 本轮有 4 次我把 fixture 缺字段当成产品缺陷（账单状态徽章、券有效期、
+ * 收据抵扣行、访客日期），回源码核对后 3 次证明产品是对的。
+ * 所以 fixture 里的枚举文案一律从 utils/labels.js 取，不要手写。
+ *
+ * 结论：**任何异常先怀疑工具与数据，再怀疑产品**，并且回源码核对过才下结论。
+ */
+// WXML + WXSS → HTML，用于视觉审查（不是运行时，只求布局/间距/层级保真）
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const TAG = { view: 'div', text: 'span', button: 'div', 'scroll-view': 'div', block: 'template-block',
+              image: 'img', navigator: 'div', canvas: 'div', form: 'div', input: 'input', textarea: 'textarea',
+              picker: 'div', switch: 'div', checkbox: 'div', radio: 'div', label: 'label', 'rich-text': 'div' };
+
+/** {{ expr }} 求值：只支持属性访问、三元、比较、字面量、简单函数无 */
+function evalExpr(src, scope) {
+  const code = `with(__s){ return (${src}); }`;
+  try { return new Function('__s', code)(scope); } catch { return ''; }
+}
+function interpolate(s, scope) {
+  return s.replace(/\{\{([\s\S]*?)\}\}/g, (_, e) => {
+    const v = evalExpr(e, scope);
+    return v === undefined || v === null || v === false ? '' : String(v);
+  });
+}
+
+/**
+ * WXML 解析：手写扫描，不用正则匹配整个标签。
+ *
+ * 必须引号感知：属性值里有 `>` 是常见的（wx:if="{{item.count > 1}}"），
+ * 用 `[^>]*?` 会在表达式里的 `>` 处提前结束标签 ——
+ * 那个元素及其后续结构会被静默丢掉，截图里看不出来，我就会据此得出错误的界面结论。
+ * 第一版就是这么把「共 N 张实拍」整行弄丢的。
+ */
+function tokenize(src) {
+  const toks = [];
+  let i = 0;
+  while (i < src.length) {
+    if (src.startsWith('<!--', i)) { const e = src.indexOf('-->', i); i = e < 0 ? src.length : e + 3; continue; }
+    if (src[i] === '<') {
+      // 扫到未被引号包裹的 '>'
+      let j = i + 1, q = null;
+      for (; j < src.length; j++) {
+        const c = src[j];
+        if (q) { if (c === q) q = null; continue; }
+        if (c === '"' || c === "'") { q = c; continue; }
+        if (c === '>') break;
+      }
+      toks.push({ type: 'tag', raw: src.slice(i, j + 1) });
+      i = j + 1;
+      continue;
+    }
+    const nxt = src.indexOf('<', i);
+    const text = src.slice(i, nxt < 0 ? src.length : nxt);
+    if (text.trim()) toks.push({ type: 'text', raw: text });
+    i = nxt < 0 ? src.length : nxt;
+  }
+  return toks;
+}
+
+function parse(src) {
+  const root = { tag: 'root', attrs: {}, children: [] };
+  const stack = [root];
+  for (const t of tokenize(src)) {
+    const top = stack[stack.length - 1];
+    if (t.type === 'text') { top.children.push({ tag: '#text', value: t.raw }); continue; }
+    const inner = t.raw.slice(1, -1);
+    if (inner.startsWith('/')) { if (stack.length > 1) stack.pop(); continue; }
+    const selfClose = inner.endsWith('/') ? '/' : '';
+    const nameM = /^([a-zA-Z-]+)/.exec(inner);
+    if (!nameM) continue;
+    const open = nameM[1];
+    const attrStr = inner.slice(open.length, inner.length - (selfClose ? 1 : 0));
+    {
+      const attrs = {};
+      const ar = /([a-zA-Z:\-_.]+)\s*=\s*"([^"]*)"|([a-zA-Z:\-_.]+)/g;
+      let a;
+      while ((a = ar.exec(attrStr || ''))) { if (a[1]) attrs[a[1]] = a[2]; else if (a[3]) attrs[a[3]] = ''; }
+      const node = { tag: open, attrs, children: [] };
+      top.children.push(node);
+      const VOID = new Set(['image', 'input', 'br']);
+      if (!selfClose && !VOID.has(open)) stack.push(node);
+    }
+  }
+  return root;
+}
+
+function render(node, scope) {
+  if (node.tag === '#text') return interpolate(node.value, scope);
+  if (node.tag === 'root') return node.children.map((c) => render(c, scope)).join('');
+
+  const a = node.attrs;
+  // wx:for
+  if (a['wx:for'] !== undefined) {
+    const listExpr = a['wx:for'].replace(/^\{\{|\}\}$/g, '');
+    const list = evalExpr(listExpr, scope) || [];
+    const itemName = a['wx:for-item'] || 'item';
+    const idxName = a['wx:for-index'] || 'index';
+    const clone = { ...node, attrs: { ...a } };
+    delete clone.attrs['wx:for']; delete clone.attrs['wx:for-item']; delete clone.attrs['wx:for-index'];
+    return (Array.isArray(list) ? list : []).map((it, i) =>
+      render(clone, { ...scope, [itemName]: it, [idxName]: i })).join('');
+  }
+  // wx:if / elif / else —— 由父层顺序处理，这里只判自身
+  if (a['wx:if'] !== undefined) {
+    const v = evalExpr(a['wx:if'].replace(/^\{\{|\}\}$/g, ''), scope);
+    if (!v) { node.__falsy = true; return ''; }
+  }
+  if (a['wx:elif'] !== undefined || a['wx:else'] !== undefined) {
+    // 简化：elif/else 仅在前一个兄弟为假时渲染，交由 renderChildren 处理
+  }
+
+  const tag = TAG[node.tag] || 'div';
+  const cls = a.class ? interpolate(a.class, scope) : '';
+  const style = a.style ? interpolate(a.style, scope) : '';
+  const inner = renderChildren(node, scope);
+  if (tag === 'template-block') return inner;
+  /*
+   * disabled 必须透传。
+   * 不传的话 [disabled] 这类属性选择器在渲染里永远匹配不到 ——
+   * 我据此会以为「禁用态没生效」，而真机上是生效的（第一版就这么误判过一次）。
+   */
+  let extraAttr = '';
+  if (a.disabled !== undefined) {
+    const raw = a.disabled;
+    const val = /^\{\{[\s\S]*\}\}$/.test(raw) ? evalExpr(raw.replace(/^\{\{|\}\}$/g, ''), scope) : raw !== 'false';
+    if (val) extraAttr += ' disabled';
+  }
+  if (node.tag === 'image') {
+    /*
+     * 必须保留 image 这个标签名。
+     * 渲染成 div 的话，`.wd-imgs image { min-height: ... }` 这类**后代选择器**匹配不上 ——
+     * 图片区在截图里高度为 0、整段消失，我会误判成「公示详情不显示照片」。
+     * 实际产品早就给了 min-height 与占位底色（注释里写着「避免照片消失」）。
+     * 这是工具第 3 次骗我，改成自定义元素后选择器照常生效。
+     */
+    const st = `${style};background:#e6ded2;display:block`;
+    return `<image class="${cls}" style="${st}"></image>`;
+  }
+  if (node.tag === 'input' || node.tag === 'textarea') {
+    const ph = a.placeholder ? interpolate(a.placeholder, scope) : '';
+    return `<div class="${cls}" style="${style};color:#b9b2c4">${ph}</div>`;
+  }
+  return `<${tag} class="${cls}" style="${style}"${extraAttr}>${inner}</${tag}>`;
+}
+
+function renderChildren(node, scope) {
+  let out = '';
+  let lastCond = null;
+  for (const c of node.children) {
+    if (c.tag === '#text') { out += interpolate(c.value, scope); continue; }
+    const a = c.attrs || {};
+    if (a['wx:if'] !== undefined) {
+      lastCond = !!evalExpr(a['wx:if'].replace(/^\{\{|\}\}$/g, ''), scope);
+      if (lastCond) out += renderNodeNoCond(c, scope);
+      continue;
+    }
+    if (a['wx:elif'] !== undefined) {
+      if (lastCond) continue;
+      lastCond = !!evalExpr(a['wx:elif'].replace(/^\{\{|\}\}$/g, ''), scope);
+      if (lastCond) out += renderNodeNoCond(c, scope);
+      continue;
+    }
+    if (a['wx:else'] !== undefined) {
+      if (!lastCond) out += renderNodeNoCond(c, scope);
+      lastCond = null;
+      continue;
+    }
+    lastCond = null;
+    out += render(c, scope);
+  }
+  return out;
+}
+function renderNodeNoCond(node, scope) {
+  const clone = { ...node, attrs: { ...node.attrs } };
+  delete clone.attrs['wx:if']; delete clone.attrs['wx:elif']; delete clone.attrs['wx:else'];
+  return render(clone, scope);
+}
+
+/** rpx → px（375pt 宽：1rpx = 0.5px） */
+function rpx(css) { return css.replace(/([\d.]+)rpx/g, (_, n) => `${(parseFloat(n) * 0.5).toFixed(3)}px`); }
+
+/**
+ * 选择器里的小程序元素名换成对应的 HTML 标签。
+ *
+ * 不做这一步，`.wd-imgs image { min-height: ... }` 永远匹配不上 ——
+ * 图片区高度 0、整段从截图里消失，我就会误判成「公示详情不显示照片」。
+ * （试过把标签渲染成 <image>，但 HTML 解析器会把它当成 <img> 的别名，
+ * DOM 里的元素名仍是 img，选择器照样不匹配。）
+ *
+ * 只在「{ 之前的选择器部分」替换，避免动到 text-align 这类属性名。
+ */
+const ELEMENT_MAP = { image: 'img', text: 'span', view: 'div', 'scroll-view': 'div', 'rich-text': 'div' };
+function mapSelectors(css) {
+  return css.replace(/([^{}]+)(\{)/g, (all, sel, brace) => {
+    // @media 等 at-rule 的前导部分不动
+    if (/@\w/.test(sel)) return all;
+    let out = sel;
+    for (const [wx, html] of Object.entries(ELEMENT_MAP)) {
+      out = out.replace(new RegExp(`(^|[\\s,>+~(])${wx}(?=$|[\\s,>+~:.\\[)])`, 'g'), `$1${html}`);
+    }
+    return out + brace;
+  });
+}
+
+const [, , wxmlPath, wxssPath, appWxssPath, dataPath, outPath, title] = process.argv;
+const data = JSON.parse(readFileSync(dataPath, 'utf8'));
+const tree = parse(readFileSync(wxmlPath, 'utf8'));
+const body = renderChildren(tree, data);
+const css = mapSelectors(rpx(readFileSync(appWxssPath, 'utf8')) + '\n' + rpx(readFileSync(wxssPath, 'utf8')));
+writeFileSync(outPath, `<!doctype html><html><head><meta charset="utf-8">
+<style>
+html,body{margin:0;padding:0;width:375px;font-size:16px}
+image{display:block;background:#e6ded2}
+*{box-sizing:border-box}
+${css}
+.__label{position:fixed;top:0;left:0;background:#000;color:#fff;font:11px monospace;padding:2px 6px;z-index:99}
+</style></head><body><div class="__label">${title}</div>${body}</body></html>`);
+console.log('written', outPath);
