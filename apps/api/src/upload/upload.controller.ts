@@ -43,8 +43,59 @@ export const uploadOptions = {
   },
 };
 
+/**
+ * 文件魔数（前几个字节）。
+ *
+ * fileFilter 里判的是 multipart 头里客户端**自己声明**的 Content-Type，
+ * 而扩展名又是从这个声明映射来的——也就是说磁盘上可以躺着任意内容的 .jpg。
+ * 当前靠「扩展名决定响应 Content-Type」阻断了 XSS 执行，但配合无鉴权的
+ * /uploads 静态目录，这实际上是一个免费的匿名文件寄存服务（可被用来托管违法内容，
+ * 而责任归属在部署方）。所以落盘后按真实字节再验一次。
+ */
+const MAGIC: Array<{ mime: string; test: (b: Buffer) => boolean }> = [
+  { mime: 'image/jpeg', test: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  {
+    mime: 'image/png',
+    test: (b) => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47,
+  },
+  {
+    mime: 'image/webp',
+    test: (b) => b.subarray(0, 4).toString('ascii') === 'RIFF' && b.subarray(8, 12).toString('ascii') === 'WEBP',
+  },
+];
+
+/** 落盘后校验真实字节；不匹配即删除并拒绝 */
+function assertRealImage(file: Express.Multer.File): void {
+  let head: Buffer;
+  try {
+    const fd = fs.openSync(file.path, 'r');
+    head = Buffer.alloc(12);
+    fs.readSync(fd, head, 0, 12, 0);
+    fs.closeSync(fd);
+  } catch {
+    throw new BizException(ErrorCode.UPLOAD_INVALID, '文件读取失败，请重试');
+  }
+  if (!MAGIC.some((m) => m.test(head))) {
+    // 不留下不合规的文件
+    try {
+      fs.unlinkSync(file.path);
+    } catch {
+      /* 删不掉也要拒绝 */
+    }
+    throw new BizException(ErrorCode.UPLOAD_INVALID, '文件内容不是有效的 jpg/png/webp 图片');
+  }
+}
+
+/**
+ * 测试专用引用。
+ * assertRealImage 走的是「落盘后按真实字节校验，不合规则删除」这条路径，删文件的逻辑
+ * 必须用行为测试证明范围正确，而它没有独立的 HTTP 入口可打。
+ */
+export const __test_assertRealImage = assertRealImage;
+
 function toResult(file?: Express.Multer.File) {
   if (!file) throw new BizException(ErrorCode.UPLOAD_INVALID, '未收到文件');
+  assertRealImage(file);
   return { url: `/uploads/${monthDir()}/${file.filename}` };
 }
 

@@ -21,4 +21,31 @@
         alias /opt/wuye/admin/;
         index index.html;
         try_files $uri $uri/ /wuye-admin/index.html;
+
+        # 安全响应头。此前这个 location 一个都没有。
+        #
+        # CSP 按后台实际加载的资源来定：Vite 构建产物是同源的 js/css，
+        # Element Plus 与图标是打进 bundle 的，没有 CDN、没有内联 <script>。
+        # 'unsafe-inline' 只给 style-src —— Vue 的 scoped 样式与 Element Plus 的
+        # 动态主题变量会写行内 style，去掉它整个界面会掉色。
+        # img-src 加 data: 与 blob:：二维码/收据预览用的是 canvas 导出。
+        # connect-src 'self' 足够：API 走同源相对路径 /wuye/api/v1。
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "same-origin" always;
+        # 后台页面本身不该被缓存（index.html 里带着 bundle 指纹；缓存会让发版不生效）
+        add_header Cache-Control "no-store" always;
+
+    }
+
+    # 带指纹的静态资源可以长期缓存。
+    #
+    # 正则 location 里用 alias 必须自带捕获组拼出完整路径。写成
+    #     alias /opt/wuye/admin/;  +  rewrite ^/wuye-admin/(.*)$ /$1 break;
+    # nginx 会返回 500 —— 而这条 location 正好命中所有 js/css，
+    # 整个后台前端会白屏。这个错我在服务器上真实踩过一次（已修正并复测）。
+    location ~* ^/wuye-admin/(assets/.+\.(?:js|css|woff2?|png|jpg|jpeg|svg|ico))$ {
+        alias /opt/wuye/admin/$1;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options "nosniff" always;
     }

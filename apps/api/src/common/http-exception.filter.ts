@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { ErrorCode } from '@pf/shared';
+import { redactAndTruncateText } from '../audit/audit.service';
 import { BizException } from './biz.exception';
 import { Prisma } from '@prisma/client';
 
@@ -192,7 +193,22 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       }
     }
 
-    this.logger.error(exception instanceof Error ? exception.stack : String(exception));
+    /*
+     * 日志也要脱敏。
+     *
+     * 全库有一套很扎实的脱敏器（audit.service 的 redactString，覆盖
+     * openid/手机号/token/私钥/JWT 形态），审计、告警、幂等记录都用了——唯独应用日志
+     * 这条路径没用。而落到这里的典型异常是 PrismaClientValidationError /
+     * PrismaClientUnknownRequestError，Prisma 会把**完整调用参数**拼进 message：
+     * wxUser.upsert 的 openid、adminUser.create 的 passwordHash、房屋的 ownerPhone
+     * 都会原样进容器日志，被运维、日志采集侧、云控制台看到。
+     *
+     * 截到 4000 字符：Prisma 的校验错误 message 可以有上万字符（会把整个 schema 的
+     * 字段列表贴出来），完整打印只会把有用的头部冲掉。
+     */
+    this.logger.error(
+      redactAndTruncateText(exception instanceof Error ? (exception.stack ?? exception.message) : exception, 4000),
+    );
     res.status(200).json(ErrorCode.INTERNAL);
   }
 }

@@ -3,8 +3,37 @@ import { GlobalExceptionFilter } from './common/http-exception.filter';
 import { ResponseInterceptor } from './common/response.interceptor';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 
-/** 生产与测试共用的应用装配（前缀/校验/响应协议/租户上下文） */
+/**
+ * 安全响应头。
+ *
+ * 全库此前一个都没有（无 helmet 依赖、nginx 的 admin location 也没有 add_header）。
+ * 这里只加确定安全、不会影响现有功能的四条：
+ *   nosniff        —— 浏览器不得按内容猜 MIME；配合上传目录尤其重要
+ *   X-Frame-Options —— 后台不允许被嵌进 iframe（点击劫持）
+ *   Referrer-Policy —— 跳外链时不把带 ID 的后台 URL 带出去
+ *   Cache-Control   —— API 响应一律不缓存：里面有手机号、房号、金额，
+ *                      浏览器/中间缓存留副本是实打实的泄露面
+ *
+ * CORS 刻意不开：后台与 API 同源部署（前端用相对路径 /wuye/api/v1），
+ * 不开 CORS 等于默认拒绝一切跨源浏览器调用，是 fail-closed 的正确配置。
+ * CSP 需要按前端实际加载的资源来定，留给 nginx 侧统一加。
+ */
+function securityHeaders(app: INestApplication): void {
+  const inner = app as unknown as {
+    use(fn: (req: unknown, res: { setHeader(k: string, v: string): void }, next: () => void) => void): void;
+  };
+  inner.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'same-origin');
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
+}
+
+/** 生产与测试共用的应用装配（前缀/校验/响应协议/租户上下文/安全响应头） */
 export function setupApp(app: INestApplication): void {
+  securityHeaders(app);
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalInterceptors(new ResponseInterceptor(), new TenantContextInterceptor());

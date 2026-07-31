@@ -12,6 +12,8 @@ const MAX_FAILS = 5;
 const LOCK_MINUTES = 15;
 const IP_WINDOW_MS = 60_000;
 const IP_MAX = 30;
+/** ipHits 的条目上界，超过即淘汰过期项（防内存无限增长） */
+const IP_TABLE_MAX = 10_000;
 
 class AdminLoginDto {
   @IsString()
@@ -50,6 +52,16 @@ export class AdminAuthService {
   private ipRateLimited(ip?: string): boolean {
     if (!ip) return false;
     const now = Date.now();
+    /*
+     * 顺手清掉过期条目并设上界。这个 Map 原先没有任何淘汰逻辑：每个来过的 IP 都会
+     * 留一条，是一个持续增长的内存点（开了 trust proxy 之后 key 从「网关那一个 IP」
+     * 变成「所有真实客户端 IP」，增长会明显加快）。
+     * 阈值以上直接整表重建：限流本身是尽力而为，宁可放过一轮也不要无限增长。
+     */
+    if (this.ipHits.size > IP_TABLE_MAX) {
+      for (const [k, v] of this.ipHits) if (v.resetAt < now) this.ipHits.delete(k);
+      if (this.ipHits.size > IP_TABLE_MAX) this.ipHits.clear();
+    }
     const e = this.ipHits.get(ip);
     if (!e || e.resetAt < now) {
       this.ipHits.set(ip, { count: 1, resetAt: now + IP_WINDOW_MS });
