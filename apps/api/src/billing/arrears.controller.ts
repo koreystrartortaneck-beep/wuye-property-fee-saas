@@ -10,6 +10,7 @@ import { IdempotencyService } from '../common/idempotency.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { centsToStr, toCents } from './engine/money';
 import { BILL_NOTIFIER, BillNotifier } from '../notify/notify.tokens';
+import { RateLimit } from '../common/rate-limit.guard';
 
 /** 北京时间的当日零点，用于按「日」判断逾期（不能用 UTC 比较） */
 function shanghaiTodayStart(): Date {
@@ -323,6 +324,16 @@ export class ArrearsController {
   list(@Query() q: ArrearsQuery) {
     return this.service.list(q);
   }
+
+  /*
+
+   * 批量催缴：有幂等键但没有频率上限。改成落 Outbox 之后单次调用很快，
+
+   * 反而更容易被连点——每次都会给一批业主排通知，重复排会耗掉他们的订阅额度。
+
+   */
+
+  @RateLimit({ limit: 6, windowMs: 60_000, message: '催缴发送过于频繁，请稍后再试' })
 
   @Post('dun')
   dun(@Current() cur: CurrentAdmin, @Body() body: DunBody) {

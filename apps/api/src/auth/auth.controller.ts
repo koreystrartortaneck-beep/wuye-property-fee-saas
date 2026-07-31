@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthService, maskPhone } from './auth.service';
 import { Current, CurrentOwner } from './current.decorator';
 import { OwnerGuard } from './owner.guard';
+import { RateLimit } from '../common/rate-limit.guard';
 
 class WxLoginDto {
   @IsString()
@@ -28,6 +29,11 @@ export class AuthController {
     private readonly prisma: PrismaService,
   ) {}
 
+  /*
+   * 每次调用都会向微信 jscode2session 外呼。配额是按小程序算的，刷爆之后所有业主都
+   * 登录不了。20 次/分钟对正常业主绝对够（登录是进入小程序时一次），对刷量远远不够。
+   */
+  @RateLimit({ limit: 20, windowMs: 60_000, message: '登录请求过于频繁，请稍后再试' })
   @Post('wx-login')
   wxLogin(
     @Body() dto: WxLoginDto,
@@ -51,6 +57,8 @@ export class AuthController {
     return this.auth.wxLogin(dto.code, trustedOpenid);
   }
 
+  // 手机号授权同样外呼微信，且它是绑定房屋的前置步骤，正常业主一辈子点几次
+  @RateLimit({ limit: 10, windowMs: 60_000, message: '获取手机号过于频繁，请稍后再试' })
   @Post('phone')
   @UseGuards(OwnerGuard)
   phone(@Current() cur: CurrentOwner, @Body() dto: PhoneDto) {

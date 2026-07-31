@@ -4,6 +4,7 @@ import path from 'node:path';
 import { Prisma } from '@prisma/client';
 import { GlobalExceptionFilter } from './common/http-exception.filter';
 import { setupApp } from './setup-app';
+import { RateLimitGuard } from './common/rate-limit.guard';
 
 /**
  * 几条安全加固，都不是漏洞级但都有确定的现实后果。
@@ -70,6 +71,8 @@ describe('异常日志必须脱敏', () => {
   });
 });
 
+type Mw = (req: unknown, res: { setHeader(k: string, v: string): void }, next: () => void) => void;
+
 describe('安全响应头', () => {
   /*
    * 全库此前一个安全头都没有（无 helmet 依赖，nginx 的 admin location 也没有
@@ -77,9 +80,17 @@ describe('安全响应头', () => {
    * Cache-Control: no-store 尤其要紧——API 响应里有手机号、房号、金额，
    * 浏览器或中间缓存留副本是实打实的泄露面。
    */
-  function headersAfterSetup(): Record<string, string> {
+  /*
+   * 返回响应头与被注册的守卫。
+   *
+   * 断言必须放在 it() 里，不能放在这个 helper 里 —— 它在 describe 体内被调用，
+   * helper 里的 expect 失败会让整个 suite「跑不起来」（Tests: 0），
+   * 注入错误时看不出是哪条断言挂了，只能看到 suite crash。第一版就是这样。
+   */
+  function setupAndCapture(): { headers: Record<string, string>; guards: unknown[] } {
     const out: Record<string, string> = {};
     let mw: ((req: unknown, res: { setHeader(k: string, v: string): void }, next: () => void) => void) | null = null;
+    const guards: unknown[] = [];
     const app = {
       use: (fn: typeof mw) => {
         mw = fn;
@@ -88,14 +99,27 @@ describe('安全响应头', () => {
       useGlobalPipes: () => undefined,
       useGlobalInterceptors: () => undefined,
       useGlobalFilters: () => undefined,
+      // setupApp 现在还要从容器里取 Reflector 来装配速率限制守卫
+      useGlobalGuards: (...g: unknown[]) => guards.push(...g),
+      get: () => ({ get: () => undefined }),
     };
     setupApp(app as never);
-    expect(mw).not.toBeNull();
-    mw!({}, { setHeader: (k: string, v: string) => (out[k] = v) }, () => undefined);
-    return out;
+    // 显式取出再调：TS 会把「只在回调里赋值」的 mw 窄化成 never
+    const middleware = mw as Mw | null;
+    if (middleware) middleware({}, { setHeader: (k: string, v: string) => (out[k] = v) }, () => undefined);
+    return { headers: out, guards };
   }
 
-  const h = headersAfterSetup();
+  const captured = setupAndCapture();
+  const h = captured.headers;
+
+  it('速率限制守卫已全局注册（不注册的话各端点的 @RateLimit 只是元数据、不生效）', () => {
+    expect(captured.guards.some((g) => g instanceof RateLimitGuard)).toBe(true);
+  });
+
+  it('安全头中间件已装上', () => {
+    expect(Object.keys(h).length).toBeGreaterThan(0);
+  });
 
   it('nosniff：浏览器不得按内容猜 MIME（配合上传目录尤其重要）', () => {
     expect(h['X-Content-Type-Options']).toBe('nosniff');
@@ -183,5 +207,101 @@ describe('上传必须按真实字节校验，而不是信客户端声明', () =
       rejected = !!e;
     });
     expect(rejected).toBe(true);
+  });
+});
+
+/**
+ * 会外呼第三方、占磁盘、或给一批业主发通知的端点必须限流。
+ *
+ * 此前只有管理端登录做了限流，其余一律没有。这几处各有确定的后果：
+ *   /auth/wx-login、/auth/phone   每次都向微信外呼；配额按小程序算，刷爆之后
+ *                                 **所有业主都登录不了**
+ *   /owner/upload、/admin/upload  每次最多 5MB 落盘，而上传目录与 MySQL 共享宿主磁盘，
+ *                                 磁盘打满两个一起挂
+ *   /admin/arrears/dun            改成落 Outbox 后单次很快，反而更容易被连点，
+ *                                 重复排通知会耗掉业主的一次性订阅额度
+ *   /admin/cloud-files/urls       每次向微信换一批 2 小时有效的下载链接
+ */
+describe('高风险端点必须限流', () => {
+  const CASES: Array<{ file: string; marker?: string; controller?: string; what: string }> = [
+    { file: 'auth/auth.controller.ts', marker: "@Post('wx-login')", what: '业主登录（外呼微信）' },
+    { file: 'auth/auth.controller.ts', marker: "@Post('phone')", what: '手机号授权（外呼微信）' },
+    /*
+     * 上传的两个端点都是 @Post()（无路径），无法用它定位。
+     * 改用「从该 @Controller 到下一个 @Controller 之间必须出现 @RateLimit」——
+     * 两个上传控制器各自独立，任一漏标都会被抓到。
+     */
+    { file: 'upload/upload.controller.ts', controller: "@Controller('owner/upload')", what: '业主上传（占磁盘）' },
+    { file: 'upload/upload.controller.ts', controller: "@Controller('admin/upload')", what: '管理端上传（占磁盘）' },
+    { file: 'billing/arrears.controller.ts', marker: "@Post('dun')", what: '批量催缴（耗业主订阅额度）' },
+    { file: 'admin/cloud-files.controller.ts', marker: "@Post('urls')", what: '云文件解析（外呼微信）' },
+  ];
+
+  function src(rel: string): string {
+    return fs
+      .readFileSync(path.join(__dirname, rel), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+  }
+
+  it('每个高风险端点都标了 @RateLimit', () => {
+    const offenders: string[] = [];
+    for (const c of CASES) {
+      const code = src(c.file);
+
+      // 控制器级：从该 @Controller 到下一个 @Controller 之间必须出现 @RateLimit
+      if (c.controller) {
+        const start = code.indexOf(c.controller);
+        if (start === -1) {
+          offenders.push(`${c.file} 找不到 ${c.controller}（${c.what}）——被改名了？请同步更新本测试`);
+          continue;
+        }
+        const nextAt = code.indexOf('@Controller(', start + c.controller.length);
+        const block = code.slice(start, nextAt === -1 ? undefined : nextAt);
+        if (!block.includes('@RateLimit(')) {
+          offenders.push(`${c.what}：${c.controller} 这个控制器里没有 @RateLimit`);
+        }
+        continue;
+      }
+
+      const at = code.indexOf(c.marker as string);
+      if (at === -1) {
+        offenders.push(`${c.file} 找不到 ${c.marker}（${c.what}）——被改名了？请同步更新本测试`);
+        continue;
+      }
+      /*
+       * @RateLimit 必须紧挨在该端点之前的装饰器块内。
+       * 只在整个文件里 grep 会误判：同一文件的另一个端点标了就算过
+       * （upload.controller 有两个 @Post()，这正是会踩的形状）。
+       */
+      const before = code.slice(Math.max(0, at - 400), at);
+      if (!before.includes('@RateLimit(')) {
+        offenders.push(`${c.what}：${c.marker} 之前没有 @RateLimit`);
+      }
+    }
+    if (offenders.length) throw new Error('高风险端点缺少限流：\n  ' + offenders.join('\n  '));
+    expect(offenders).toEqual([]);
+  });
+
+  it('限流阈值都是正数（写 0 会把端点彻底关掉）', () => {
+    const files = ['auth/auth.controller.ts', 'upload/upload.controller.ts', 'billing/arrears.controller.ts', 'admin/cloud-files.controller.ts'];
+    const bad: string[] = [];
+    for (const f of files) {
+      for (const m of src(f).matchAll(/@RateLimit\(\{\s*limit:\s*(\d+)/g)) {
+        if (Number(m[1]) <= 0) bad.push(`${f} → limit: ${m[1]}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('cloud-files 有角色限制与数量上限', () => {
+    /*
+     * 这个端点把任意 cloud:// fileID 换成可访问的临时 URL，且不校验文件是否属于本租户。
+     * 原先只有 AdminGuard（无 @Roles，等于任何已登录管理员）、fileIds 只有 @IsArray()
+     * 而没有数量上限。
+     */
+    const code = src('admin/cloud-files.controller.ts');
+    expect(code).toMatch(/@Roles\(/);
+    expect(code).toMatch(/@ArrayMaxSize\(\d+/);
   });
 });

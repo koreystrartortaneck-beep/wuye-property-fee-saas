@@ -9,6 +9,7 @@ import { AdminGuard } from '../auth/admin.guard';
 import { OwnerGuard } from '../auth/owner.guard';
 import { BizException } from '../common/biz.exception';
 import { WxCloudService } from '../wx/wx-cloud.service';
+import { RateLimit } from '../common/rate-limit.guard';
 
 /** 上传根目录：容器内由 UPLOAD_DIR 指定并挂 volume；本地落在 apps/api/uploads */
 export const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
@@ -110,6 +111,11 @@ export const memUploadOptions = {
 @Controller('owner/upload')
 @UseGuards(OwnerGuard)
 export class UploadController {
+  /*
+   * 每次最多 5MB 落盘，而上传目录与 MySQL 共享宿主磁盘 —— 磁盘打满两个一起挂。
+   * 20 张/分钟：业主报修一次贴几张图，够用；想把磁盘写满则远远不够。
+   */
+  @RateLimit({ limit: 20, windowMs: 60_000, message: '上传过于频繁，请稍后再试' })
   @Post()
   @UseInterceptors(FileInterceptor('file', uploadOptions))
   upload(@UploadedFile() file?: Express.Multer.File) {
@@ -125,6 +131,8 @@ export class UploadController {
 export class AdminUploadController {
   constructor(private readonly wxCloud: WxCloudService) {}
 
+  // 管理端批量传照片墙时会连发，阈值放宽一些
+  @RateLimit({ limit: 60, windowMs: 60_000, message: '上传过于频繁，请稍后再试' })
   @Post()
   @UseInterceptors(FileInterceptor('file', process.env.WX_CLOUD_ENV ? memUploadOptions : uploadOptions))
   async upload(@UploadedFile() file?: Express.Multer.File) {

@@ -1,4 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { RateLimitGuard } from './common/rate-limit.guard';
 import { GlobalExceptionFilter } from './common/http-exception.filter';
 import { ResponseInterceptor } from './common/response.interceptor';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
@@ -37,5 +39,11 @@ export function setupApp(app: INestApplication): void {
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalInterceptors(new ResponseInterceptor(), new TenantContextInterceptor());
+  /*
+   * 速率限制守卫必须全局注册，否则各端点上的 @RateLimit 装饰器只是元数据、不生效。
+   * 它对未标注的端点直接放行，所以全局注册没有副作用。
+   * Reflector 从容器里取，避免自己 new 一个导致读不到 Nest 写入的元数据。
+   */
+  app.useGlobalGuards(new RateLimitGuard(app.get(Reflector)));
   app.useGlobalFilters(new GlobalExceptionFilter());
 }
