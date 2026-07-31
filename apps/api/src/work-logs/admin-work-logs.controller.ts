@@ -15,6 +15,7 @@ import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
+import { signUploadPaths } from '../upload/upload-access';
 
 class CreateWorkLogDto {
   @IsString()
@@ -76,7 +77,15 @@ export class AdminWorkLogsController {
       this.prisma.t.workLog.findMany({ where, ...pageArgs(q), orderBy: { createdAt: 'desc' } }),
       this.prisma.t.workLog.count({ where }),
     ]);
-    return pageResult(list, total, q);
+    /*
+     * 图片地址读取时现签：存库的是裸路径，签名只有 10 分钟有效——
+     * 把带签名的地址存进库，10 分钟后所有历史图片全部打不开。
+     */
+    return pageResult(
+      list.map((w) => ({ ...w, images: signUploadPaths(w.images) })),
+      total,
+      q,
+    );
   }
 
   @Delete(':id')

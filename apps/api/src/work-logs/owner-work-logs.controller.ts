@@ -7,6 +7,7 @@ import { BizException } from '../common/biz.exception';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { OwnerHousesService } from '../owner/owner-houses.controller';
 import { PrismaService } from '../prisma/prisma.service';
+import { signUploadPaths } from '../upload/upload-access';
 
 class ListQuery extends PageQuery {
   @IsString()
@@ -39,7 +40,15 @@ export class OwnerWorkLogsController {
       this.prisma.raw.workLog.findMany({ where, ...pageArgs(q), orderBy: { createdAt: 'desc' } }),
       this.prisma.raw.workLog.count({ where }),
     ]);
-    return pageResult(list, total, q);
+    /*
+     * 图片地址读取时现签：存库的是裸路径，签名只有 10 分钟有效——
+     * 把带签名的地址存进库，10 分钟后所有历史图片全部打不开。
+     */
+    return pageResult(
+      list.map((w) => ({ ...w, images: signUploadPaths(w.images) })),
+      total,
+      q,
+    );
   }
 
   @Get(':id')

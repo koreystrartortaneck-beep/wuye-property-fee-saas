@@ -3,6 +3,16 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { setupApp } from './setup-app';
+import { verifyUploadToken } from './upload/upload-access';
+
+/** 静态目录中间件用到的最小请求/响应形状 */
+interface UploadReq {
+  path: string;
+  query?: { exp?: unknown; sig?: unknown };
+}
+interface UploadRes {
+  status(code: number): { json(body: unknown): void };
+}
 import { UPLOAD_ROOT } from './upload/upload.controller';
 
 async function bootstrap() {
@@ -20,7 +30,26 @@ async function bootstrap() {
    */
   app.set('trust proxy', 1);
   setupApp(app);
-  // 上传图片静态托管（生产由 Nginx /wuye/uploads/ 反代到这里）
+  /*
+   * 上传图片静态托管（生产由 Nginx /wuye/uploads/ 反代到这里）。
+   *
+   * 挂静态目录之前先校验签名：这个目录原本**完全无鉴权**，而业主报修照片可能拍到
+   * 户内、门牌、身份材料，只靠「时间戳 + 6 字节随机」的文件名保护——48 位熵不可暴力
+   * 枚举，但 URL 一旦经 referrer、截图、日志、转发外泄就长期有效且无法吊销。
+   *
+   * 用 query 里的签名而不是 Guard：图片走 <img src> 加载，浏览器不带 Authorization 头。
+   * 生产配了 WX_CLOUD_ENV、图片走微信云存储的临时 URL，不经这条路径；
+   * 这里保护的是自建部署（docker-compose.prod.yml 那套）的回退路径。
+   */
+  app.use('/uploads', (req: UploadReq, res: UploadRes, next: () => void) => {
+    try {
+      // req.path 在这个中间件里是去掉 /uploads 前缀后的部分，签名按完整路径算
+      verifyUploadToken(`/uploads${req.path}`, req.query?.exp, req.query?.sig);
+      next();
+    } catch (e) {
+      res.status(403).json({ code: 40300, message: e instanceof Error ? e.message : '禁止访问' });
+    }
+  });
   app.useStaticAssets(UPLOAD_ROOT, { prefix: '/uploads/' });
   await app.listen(process.env.PORT ?? 3000);
   // eslint-disable-next-line no-console

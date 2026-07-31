@@ -4,6 +4,7 @@ import { BizException } from '../common/biz.exception';
 import { pageArgs, pageResult, PageQuery } from '../common/pagination';
 import { OwnerHousesService } from '../owner/owner-houses.controller';
 import { PrismaService } from '../prisma/prisma.service';
+import { signUploadPaths } from '../upload/upload-access';
 
 /**
  * 工单服务（报修/投诉/建议共用底座）。
@@ -50,7 +51,18 @@ export class TicketsService {
       }),
       this.prisma.raw.ticket.count({ where }),
     ]);
-    return pageResult(list, total, q);
+    /*
+     * 图片地址在**读取时**现签。
+     *
+     * 存库的是裸路径（/uploads/...），签名只有 10 分钟有效——把带签名的地址存进库，
+     * 10 分钟后所有历史图片全部打不开。非 /uploads 开头的（cloud:// 走微信云存储的
+     * 临时 URL、http(s):// 外链）原样返回。
+     */
+    return pageResult(
+      list.map((t) => ({ ...t, images: signUploadPaths(t.images) })),
+      total,
+      q,
+    );
   }
 
   async myDetail(ownerId: string, id: string) {
@@ -59,7 +71,7 @@ export class TicketsService {
       include: { house: { select: { displayName: true, community: { select: { name: true } } } } },
     });
     if (!ticket || ticket.wxUserId !== ownerId) throw new BizException(ErrorCode.NOT_FOUND);
-    return ticket;
+    return { ...ticket, images: signUploadPaths(ticket.images) };
   }
 
   async rate(ownerId: string, id: string, rating: number, comment?: string) {
@@ -93,13 +105,18 @@ export class TicketsService {
       }),
       this.prisma.t.ticket.count({ where }),
     ]);
-    return pageResult(list, total, q);
+    // 同上：读取时现签
+    return pageResult(
+      list.map((t) => ({ ...t, images: signUploadPaths(t.images) })),
+      total,
+      q,
+    );
   }
 
   private async mustGet(id: string) {
     const ticket = await this.prisma.t.ticket.findUnique({ where: { id } });
     if (!ticket) throw new BizException(ErrorCode.NOT_FOUND);
-    return ticket;
+    return { ...ticket, images: signUploadPaths(ticket.images) };
   }
 
   async process(id: string, assigneeName: string) {

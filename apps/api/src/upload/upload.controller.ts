@@ -8,6 +8,7 @@ import { ErrorCode } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { OwnerGuard } from '../auth/owner.guard';
 import { BizException } from '../common/biz.exception';
+import { signUploadUrl } from './upload-access';
 import { WxCloudService } from '../wx/wx-cloud.service';
 import { RateLimit } from '../common/rate-limit.guard';
 
@@ -97,7 +98,17 @@ export const __test_assertRealImage = assertRealImage;
 function toResult(file?: Express.Multer.File) {
   if (!file) throw new BizException(ErrorCode.UPLOAD_INVALID, '未收到文件');
   assertRealImage(file);
-  return { url: `/uploads/${monthDir()}/${file.filename}` };
+  /*
+   * url 返回**裸路径**，viewUrl 返回带签名的即时可用地址。
+   *
+   * 这个区分是必须的：url 会被前端存进 Ticket.images / WorkLog.images，而签名只有
+   * 10 分钟有效 —— 把带签名的地址存进库，10 分钟后所有历史图片全部打不开。
+   * 签名要在**读取时**按当次请求现签（见 signUploadPaths），存的必须是裸路径。
+   *
+   * viewUrl 供上传后立刻预览用（此时签名还新鲜），不入库。
+   */
+  const pathname = `/uploads/${monthDir()}/${file.filename}`;
+  return { url: pathname, viewUrl: signUploadUrl(pathname) };
 }
 
 /** 云存储上传用：把文件读进内存（不落盘），再转存微信云存储 */
