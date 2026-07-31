@@ -101,6 +101,82 @@ describe('卡券：物业发券 → 领取 → 核销', () => {
     expect(res.body.data.list[0].coupon.name).toBe('物业费满100减10');
   });
 
+  it('并发领取不会超发——靠数据库唯一约束，不是靠应用层 count', async () => {
+    /*
+     * 这条对着真 MySQL 验的是数据库级保证，不是 mock。
+     *
+     * 原实现在事务外 count 一次再进事务（TOCTOU）：同一用户并发两次领取都读到 0、
+     * 都通过校验，各自建一条记录 —— 领到超额的券，而每张券都是实打实的抵扣金额。
+     * 修法是 UserCoupon 上加 @@unique([couponId, wxUserId, claimSeq])，
+     * 并发时必有一方撞 P2002。
+     *
+     * 单元测试里那个「唯一约束」是我用 Set 模拟的，只能证明代码逻辑；
+     * 这里用真数据库 + 真并发，才能证明约束本身在生产的 MySQL 上生效。
+     */
+    const fresh = await request(app.getHttpServer())
+      .post('/api/v1/admin/coupons')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        communityId, name: '并发测试券', type: 'DISCOUNT', faceValue: 5, threshold: 10,
+        totalQty: 50, perUserLimit: 1, validFrom: '2026-01-01', validTo: '2026-12-31',
+      })
+      .expect(200);
+    const cid = fresh.body.data.id;
+
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        request(app.getHttpServer())
+          .post(`/api/v1/owner/coupons/${cid}/claim`)
+          .set('Authorization', `Bearer ${ownerToken}`),
+      ),
+    );
+    const ok = results.filter((r) => r.body.code === 0);
+    const limited = results.filter((r) => r.body.code === 45004);
+
+    // perUserLimit = 1：只能有一次成功，其余必须是「已达上限」
+    expect(ok).toHaveLength(1);
+    expect(limited).toHaveLength(5);
+
+    // 库里也只能有一条，且库存只被扣了一次
+    const rows = await prisma.raw.userCoupon.count({ where: { couponId: cid } });
+    expect(rows).toBe(1);
+    const coupon = await prisma.raw.coupon.findUnique({ where: { id: cid } });
+    expect(coupon!.claimedQty).toBe(1);
+  });
+
+  it('并发核销只有一次成功——两个收银台同时扫同一张券', async () => {
+    /*
+     * 原实现是「findFirst 查到 UNUSED → 无条件 update」：两个收银台同时扫，
+     * 两边都查到 UNUSED、两次 update 都成功，礼品券被兑两份。
+     * 修法是条件 updateMany + count 校验（与支付侧的券消费同一形状）。
+     *
+     * 顺序调用两次是查不出这个问题的（第一次已把状态改掉），必须真并发。
+     */
+    const fresh = await request(app.getHttpServer())
+      .post('/api/v1/admin/coupons')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        communityId, name: '并发核销券', type: 'SERVICE', totalQty: 5, perUserLimit: 1,
+        validFrom: '2026-01-01', validTo: '2026-12-31',
+      })
+      .expect(200);
+    const claim = await request(app.getHttpServer())
+      .post(`/api/v1/owner/coupons/${fresh.body.data.id}/claim`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+    const code = claim.body.data.code;
+
+    const results = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        request(app.getHttpServer())
+          .post(`/api/v1/admin/coupons/verify/${code}`)
+          .set('Authorization', `Bearer ${adminToken}`),
+      ),
+    );
+    expect(results.filter((r) => r.body.code === 0)).toHaveLength(1);
+    expect(results.filter((r) => r.body.code === 45005)).toHaveLength(3);
+  });
+
   it('管理端核销 → 重复核销被拒', async () => {
     const v = await request(app.getHttpServer())
       .post(`/api/v1/admin/coupons/verify/${claimCode}`)
