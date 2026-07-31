@@ -34,6 +34,15 @@ export const ErrorCode = {
   METER_READING_MISSING: { code: 42003, message: '缺少本期抄表读数' },
   SHARE_POOL_MISSING: { code: 42004, message: '缺少本期公摊总额' },
   FORMULA_INVALID: { code: 42005, message: '自定义公式不合法' },
+  /*
+   * 本期读数与**后一期**冲突（不是与上期）。
+   *
+   * 单独一个码而不是复用 METER_READING_BACKWARD：BizException 会把错误码的默认文案
+   * 拼在自定义说明前面（`默认：说明`），复用那个码会得到
+   * 「本期读数不能小于上期读数：本期读数 1300 大于后一期(2026-07)的 1234.5」——
+   * 一句话里两个相反的判断，抄表员读完不知道到底该往上改还是往下改。
+   */
+  METER_READING_FORWARD_CONFLICT: { code: 42006, message: '本期读数与后一期不一致' },
 
   // 43xxx 账单与支付
   BILL_NOT_PAYABLE: { code: 43001, message: '账单不可支付' },

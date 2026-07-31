@@ -78,8 +78,13 @@ export class MeterService {
     });
     if (next) {
       if (dto.value > Number(next.value)) {
+        /*
+         * 用 FORWARD_CONFLICT 而不是 BACKWARD：BizException 会把错误码的默认文案拼在
+         * 说明前面，用 BACKWARD 会得到「本期读数不能小于上期读数：本期读数 1300
+         * 大于后一期…」—— 一句话里两个相反的判断。
+         */
         throw new BizException(
-          ErrorCode.METER_READING_BACKWARD,
+          ErrorCode.METER_READING_FORWARD_CONFLICT,
           `本期读数 ${dto.value} 大于后一期(${next.period})的 ${next.value}，请先核对`,
         );
       }

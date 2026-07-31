@@ -15,6 +15,18 @@ describe('计费配置：规则/抄表/公摊', () => {
   const CLEAN = async () => {
     const t = await prisma.raw.tenant.findUnique({ where: { code: 'cfg-t11' } });
     if (t) {
+      /*
+       * 账单/批次/出账记录也要清。
+       *
+       * 「后一期已出账后不许改读数」那条用例会真的出一次账 ——
+       * 不清的话下次跑就删不掉 feeRule（被 Bill 引用）、进而删不掉租户，
+       * 整个文件连坐全红。我第一次加这条用例时就是这么红了 15 条。
+       * 顺序按外键依赖从叶到根。
+       */
+      await prisma.raw.paymentBill.deleteMany({ where: { bill: { tenantId: t.id } } });
+      await prisma.raw.bill.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.billRun.deleteMany({ where: { tenantId: t.id } });
+      await prisma.raw.billBatch.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.sharePool.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.meterReading.deleteMany({ where: { tenantId: t.id } });
       await prisma.raw.feeRule.deleteMany({ where: { tenantId: t.id } });
@@ -99,6 +111,55 @@ describe('计费配置：规则/抄表/公摊', () => {
 
     const backward = await post('/meter-readings', { houseId, meterType: 'WATER', period: '2026-08', value: 1000 }).expect(200);
     expect(backward.body.code).toBe(42002);
+  });
+
+  /*
+   * 「改本期读数」的两道约束此前零覆盖（meter.controller 80-96 行），
+   * 而它们保护的是用量计算 —— 用量错一位，那户的水电费就错一位。
+   */
+  it('改本期读数不能超过后一期：否则后一期用量变负', async () => {
+    // 已有 2026-06=1200.3、2026-07=1235.0。把 6 月改到 1300 会让 7 月用量变成负数
+    const res = await post('/meter-readings', {
+      houseId, meterType: 'WATER', period: '2026-06', value: 1300,
+    }).expect(200);
+    // 42006 而不是 42002：这是与「后一期」冲突，不是「小于上期」——
+    // 复用后者会让提示变成「不能小于上期读数：…大于后一期…」，一句话两个相反判断
+    expect(res.body.code).toBe(42006);
+    expect(res.body.message).toContain('2026-07');
+    expect(res.body.message).toContain('1234.5');
+    // 提示里不得出现相反的说法
+    expect(res.body.message).not.toContain('不能小于上期');
+
+    // 原值必须没被改动
+    const kept = await prisma.raw.meterReading.findFirst({
+      where: { houseId, meterType: 'WATER', period: '2026-06' },
+    });
+    expect(Number(kept!.value)).toBe(1200.3);
+  });
+
+  it('后一期已出账后，本期读数不许再改', async () => {
+    /*
+     * 这是更严重的一种：后一期已经按当时的用量出了账单并可能已缴费，
+     * 改本期读数会让那张已出的账单「用量」与读数不再自洽 ——
+     * 账单金额已经收了钱，对不上就只能人工查账。
+     */
+    const rule = await prisma.raw.feeRule.create({
+      data: {
+        tenantId, communityId, name: '水费(后一期)', houseType: 'RESIDENCE', ruleType: 'METER',
+        params: { unitPrice: 3, meterType: 'WATER' }, period: 'MONTHLY', billDay: 1, dueDays: 15,
+      },
+    });
+    const gen = await post('/bill-runs', { ruleId: rule.id, period: '2026-07' }).expect(200);
+    expect(gen.body.code).toBe(0);
+    expect(gen.body.data.generated).toBe(1);
+
+    const res = await post('/meter-readings', {
+      houseId, meterType: 'WATER', period: '2026-06', value: 1100,
+    }).expect(200);
+    expect(res.body.code).toBe(40000);
+    // 必须说清是哪一期的哪张账单挡着
+    expect(res.body.message).toContain('2026-07');
+    expect(res.body.message).toContain('已出账');
   });
 
   it('同期重复录入为覆盖更新', async () => {
