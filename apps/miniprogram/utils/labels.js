@@ -34,8 +34,8 @@ const INVOICE_STATUS = {
   ISSUED: '已开具',
   REJECTED: '已驳回',
   CANCELED: '已取消',
-  REVERSAL_REQUIRED: '待红冲',
-  REVERSED: '已红冲',
+  REVERSAL_REQUIRED: '待作废重开',
+  REVERSED: '已作废',
 };
 
 /** 发票抬头类型 */
@@ -48,12 +48,39 @@ const TICKET_STATUS = { PENDING: '待受理', PROCESSING: '处理中', DONE: '�
 /** 访客通行码 */
 const PASS_STATUS = { ACTIVE: '有效', USED: '已使用', EXPIRED: '已过期', CANCELED: '已取消' };
 
-/** 生活服务订单 */
-const SERVICE_ORDER_STATUS = { PENDING: '待受理', ACCEPTED: '已接单', DONE: '已完成', CANCELED: '已取消' };
+/**
+ * 生活服务订单。
+ * PENDING 取「待接单」而不是「待受理」：与工单的 TICKET_STATUS.PENDING（待受理）
+ * 区分开是对的——物业接单 ≠ 受理工单，是两件事。原先本表写「待受理」而 services.js
+ * 自建的表写「待接单」，且页面用的是后者，本表形同虚设。
+ */
+const SERVICE_ORDER_STATUS = { PENDING: '待接单', ACCEPTED: '已接单', DONE: '已完成', CANCELED: '已取消' };
 
 /** 优惠券 */
 const COUPON_TYPE = { DISCOUNT: '满减', SERVICE: '服务券', GIFT: '礼品券' };
-const USER_COUPON_STATUS = { UNUSED: '未使用', USED: '已核销', EXPIRED: '已过期' };
+// USED 取「已使用」：核销是财务术语，且本文件上方 PASS_STATUS.USED 就是「已使用」,
+// 同一个 key 在同一个文件里两种译法是原先的状态。
+const USER_COUPON_STATUS = { UNUSED: '未使用', USED: '已使用', EXPIRED: '已过期' };
+
+/**
+ * 物业工作分类（工作照片墙 / 首页动态 / 社区页 / 详情页共用）。
+ *
+ * 原先在 4 个页面各写一份，且互相矛盾：index.js 与 community.js 的 OTHER 是
+ * 「公示」，work-wall.js 与 work-detail.js 是「其他」；INSPECTION 在 work-detail.js
+ * 是「日常巡检」、其余是「巡检」。于是业主在列表看到「巡检」，点进详情变成
+ * 「日常巡检」——一次点击之内换了名字。
+ *
+ * OTHER 取「其他」：「公示」是载体名（物业公示）而不是分类名，把它当分类会和
+ * 页面标题重复。INSPECTION 取「巡检」：短，卡片不折行。
+ */
+const WORK_CATEGORY = {
+  INSPECTION: '巡检',
+  CLEANING: '保洁',
+  GREENING: '绿化',
+  REPAIR: '维修',
+  SECURITY: '安保',
+  OTHER: '其他',
+};
 
 /** 绑定关系 / 来源 / 状态 */
 const BINDING_RELATION = { OWNER: '业主', FAMILY: '家属', TENANT: '租客' };
@@ -75,6 +102,7 @@ function label(map, key, fallback = '—') {
 }
 
 module.exports = {
+  WORK_CATEGORY,
   BILL_STATUS,
   PAYMENT_STATUS,
   INVOICE_STATUS,

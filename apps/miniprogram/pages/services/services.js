@@ -2,8 +2,11 @@ const { request } = require('../../utils/request');
 const { imageUrl } = require('../../utils/upload');
 const { loadMyHouses } = require('../../utils/auth');
 const { fmtDate } = require('../../utils/datetime');
+const { SERVICE_ORDER_STATUS } = require('../../utils/labels');
 
-const ORDER_STATUS = { PENDING: '待接单', ACCEPTED: '已接单', DONE: '已完成', CANCELED: '已取消' };
+// 单一真源在 utils/labels.js（原先本页自建一份，而 labels.js 里那张写的是
+// 「待受理」、从未被引用）。
+const ORDER_STATUS = SERVICE_ORDER_STATUS;
 
 Page({
   data: {

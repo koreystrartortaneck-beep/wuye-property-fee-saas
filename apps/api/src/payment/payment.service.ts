@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ErrorCode } from '@pf/shared';
+import { BILL_STATUS_CN, ErrorCode, PAYMENT_STATUS_CN, cn } from '@pf/shared';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { toCents } from '../billing/engine/money';
@@ -220,7 +220,11 @@ export class PaymentService {
       let payment: { id: string; orderNo: string; totalAmount: unknown };
       try {
         if (bill.status !== 'UNPAID') {
-          throw new BizException(ErrorCode.BILL_NOT_PAYABLE, `账单「${bill.title}」状态为 ${bill.status}`);
+          throw new BizException(
+            ErrorCode.BILL_NOT_PAYABLE,
+            // 业主端会把 message 原样 toast，绝不能把英文枚举甩给业主
+            `账单「${bill.title}」当前${cn(BILL_STATUS_CN, bill.status)}，无法缴费`,
+          );
         }
         // 占用校验：仅进行中订单（CREATED / PREPAY_UNKNOWN）占用账单，历史失败订单不阻挡重试
         const occupied = await this.prisma.raw.paymentBill.findFirst({
@@ -576,7 +580,10 @@ export class PaymentService {
     if (payment.channel !== 'MOCK') throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '真实支付订单不可 mock 确认');
     if (payment.status === 'SUCCESS') return { orderNo, status: 'SUCCESS' }; // 幂等
     if (payment.status !== 'CREATED') {
-      throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, `订单状态 ${payment.status}`);
+      throw new BizException(
+        ErrorCode.PAYMENT_STATE_INVALID,
+        `该笔缴费当前${cn(PAYMENT_STATUS_CN, payment.status)}，无法继续`,
+      );
     }
 
     const paidAt = new Date();

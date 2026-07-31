@@ -8,9 +8,9 @@ const TYPE_LABEL = labels.COUPON_TYPE;
 
 function fmtValue(c) {
   if (c.type === 'DISCOUNT') {
-    return { big: Number(c.faceValue || 0).toFixed(0), sub: `满${Number(c.threshold || 0).toFixed(0)}可用` };
+    return { big: Number(c.faceValue || 0).toFixed(2), sub: `满${Number(c.threshold || 0).toFixed(2)}可用` };
   }
-  return { big: c.faceValue ? Number(c.faceValue).toFixed(0) : '券', sub: TYPE_LABEL[c.type] };
+  return { big: c.faceValue ? Number(c.faceValue).toFixed(2) : '券', sub: TYPE_LABEL[c.type] };
 }
 
 Page({

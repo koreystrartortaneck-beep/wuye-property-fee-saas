@@ -87,7 +87,9 @@ interface Pass {
   house?: { displayName: string };
 }
 
-const STATUS: Record<string, string> = { ACTIVE: '有效', USED: '已核销', EXPIRED: '已过期', CANCELED: '已取消' };
+// 与 packages/shared/src/enum-labels.ts 的 PASS_STATUS_CN 一致（跨端测试强制）。
+// 原为「已核销」——核销是门岗术语，而同文件空状态里写的就是「已使用」，自我矛盾。
+const STATUS: Record<string, string> = { ACTIVE: '有效', USED: '已使用', EXPIRED: '已过期', CANCELED: '已取消' };
 const TAG: Record<string, 'success' | 'info' | 'warning' | 'danger'> = {
   ACTIVE: 'success', USED: 'info', EXPIRED: 'warning', CANCELED: 'danger',
 };

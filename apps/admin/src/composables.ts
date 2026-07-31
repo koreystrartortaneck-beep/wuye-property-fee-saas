@@ -78,7 +78,9 @@ export function currentMonth(): string {
 // ---------- 三期标签 ----------
 
 export const WORK_CATEGORY_LABEL: Record<string, string> = {
-  INSPECTION: '日常巡检',
+  // 与 packages/shared 的 WORK_CATEGORY_CN 一致（跨端测试强制）。
+  // 业主端叫「巡检」，后台叫「日常巡检」会让员工按业主说的词搜不到。
+  INSPECTION: '巡检',
   CLEANING: '保洁',
   GREENING: '绿化',
   SECURITY: '安保',
@@ -94,7 +96,8 @@ export const SERVICE_ORDER_STATUS_LABEL: Record<string, string> = {
 };
 
 export const COUPON_TYPE_LABEL: Record<string, string> = {
-  DISCOUNT: '满减抵扣',
+  // 券面本来就印「满100减10」，业主端也叫「满减」
+  DISCOUNT: '满减',
   SERVICE: '服务券',
   GIFT: '礼品券',
 };

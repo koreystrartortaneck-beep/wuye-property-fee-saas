@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ErrorCode } from '@pf/shared';
+import { ErrorCode, PASS_STATUS_CN, cn } from '@pf/shared';
 import { BizException } from '../common/biz.exception';
 import { pageArgs, pageResult, PageQuery } from '../common/pagination';
 import { OwnerHousesService } from '../owner/owner-houses.controller';
@@ -109,7 +109,8 @@ export class VisitorsService {
   async verify(id: string) {
     const pass = await this.prisma.t.visitorPass.findUnique({ where: { id } });
     if (!pass) throw new BizException(ErrorCode.NOT_FOUND);
-    if (pass.status !== 'ACTIVE') throw new BizException(ErrorCode.PASS_STATE_INVALID, `当前状态 ${pass.status}`);
+    if (pass.status !== 'ACTIVE')
+      throw new BizException(ErrorCode.PASS_STATE_INVALID, `该通行码${cn(PASS_STATUS_CN, pass.status)}，不可使用`);
     const today = dayStart(new Date()).getTime();
     if (dayStart(pass.visitDate).getTime() !== today) {
       throw new BizException(ErrorCode.PASS_STATE_INVALID, '不在有效日期');

@@ -1,8 +1,10 @@
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
 const { requestSubscribe, getSubscribeState } = require('../../utils/subscribe');
+const { BINDING_RELATION } = require('../../utils/labels');
 
-const RELATION_LABEL = { OWNER: '业主', FAMILY: '家属', TENANT: '租客' };
+// 与 utils/labels.js 的 BINDING_RELATION 完全重复，收敛到真源
+const RELATION_LABEL = BINDING_RELATION;
 
 Page({
   data: {

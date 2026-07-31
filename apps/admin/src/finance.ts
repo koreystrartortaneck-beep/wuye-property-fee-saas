@@ -8,13 +8,13 @@ export const BILL_STATUS_LABEL: Record<string, string> = {
   UNPAID: '待缴',
   PAID: '已缴',
   CANCELED: '已作废',
-  DRAFT: '草稿',
+  DRAFT: '未发布',
   REFUNDING: '退款中',
   REFUNDED: '已退款',
 };
 
 export const BILL_BATCH_STATUS_LABEL: Record<string, string> = {
-  DRAFT: '草稿',
+  DRAFT: '未发布',
   GENERATING: '生成中',
   READY: '待发布',
   PUBLISHED: '已发布',
@@ -99,8 +99,8 @@ export const INVOICE_STATUS_LABEL: Record<string, string> = {
   ISSUED: '已开具',
   REJECTED: '已驳回',
   CANCELED: '已取消',
-  REVERSAL_REQUIRED: '需红冲',
-  REVERSED: '已红冲',
+  REVERSAL_REQUIRED: '待作废重开',
+  REVERSED: '已作废',
 };
 
 export const INVOICE_TITLE_TYPE_LABEL: Record<string, string> = { PERSONAL: '个人', ENTERPRISE: '企业' };
