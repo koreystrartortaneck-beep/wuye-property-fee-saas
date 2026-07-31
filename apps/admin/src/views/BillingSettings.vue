@@ -73,7 +73,7 @@
     </div>
 
     <el-dialog v-model="dialog" :title="editTitle" width="min(460px, 92vw)">
-      <el-form label-width="90px">
+      <el-form label-width="var(--form-label-w)">
         <el-form-item label="收款状态">
           <el-radio-group v-model="form.status">
             <el-radio value="OPEN">正常收款</el-radio>

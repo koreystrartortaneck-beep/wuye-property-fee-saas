@@ -136,7 +136,7 @@
 
   <!-- 退款 / 冲正 原因对话框（一次确认，强制原因） -->
   <el-dialog v-model="reasonDialog" :title="reasonTitle" width="min(440px, 92vw)">
-    <el-form label-width="80px">
+    <el-form label-width="var(--form-label-w)">
       <el-form-item label="订单号"><span>{{ current?.orderNo }}</span></el-form-item>
       <el-form-item label="金额"><span>¥{{ yuan(current?.totalAmount) }}（全额）</span></el-form-item>
       <el-form-item label="原因">

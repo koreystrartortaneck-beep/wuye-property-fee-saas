@@ -51,7 +51,7 @@
       @current-change="(p: number) => { page = p; load(); }" />
 
     <el-dialog v-model="dialog" title="发放优惠券" width="min(500px, 92vw)">
-      <el-form label-width="90px">
+      <el-form label-width="var(--form-label-w)">
         <el-form-item label="适用范围">
           <el-select v-model="form.communityId" placeholder="全部小区" clearable>
             <el-option v-for="c in communities" :key="c.id" :label="c.name" :value="c.id" />

@@ -52,7 +52,7 @@
       @current-change="(p: number) => { page = p; load(); }" />
 
     <el-dialog v-model="dialog" title="发布工作照片" width="min(560px, 92vw)">
-      <el-form label-width="80px">
+      <el-form label-width="var(--form-label-w)">
         <el-form-item label="分类">
           <el-select v-model="form.category">
             <el-option v-for="(label, val) in WORK_CATEGORY_LABEL" :key="val" :label="label" :value="val" />

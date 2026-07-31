@@ -250,10 +250,21 @@ const phaseClass = computed(() => {
 });
 
 /** 收缴率可能因退款/多缴越界，越界会让 el-progress 直接报错 */
+/**
+ * 收缴率钳到 0–100，保留一位小数。
+ *
+ * 后端两处的单位约定不同，这是刻意的、不要「统一」：
+ *   stats / today 的 rate 是**百分数**（如 98.5，后端已 Math.round(x*1000)/10）
+ *   operations metrics 的 rate 是**比值**（0–1），所以 Operations 的 pct() 要乘 100
+ * 真正的不一致在小数位：这里原先 Math.round 抹成整数，于是同一个收缴率在「今天」
+ * 显示 99%、在运维页显示 98.6%，看起来像两个数。改为同样保留一位小数。
+ *
+ * el-progress 的 percentage 接受小数，但要求 0–100 且不为 NaN。
+ */
 function clampRate(v: unknown): number {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
-  return Math.min(100, Math.max(0, Math.round(n)));
+  return Math.min(100, Math.max(0, Math.round(n * 10) / 10));
 }
 function rateColor(v: unknown): string {
   const n = clampRate(v);

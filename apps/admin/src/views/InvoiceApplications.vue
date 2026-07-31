@@ -88,7 +88,7 @@
     />
 
     <el-dialog v-model="dialog" title="处理开票申请" width="min(480px, 92vw)">
-      <el-form label-width="90px">
+      <el-form label-width="var(--form-label-w)">
         <el-form-item label="处理结果">
           <el-select v-model="pform.status" style="width: 100%">
             <el-option label="标记处理中" value="PROCESSING" />

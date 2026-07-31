@@ -35,7 +35,7 @@
     />
 
     <el-dialog v-model="dialog" :title="editing ? '编辑小区' : '新建小区'" width="min(420px, 92vw)">
-      <el-form label-width="70px">
+      <el-form label-width="var(--form-label-w)">
         <el-form-item label="名称"><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="地址"><el-input v-model="form.address" /></el-form-item>
         <el-form-item label="管家电话"><el-input v-model="form.servicePhone" placeholder="业主端「联系管家」直拨此号" /></el-form-item>

@@ -81,7 +81,7 @@
   </el-card>
 
   <el-dialog v-model="dialog" :title="editing ? '编辑服务' : '新增服务'" width="min(480px, 92vw)">
-    <el-form label-width="90px">
+    <el-form label-width="var(--form-label-w)">
       <el-form-item label="适用范围">
         <el-select v-model="form.communityId" placeholder="全部小区" clearable :disabled="!!editing">
           <el-option v-for="c in communities" :key="c.id" :label="c.name" :value="c.id" />

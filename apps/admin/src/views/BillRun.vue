@@ -199,7 +199,7 @@
 
   <!-- 新建收费标准 -->
   <el-dialog v-model="ruleDialog" title="设置收费标准" width="min(480px, 92vw)">
-    <el-form label-width="96px">
+    <el-form label-width="var(--form-label-w)">
       <!--
         小区必须显式选择。原先 saveRule 里写死 communities.value[0]?.id，
         多小区的物业公司会把规则建到列表里第一个小区上，而界面上没有任何地方

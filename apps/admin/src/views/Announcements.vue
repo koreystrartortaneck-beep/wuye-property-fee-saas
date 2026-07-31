@@ -50,7 +50,7 @@
     />
 
     <el-dialog v-model="dialog" :title="editing ? '编辑公告' : '发布公告'" width="min(520px, 92vw)">
-      <el-form label-width="80px">
+      <el-form label-width="var(--form-label-w)">
         <el-form-item label="适用范围">
           <el-select v-model="form.communityId" placeholder="全部小区" clearable :disabled="!!editing">
             <el-option v-for="c in communities" :key="c.id" :label="c.name" :value="c.id" />

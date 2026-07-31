@@ -82,7 +82,7 @@
 
     <!-- 新增/编辑 -->
     <el-dialog v-model="dialog" :title="editing ? '编辑房屋' : '新增房屋'" width="min(480px, 92vw)">
-      <el-form label-width="90px">
+      <el-form label-width="var(--form-label-w)">
         <el-form-item label="类型">
           <el-select v-model="form.type" :disabled="!!editing">
             <el-option v-for="(label, val) in HOUSE_TYPE_LABEL" :key="val" :label="label" :value="val" />

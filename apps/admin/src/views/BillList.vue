@@ -154,7 +154,7 @@
       "
       style="margin: 12px 0"
     />
-    <el-form label-width="60px">
+    <el-form label-width="var(--form-label-w)">
       <el-form-item label="原因">
         <el-input v-model="reasonText" type="textarea" :rows="2" placeholder="必填，记入操作留痕" />
       </el-form-item>

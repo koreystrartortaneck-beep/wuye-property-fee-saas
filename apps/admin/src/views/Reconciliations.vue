@@ -113,7 +113,7 @@
     </el-dialog>
 
     <el-dialog v-model="resolveDialog" title="处置对账差异" width="min(440px, 92vw)">
-      <el-form label-width="90px">
+      <el-form label-width="var(--form-label-w)">
         <el-form-item label="处置方式">
           <el-select v-model="resolve.status" style="width: 100%">
             <el-option label="人工关闭（已核实无误）" value="MANUALLY_CLOSED" />

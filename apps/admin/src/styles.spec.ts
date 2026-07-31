@@ -475,4 +475,52 @@ describe('共享样式无死代码', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  it('表单标签列宽走统一令牌，不各页硬编码 px', () => {
+    /*
+     * 原先 15 个表单用了 7 种值（60/70/80/90/96/100/110px）——相邻页面的弹窗打开时
+     * 输入框起始位置不一样，来回切换能明显看出错位。100px 取自全站最长标签
+     * 「目标计费方式」（6 字约需 96px）并留余量，定义在 tokens.css 的 --form-label-w。
+     */
+    const offenders: string[] = [];
+    for (const file of files) {
+      const src = fs.readFileSync(file, 'utf8');
+      for (const m of src.matchAll(/label-width="(\d+)px"/g)) {
+        offenders.push(`${path.relative(SRC, file)} → label-width="${m[1]}px"`);
+      }
+    }
+    if (offenders.length) {
+      throw new Error(
+        '以下表单硬编码了标签列宽，相邻页面的弹窗会错位：\n  ' +
+          offenders.join('\n  ') +
+          '\n请改用 label-width="var(--form-label-w)"。',
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('--form-label-w 已定义且足以容纳全站最长标签', () => {
+    const tokens = read('styles/tokens.css');
+    const m = /--form-label-w:\s*(\d+)px/.exec(tokens);
+    expect(m).not.toBeNull();
+    const width = Number(m![1]);
+
+    // 全站表单里最长的中文标签
+    let longest = '';
+    for (const file of files) {
+      const src = fs.readFileSync(file, 'utf8');
+      for (const lm of src.matchAll(/<el-form-item label="([^"]+)"/g)) {
+        if (lm[1].length > longest.length) longest = lm[1];
+      }
+    }
+    // 中文按 14px 估，加冒号与间距约 12px
+    const need = longest.length * 14 + 12;
+    if (need > width) {
+      throw new Error(
+        `--form-label-w 是 ${width}px，但最长标签「${longest}」（${longest.length} 字）约需 ${need}px，` +
+          '标签会折行或被截断。',
+      );
+    }
+    expect(need).toBeLessThanOrEqual(width);
+  });
 });

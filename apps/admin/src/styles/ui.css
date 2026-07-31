@@ -336,3 +336,12 @@
 .el-table td.el-table__cell {
   padding: var(--sp-2) 0;
 }
+
+/*
+ * 表单标签列宽统一。Element Plus 的 label-width 支持 CSS 变量，所以模板里写
+ * label-width="var(--form-label-w)" 即可，不必各页硬编码 px。
+ */
+.el-form-item__label {
+  color: var(--text-secondary);
+  font-weight: var(--fw-regular);
+}

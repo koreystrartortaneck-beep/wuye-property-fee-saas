@@ -55,7 +55,7 @@
 </el-table>
 
     <el-dialog v-model="dialog" title="新建租户" width="min(460px, 92vw)">
-      <el-form label-width="110px">
+      <el-form label-width="var(--form-label-w)">
         <el-form-item label="公司名称"><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="编码"><el-input v-model="form.code" placeholder="唯一英文标识，如 yunjing" /></el-form-item>
         <el-form-item label="联系人"><el-input v-model="form.contactName" /></el-form-item>

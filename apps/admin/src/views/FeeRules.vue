@@ -95,7 +95,7 @@
     </el-table>
 
     <el-dialog v-model="dialog" :title="editing ? '编辑规则' : '新建规则'" width="min(520px, 92vw)">
-      <el-form label-width="100px">
+      <el-form label-width="var(--form-label-w)">
         <el-form-item label="规则名称"><el-input v-model="form.name" placeholder="如 物业管理费" /></el-form-item>
         <el-form-item label="计费方式">
           <el-select v-model="form.ruleType" :disabled="!!editing">
@@ -153,7 +153,7 @@
     <!-- 公式规则转换为标准计费方式 -->
     <el-dialog v-model="convertDialog" title="转换公式规则" width="min(520px, 92vw)">
       <el-alert class="mb" type="warning" :closable="false" title="转换后规则变为标准计费方式且默认停用，公式将永久失效。" />
-      <el-form label-width="100px">
+      <el-form label-width="var(--form-label-w)">
         <el-form-item label="目标计费方式">
           <el-select v-model="convertForm.ruleType">
             <el-option v-for="(label, val) in CREATE_RULE_TYPE_LABEL" :key="val" :label="label" :value="val" />
