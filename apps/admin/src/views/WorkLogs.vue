@@ -62,19 +62,17 @@
         <el-form-item label="说明"><el-input v-model="form.description" type="textarea" :rows="3" maxlength="500" /></el-form-item>
         <el-form-item label="人员"><el-input v-model="form.staffName" placeholder="选填" style="width: 200px" /></el-form-item>
         <el-form-item label="照片">
+          <!--
+            accept 明确列出后端真正接受的三种（upload.controller 的 ALLOWED = jpeg/png/webp），
+            不用通配写法：通配会让文件选择器放行 HEIC/BMP/GIF，选了才被后端拒，
+            用户得到的是「上传失败」而不是「这种格式不支持」—— iPhone 默认拍照就是 HEIC。
+            tests/upload-accept.test.js 钉住「前端 accept 必须等于后端 ALLOWED」。
+          -->
           <el-upload
             list-type="picture-card"
             :file-list="fileList"
             :http-request="doUpload"
             :on-remove="onRemove"
-            <!--
-              明确列出后端真正接受的三种（ALLOWED = jpeg/png/webp），不用通配写法：
-              · 通配写法会让文件选择器放行 HEIC/BMP/GIF，选了才被后端拒，
-                用户得到的是「上传失败」而不是「这种格式不支持」——iPhone 默认就是 HEIC。
-              · 顺带解决一个工具层面的坑：`image/` 后面紧跟星号构成的字符序列
-                会被「按正则去块注释」的测试当成注释开始，把后面一大段代码一并删掉，
-                于是那些测试里的「不得出现 X」类断言静默失效（见 no-quoted-block-comment 守卫）。
-            -->
             accept="image/jpeg,image/png,image/webp"
             :limit="9"
           >

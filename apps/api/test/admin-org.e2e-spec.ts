@@ -13,6 +13,18 @@ describe('管理端组织管理（租户/小区/房产导入/绑定审核）', (
   let communityId: string;
 
   const CLEAN = async () => {
+    /*
+     * 「跨租户删不掉」那条用例会另建一个租户。它一旦中途失败，
+     * 自己的收尾就不会执行，下次跑就撞 Tenant_code_key —— 整个文件连坐全红。
+     * 测试必须可重复运行：清理放在 CLEAN 里，而不是指望用例自己收尾。
+     */
+    for (const code of ['org-t8-other']) {
+      const extra = await prisma.raw.tenant.findUnique({ where: { code } });
+      if (extra) {
+        await prisma.raw.community.deleteMany({ where: { tenantId: extra.id } });
+        await prisma.raw.tenant.delete({ where: { id: extra.id } });
+      }
+    }
     const t = await prisma.raw.tenant.findUnique({ where: { code: 'org-t8' } });
     if (t) {
       await prisma.raw.houseBinding.deleteMany({ where: { tenantId: t.id } });
@@ -168,5 +180,78 @@ describe('管理端组织管理（租户/小区/房产导入/绑定审核）', (
       .set('X-Tenant-Id', tenantId)
       .expect(200);
     expect(res.body.data.list.map((c: { id: string }) => c.id)).toContain(communityId);
+  });
+
+  describe('删除空小区', () => {
+    /*
+     * 存在的理由：历史遗留的测试小区（名字里写着「勿用/待删」那种）会一直挂在
+     * 首页的「各小区收缴情况」表里 —— 那张表刻意「没有账单也显示 0 而不是隐藏」，
+     * 所以清理只能靠真的删掉；停用不够（停用后仍在表里）。
+     */
+    let emptyId: string;
+
+    it('建一个空小区', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/admin/communities')
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
+        .send({ name: '待删空小区' })
+        .expect(200);
+      expect(res.body.code).toBe(0);
+      emptyId = res.body.data.id;
+    });
+
+    it('有房屋时拒绝删除，并说清挂了什么', async () => {
+      const withHouse = await request(app.getHttpServer())
+        .post('/api/v1/admin/communities')
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
+        .send({ name: '有房屋的小区' })
+        .expect(200);
+      await request(app.getHttpServer())
+        .post('/api/v1/admin/houses/import')
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
+        .send({
+          communityId: withHouse.body.data.id,
+          rows: [{ type: 'RESIDENCE', code: 'del-1', displayName: '待删1', area: 80 }],
+        })
+        .expect(200);
+
+      const res = await request(app.getHttpServer())
+        .delete(`/api/v1/admin/communities/${withHouse.body.data.id}`)
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
+        .expect(200);
+      expect(res.body.code).toBe(40000);
+      // 提示必须指出是什么在挡着 —— 只说「无法删除」等于让人去猜
+      expect(res.body.message).toContain('房屋');
+      expect(res.body.message).toContain('1 条');
+    });
+
+    it('空小区可以删除', async () => {
+      const res = await request(app.getHttpServer())
+        .delete(`/api/v1/admin/communities/${emptyId}`)
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
+        .expect(200);
+      expect(res.body.code).toBe(0);
+      expect(res.body.data.deleted).toBe(true);
+
+      const after = await prisma.raw.community.findUnique({ where: { id: emptyId } });
+      expect(after).toBeNull();
+    });
+
+    it('别家公司的小区删不掉（跨租户）', async () => {
+      const other = await prisma.raw.tenant.create({ data: { name: '别家', code: 'org-t8-other' } });
+      const otherCommunity = await prisma.raw.community.create({
+        data: { tenantId: other.id, name: '别家的小区' },
+      });
+      const res = await request(app.getHttpServer())
+        .delete(`/api/v1/admin/communities/${otherCommunity.id}`)
+        .set('Authorization', `Bearer ${tenantAdminToken}`)
+        .expect(200);
+      expect(res.body.code).toBe(40400);
+      // 必须还在
+      expect(await prisma.raw.community.findUnique({ where: { id: otherCommunity.id } })).toBeTruthy();
+      // 收尾交给 CLEAN 兜底即可，这里删掉只是让同一次运行内不留垃圾
+      await prisma.raw.community.deleteMany({ where: { tenantId: other.id } });
+      await prisma.raw.tenant.delete({ where: { id: other.id } }).catch(() => undefined);
+    });
   });
 });

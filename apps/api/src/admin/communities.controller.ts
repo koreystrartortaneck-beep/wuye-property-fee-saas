@@ -1,7 +1,9 @@
-import { Body, Controller, Get, Injectable, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Injectable, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { AdminGuard } from '../auth/admin.guard';
-import { RolesGuard } from '../auth/roles.decorator';
+import { Roles, RolesGuard } from '../auth/roles.decorator';
+import { ErrorCode } from '@pf/shared';
+import { BizException } from '../common/biz.exception';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -72,6 +74,65 @@ export class CommunitiesService {
   update(id: string, dto: UpdateCommunityDto) {
     return this.prisma.t.community.update({ where: { id }, data: dto });
   }
+
+  /*
+   * 删除前必须清点的**业务数据**。任何一项非空就拒绝，并在提示里说清挂了什么 ——
+   * 只说「无法删除」等于让人去猜。
+   *
+   * 刻意不包含留痕与运维类的表（AuditLog / OperationalAlert / Incident /
+   * IdempotencyRecord / OutboxEvent / PaymentEvent / Reconciliation* / RefundAttempt）：
+   * 审计日志按合规不能删，而它引用一个已删小区是可以接受的 ——
+   * 日志本身带着当时的摘要，追溯不依赖小区仍然存在。
+   * 若把审计日志也算作阻止项，任何被操作过的小区都永远删不掉，这个接口就没有意义了。
+   */
+  private static readonly BLOCKING: Array<[string, string]> = [
+    ['house', '房屋'],
+    ['bill', '账单'],
+    ['billBatch', '出账批次'],
+    ['feeRule', '收费规则'],
+    ['payment', '缴费记录'],
+    ['refund', '退款'],
+    ['ticket', '工单'],
+    ['visitorPass', '访客通行码'],
+    ['workLog', '物业公示'],
+    ['announcement', '公告'],
+    ['coupon', '卡券'],
+    ['serviceItem', '生活服务'],
+    ['serviceOrder', '服务预约'],
+    ['invoiceApplication', '发票申请'],
+    ['communityCollectionPolicy', '收款策略'],
+  ];
+
+  /**
+   * 删除空小区。
+   *
+   * 存在的理由：历史遗留的测试小区（比如名字里写着「勿用/待删」的）会一直出现在
+   * 首页的「各小区收缴情况」表里 —— 而那张表刻意「没有账单也显示 0 而不是隐藏」
+   * （隐藏会让物业以为漏了小区）。所以清理只能靠真的删掉。
+   *
+   * 停用（status=DISABLED）不够：停用后它不再参与出账、业主端也看不到，
+   * 但仍留在那张表里。
+   */
+  async remove(id: string) {
+    const community = await this.prisma.t.community.findFirst({ where: { id }, select: { id: true, name: true } });
+    if (!community) throw new BizException(ErrorCode.NOT_FOUND, '小区不存在或不属于当前物业公司');
+
+    const client = this.prisma.t as unknown as Record<string, { count(args: unknown): Promise<number> }>;
+    const attached: string[] = [];
+    for (const [model, label] of CommunitiesService.BLOCKING) {
+      const n = await client[model].count({ where: { communityId: id } });
+      if (n > 0) attached.push(`${label} ${n} 条`);
+    }
+    if (attached.length > 0) {
+      throw new BizException(
+        ErrorCode.VALIDATION,
+        `「${community.name}」下还有 ${attached.join('、')}，不能删除。请先转移或清理这些数据，或改为停用该小区。`,
+      );
+    }
+
+    await this.prisma.t.community.delete({ where: { id } });
+    return { deleted: true, name: community.name };
+  }
 }
 
 @Controller('admin/communities')
@@ -92,5 +153,15 @@ export class CommunitiesController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateCommunityDto) {
     return this.service.update(id, dto);
+  }
+
+  /*
+   * 删除限 TENANT_ADMIN：STAFF 的日常是抄表、处理工单，没有删小区的理由，
+   * 而误删的代价（哪怕有空校验兜着）不该由一个日常角色承担。
+   */
+  @Roles('TENANT_ADMIN')
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.service.remove(id);
   }
 }
