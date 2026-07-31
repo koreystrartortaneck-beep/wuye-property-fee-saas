@@ -87,13 +87,26 @@ describe('安全响应头', () => {
    * helper 里的 expect 失败会让整个 suite「跑不起来」（Tests: 0），
    * 注入错误时看不出是哪条断言挂了，只能看到 suite crash。第一版就是这样。
    */
-  function setupAndCapture(): { headers: Record<string, string>; guards: unknown[] } {
+  function setupAndCapture(): { headers: Record<string, string>; guards: unknown[]; paths: string[] } {
     const out: Record<string, string> = {};
     let mw: ((req: unknown, res: { setHeader(k: string, v: string): void }, next: () => void) => void) | null = null;
     const guards: unknown[] = [];
+    const paths: string[] = [];
     const app = {
-      use: (fn: typeof mw) => {
-        mw = fn;
+      /*
+       * setupApp 现在有两类 use 调用：
+       *   use(fn)            —— 安全响应头中间件（本组要断言的）
+       *   use('/uploads', fn) —— 上传令牌校验（从 main.ts 移过来的）
+       * 只认单参形式，否则会把路径字符串当成中间件，调用时 TypeError
+       * 导致整个 suite「跑不起来」（Tests: 0）—— 我就是这么撞上的。
+       */
+      use: (a: unknown, b?: unknown) => {
+        if (typeof a === 'string') {
+          paths.push(a);
+          return;
+        }
+        mw = a as typeof mw;
+        void b;
       },
       setGlobalPrefix: () => undefined,
       useGlobalPipes: () => undefined,
@@ -107,11 +120,17 @@ describe('安全响应头', () => {
     // 显式取出再调：TS 会把「只在回调里赋值」的 mw 窄化成 never
     const middleware = mw as Mw | null;
     if (middleware) middleware({}, { setHeader: (k: string, v: string) => (out[k] = v) }, () => undefined);
-    return { headers: out, guards };
+    return { headers: out, guards, paths };
   }
 
   const captured = setupAndCapture();
   const h = captured.headers;
+
+  it('上传目录的令牌校验在 setupApp 里挂上', () => {
+    // 它原本在 main.ts —— 而没有任何测试加载 main.ts，等于零覆盖。
+    // 挂进 setupApp 后，测试应用与生产装配同一份代码。
+    expect(captured.paths).toContain('/uploads');
+  });
 
   it('速率限制守卫已全局注册（不注册的话各端点的 @RateLimit 只是元数据、不生效）', () => {
     expect(captured.guards.some((g) => g instanceof RateLimitGuard)).toBe(true);

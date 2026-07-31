@@ -181,21 +181,39 @@ describe('签名必须真的接到链路上', () => {
   });
 
   it('静态目录挂载之前有校验中间件', () => {
-    const src = code('../main.ts');
-    const verifyAt = src.indexOf('verifyUploadToken(');
-    const staticAt = src.indexOf('useStaticAssets(');
-    expect(verifyAt).toBeGreaterThan(-1);
+    /*
+     * 中间件已从 main.ts 移进 setupApp —— 原因是**没有任何测试加载 main.ts**，
+     * 放在那里等于这段安全控制零覆盖（现在由 uploads-access.http.spec.ts 用真实
+     * HTTP 请求覆盖 403/放行/过期/篡改各分支）。
+     *
+     * 这条守卫保留的是 HTTP 测试覆盖不到的那一半：**顺序**。
+     * 测试应用不调 useStaticAssets，所以「校验是否早于静态目录」只能在这里钉。
+     * 顺序反了的话 express 会先把静态文件吐出去，校验形同不存在。
+     *
+     * 教训：上一版把这条钉在 main.ts 的文本上，我合理地把代码移走后它就误报了。
+     * 钉「位置」的守卫脆，钉「关系」的守卫才稳 —— 现在钉的是 setupApp 与
+     * useStaticAssets 的先后关系，中间件具体放在哪个文件都不影响。
+     */
+    const setup = code('../setup-app.ts');
+    expect(setup).toContain('verifyUploadToken(');
+    expect(setup).toContain('uploadTokenGuard(app)');
+
+    const main = code('../main.ts');
+    const setupAt = main.indexOf('setupApp(app)');
+    const staticAt = main.indexOf('useStaticAssets(');
+    expect(setupAt).toBeGreaterThan(-1);
     expect(staticAt).toBeGreaterThan(-1);
-    // 顺序反了的话静态文件会先被 express 直接吐出去
-    expect(verifyAt).toBeLessThan(staticAt);
+    expect(setupAt).toBeLessThan(staticAt);
   });
 
   it('校验失败返回 403 而不是放行', () => {
-    const src = code('../main.ts');
+    // 行为层面已由 uploads-access.http.spec.ts 覆盖；这里只钉「catch 里不得放行」——
+    // 那是一行之差就能把整套机制变成装饰的地方。
+    const src = code('../setup-app.ts');
     expect(src).toMatch(/res\.status\(403\)/);
-    // catch 里不得调 next()
-    const block = src.slice(src.indexOf("app.use('/uploads'"), src.indexOf('useStaticAssets('));
+    const block = src.slice(src.indexOf("inner.use('/uploads'"), src.indexOf('function setupApp'));
     const catchBody = /catch \([\s\S]{0,200}?\}/.exec(block)?.[0] ?? '';
+    expect(catchBody).not.toBe('');
     expect(catchBody).not.toContain('next()');
   });
 });
