@@ -17,6 +17,12 @@ import { BizException } from './biz.exception';
  *   POST /admin/arrears/dun            批量催缴，有幂等键但没有频率上限
  *   POST /admin/cloud-files/urls       每次向微信换一批 2 小时有效的下载链接
  *   POST /payment/wxpay/notify         验签在限流之后，可被用来消耗 RSA 验签的 CPU
+ *   POST /payment/wxpay/refund-notify  同上
+ *
+ * 上面这份清单不是说明文字，是被测试核对的契约（rate-limit.guard.spec.ts）：
+ * 列进来却没标 @RateLimit 会让测试失败。加这条守卫是因为清单里的
+ * /payment/wxpay/notify 原本就**只写在注释里、没有真标注** —— 注释宣称的保护不存在，
+ * 比没有注释更糟：它让人以为这里已经防住了。
  *
  * 实现刻意保持与登录限流一致的形态：**单实例内存计数**。
  * 现在是 min=1 常驻单实例，够用；水平扩展时必须换共享存储（Redis），

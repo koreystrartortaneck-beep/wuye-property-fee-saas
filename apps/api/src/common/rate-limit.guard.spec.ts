@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { Reflector } from '@nestjs/core';
 import { RATE_LIMIT_KEY, RateLimitGuard, type RateLimitOptions } from './rate-limit.guard';
 
@@ -101,5 +103,169 @@ describe('RateLimitGuard', () => {
     for (let i = 0; i < 25_000; i += 1) guard.canActivate(ctx(`10.0.${(i >> 8) & 255}.${i & 255}`));
     const size = (guard as unknown as { hits: Map<string, unknown> }).hits.size;
     expect(size).toBeLessThanOrEqual(20_001);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// 注释里宣称的保护必须真实存在
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 起因：guard 的文档注释列了 6 个「真正需要限流」的端点，其中
+ * POST /payment/wxpay/notify **只写在注释里，从来没标 @RateLimit**。
+ * 注释宣称的保护不存在比没有注释更糟 —— 它让人以为这里已经防住了，不会再去看。
+ *
+ * 所以把那份清单变成契约：列进注释的端点必须真的有标注。
+ */
+describe('限流清单与实际标注一致', () => {
+  const apiSrc = join(__dirname, '..');
+
+  /** 递归收集所有 .ts（排除 spec） */
+  function walk(dir: string): string[] {
+    const out: string[] = [];
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) out.push(...walk(p));
+      else if (e.name.endsWith('.ts') && !e.name.includes('.spec.')) out.push(p);
+    }
+    return out;
+  }
+
+  /**
+   * 建立「完整路由 → 该处理器是否标了 @RateLimit」。
+   *
+   * 装饰器块的界定：从上一个成员结束（或类体开始）到本 HTTP 方法装饰器之间的文本。
+   * 不能用「往上固定看 N 行」—— 那会把上一个方法的 @RateLimit 算到本方法头上，
+   * 得到一份假的通过。这个坑本轮已经踩过（methodBody 的定长切片越界到下一个方法）。
+   */
+  function collectRoutes(): Map<string, boolean> {
+    const routes = new Map<string, boolean>();
+    for (const file of walk(apiSrc)) {
+      const whole = readFileSync(file, 'utf8');
+      /*
+       * 必须按 @Controller 分段：upload.controller.ts 一个文件里有两个控制器
+       * （owner/upload 与 admin/upload）。只取第一个 @Controller 会把 admin 的方法
+       * 算成 owner 前缀 —— 于是 POST /admin/upload 被误报成「没标限流」，
+       * 而它其实标了。这是我这条守卫的第一版真实犯下的错。
+       */
+      const ctrlRe = /@Controller\(\s*'([^']*)'\s*\)/g;
+      const segs: Array<{ prefix: string; start: number; end: number }> = [];
+      let c: RegExpExecArray | null;
+      while ((c = ctrlRe.exec(whole))) {
+        segs.push({ prefix: c[1], start: c.index, end: whole.length });
+        if (segs.length > 1) segs[segs.length - 2].end = c.index;
+      }
+      if (!segs.length) continue;
+      for (const seg of segs) {
+      const src = whole.slice(seg.start, seg.end);
+      const prefix = seg.prefix;
+      const methodRe = /@(Get|Post|Patch|Put|Delete)\(\s*(?:'([^']*)')?\s*\)/g;
+      let m: RegExpExecArray | null;
+      let blockStart = src.indexOf('{');
+      while ((m = methodRe.exec(src))) {
+        const block = src.slice(blockStart, m.index);
+        const path = [prefix, m[2] ?? ''].filter(Boolean).join('/');
+        const full = `${m[1].toUpperCase()} /${path}`;
+        // 同一路由可能出现在多个控制器（owner/admin 各一份），任一处标了就算标了
+        routes.set(full, (routes.get(full) ?? false) || /@RateLimit\(/.test(block));
+        // 下一个装饰器块从本方法体结束处算起：找本方法的开括号再做括号匹配
+        const bodyOpen = src.indexOf('{', methodRe.lastIndex);
+        blockStart = bodyOpen < 0 ? methodRe.lastIndex : matchBrace(src, bodyOpen);
+      }
+      }
+    }
+    return routes;
+  }
+
+  /** 从 open 处的 { 起做括号匹配，返回配对 } 之后的位置 */
+  function matchBrace(src: string, open: number): number {
+    let depth = 0;
+    for (let i = open; i < src.length; i++) {
+      if (src[i] === '{') depth++;
+      else if (src[i] === '}') {
+        depth--;
+        if (depth === 0) return i + 1;
+      }
+    }
+    return src.length;
+  }
+
+  /** 从 guard 的文档注释里解析出被宣称限流的端点 */
+  function documentedRoutes(): string[] {
+    const doc = readFileSync(join(__dirname, 'rate-limit.guard.ts'), 'utf8');
+    const head = doc.slice(0, doc.indexOf('*/'));
+    const out: string[] = [];
+    for (const line of head.split('\n')) {
+      const m = /^\s*\*\s+(GET|POST|PATCH|PUT|DELETE)\s+(\/\S+)/.exec(line);
+      if (!m) continue;
+      // 一行可能写多个：POST /auth/wx-login、/auth/phone
+      for (const p of m[2].split(/[、,]/)) if (p.startsWith('/')) out.push(`${m[1]} ${p}`);
+    }
+    return out;
+  }
+
+  it('注释里能解析出端点清单（解析器自身别静默返回空）', () => {
+    // 解析器写坏时会返回空数组，让下面那条断言变成永真 —— 先钉住它非空
+    const docs = documentedRoutes();
+    expect(docs.length).toBeGreaterThanOrEqual(7);
+    expect(docs).toContain('POST /payment/wxpay/notify');
+  });
+
+  it('路由收集器自身能认出已知的标注与未标注端点', () => {
+    // 同理：收集器写坏（比如全返回 true）会让主断言永真
+    const routes = collectRoutes();
+    expect(routes.get('POST /auth/wx-login')).toBe(true);
+    // 业主查账单是纯读、没限流，用它验证收集器不是无脑返回 true
+    expect(routes.get('GET /owner/bills')).toBe(false);
+  });
+
+  it('一个文件里的多个 @Controller 都要各按自己的前缀算', () => {
+    // upload.controller.ts 有 owner/upload 与 admin/upload 两个控制器。
+    // 只认第一个会让 admin/upload 凭空消失、并被误报成未限流。
+    const routes = collectRoutes();
+    expect(routes.get('POST /owner/upload')).toBe(true);
+    expect(routes.get('POST /admin/upload')).toBe(true);
+  });
+
+  it('清单里的每个端点都真的标了 @RateLimit', () => {
+    const routes = collectRoutes();
+    const missing = documentedRoutes().filter((r) => routes.get(r) !== true);
+    expect(missing).toEqual([]);
+  });
+
+  it('反向也要成立：标了限流的端点必须写进清单', () => {
+    /*
+     * 只做「清单 → 标注」这一个方向有个洞：从注释里删掉一行就能让契约缩小，
+     * 测试照样全绿 —— 我把它注入验证时正是这么漏过去的。
+     * 双向核对之后，删注释会因为「标了却没写进清单」失败，改不动。
+     *
+     * 顺带的好处：以后给某个端点加限流，必须同时把理由写进那份清单，
+     * 阈值取值的依据不会散落在各个文件里。
+     */
+    const routes = collectRoutes();
+    const documented = new Set(documentedRoutes());
+    const undocumented = [...routes.entries()]
+      .filter(([, limited]) => limited)
+      .map(([r]) => r)
+      .filter((r) => !documented.has(r))
+      .sort();
+    expect(undocumented).toEqual([]);
+  });
+
+  it('支付与退款回调的阈值必须足够宽——误伤等于钱不落账', () => {
+    /*
+     * 回调限流是有风险的防护：拒掉正常回调意味着支付不落账。
+     * 阈值必须高到绝不可能碰上正常流量（微信来自少量固定 IP，1600 户集中缴费
+     * 也远达不到单 IP 每秒 10 次），否则这条防护本身就是故障源。
+     */
+    for (const f of ['../payment/wxpay-notify.controller.ts', '../payment/wxpay-refund-notify.controller.ts']) {
+      const src = readFileSync(join(__dirname, f), 'utf8');
+      const m = /@RateLimit\(\{\s*limit:\s*(\d+),\s*windowMs:\s*([\d_]+)/.exec(src);
+      expect(m).not.toBeNull();
+      const limit = Number(m![1]);
+      const windowMs = Number(m![2].replace(/_/g, ''));
+      expect(windowMs).toBe(60_000);
+      expect(limit).toBeGreaterThanOrEqual(600);
+    }
   });
 });
