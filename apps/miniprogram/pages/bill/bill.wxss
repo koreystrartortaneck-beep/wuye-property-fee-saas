@@ -33,6 +33,18 @@
   font-weight: 900;
 }
 
+/*
+ * 汇总的占位/错误文案：与金额同位置，但**不能长得像金额** ——
+ * 用小一号字 + 降透明度，避免被当成一个真实数字读走。
+ * 与 pay-confirm 的 .pay-amount-loading 同一处理。
+ */
+.summary-amount-hint {
+  font-size: 26rpx;
+  font-weight: 600;
+  opacity: 0.62;
+  letter-spacing: 0;
+}
+
 .summary-btn {
   height: 68rpx;
   padding: 0 30rpx;

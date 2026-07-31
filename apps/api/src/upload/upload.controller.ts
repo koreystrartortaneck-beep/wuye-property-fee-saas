@@ -160,7 +160,22 @@ export class AdminUploadController {
       const ext = EXT[file.mimetype] ?? '.jpg';
       const cloudPath = `admin/${monthDir()}/${Date.now()}-${randomBytes(6).toString('hex')}${ext}`;
       const fileId = await this.wxCloud.uploadToCloud(cloudPath, file.buffer, file.mimetype);
-      return { url: fileId };
+      /*
+       * 顺手换一个临时下载 URL 一起返回。
+       *
+       * 为什么必须在这里返回：cloud:// 浏览器不能直接渲染，前端要预览刚上传的图
+       * 就得调 /admin/cloud-files/urls 去换 —— 而那个端点即将按「fileID 必须出现在
+       * 本租户的记录里」校验归属，此刻这张图还没保存进任何一条记录，
+       * 校验一加上，管理员就看不到自己刚上传的图了。
+       *
+       * 换 URL 失败不能连带让上传失败：图已经在云上了，
+       * 丢掉 fileId 等于让管理员白传一次。降级为不带 viewUrl，前端仍能保存。
+       */
+      const viewUrl = await this.wxCloud
+        .resolveFileUrls([fileId])
+        .then((m) => m[fileId] ?? '')
+        .catch(() => '');
+      return { url: fileId, viewUrl };
     }
     return toResult(file);
   }

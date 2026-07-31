@@ -23,6 +23,8 @@ interface ReceiptPayment {
   orderNo: string;
   channel: string;
   totalAmount: unknown;
+  /** 券抵扣额。收据必须带上它，否则明细各行之和与实收金额对不上 */
+  discountAmount?: unknown;
   paymentBills?: Array<{ bill?: ReceiptBill | null }>;
 }
 
@@ -383,6 +385,20 @@ export class PaymentService {
       community: firstHouse?.community?.name ?? null,
       house: firstHouse?.displayName ?? null,
       bills,
+      /*
+       * 券抵扣额必须进快照。
+       *
+       * 没有它，收据上的明细是各张账单的原价（合计 1200），而「实收金额」是扣券后的
+       * 1180 —— **这张收据自己对不上账**，凭空少 20 元。而收据页明确写着
+       * 「可发送给他人或用于报销」，对不上账的凭证会被财务退回。
+       *
+       * 快照是不可变的，历史订单没有这个字段：前端按缺失处理（不显示抵扣行），
+       * 不能因为字段不存在就把整张收据判为异常。
+       */
+      discountAmount:
+        payment.discountAmount != null && Number(String(payment.discountAmount)) > 0
+          ? String(payment.discountAmount)
+          : null,
       issuedAt: new Date().toISOString(),
     };
     return { receiptNo, snapshot };

@@ -12,11 +12,21 @@
     <button class="gold-button state-cta" bindtap="goBind">去绑定房屋</button>
   </view>
 
-  <!-- 汇总细条（单账单单支付：仅展示待缴合计，逐张在卡片内缴费） -->
+  <!--
+    汇总细条（单账单单支付：仅展示待缴合计，逐张在卡片内缴费）。
+
+    三态必须分开：加载中 / 取不到 / 有值。
+    此前只有「有值」一种，而 data 初值是 unpaidCount:0 + unpaidTotal:'0.00'，
+    于是首屏先画出「待缴合计 · 0 笔 ¥ 0.00」——下面列表明明列着十几笔待缴，
+    两个数字自相矛盾，而更醒目的那个是错的；summary 请求失败时它还会一直停在 0。
+    首页早就按这个原则做了独立加载态，账单页当时漏了。
+  -->
   <view wx:if="{{!noHouse}}" class="summary-card">
     <view class="summary-left">
-      <view class="summary-label">待缴合计 · {{unpaidCount}} 笔</view>
-      <view class="summary-amount amount">¥ {{unpaidTotal}}</view>
+      <view class="summary-label">待缴合计{{summaryLoaded ? ' · ' + unpaidCount + ' 笔' : ''}}</view>
+      <view wx:if="{{summaryLoaded}}" class="summary-amount amount">¥ {{unpaidTotal}}</view>
+      <view wx:elif="{{summaryError}}" class="summary-amount summary-amount-hint" bindtap="loadSummary">取不到，点击重试</view>
+      <view wx:else class="summary-amount summary-amount-hint">计算中…</view>
     </view>
   </view>
 

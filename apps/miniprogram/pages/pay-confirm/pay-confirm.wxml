@@ -9,7 +9,18 @@
   -->
   <view class="pay-card">
     <view class="pay-label">应付金额</view>
-    <view wx:if="{{loaded}}" class="pay-amount amount">¥ {{totalAmount}}</view>
+    <!--
+      这里必须是**扣券之后**的实付金额，和按钮上的数字用同一个表达式。
+
+      原来绑的是 totalAmount（券前）：选了一张抵 20 元的券之后，
+      页面上字号最大、标着「应付金额」的那个数是 1200，
+      而下面的「实付金额」和按钮都是 1180 —— 业主第一眼读到的、最醒目的那个数，
+      不是他实际要付的钱。同屏三个数字里错的偏偏是最大的那个。
+
+      不显示券前原价也不会丢信息：紧接着的「费用明细」与「账单金额 / 优惠券抵扣 /
+      实付金额」三行把差额讲得很清楚。
+    -->
+    <view wx:if="{{loaded}}" class="pay-amount amount">¥ {{pickedCouponId ? payAmount : totalAmount}}</view>
     <view wx:else class="pay-amount amount pay-amount-loading">计算中…</view>
     <view class="pay-house">{{house}}</view>
   </view>

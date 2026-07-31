@@ -32,7 +32,8 @@
 
     <view class="rc-row" wx:for="{{r.items}}" wx:key="title">
       <text class="rc-item">{{item.title}}</text>
-      <text class="rc-val amount">¥{{item.amount}}</text>
+      <!-- 抵扣行带负号，与缴费确认页的「−¥20.00」写法一致；同一个概念不能两页两种写法 -->
+      <text class="rc-val amount">{{item.negative ? '−¥' : '¥'}}{{item.amount}}</text>
     </view>
 
     <view class="rc-divider"></view>

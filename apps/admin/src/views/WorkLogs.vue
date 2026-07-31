@@ -67,7 +67,15 @@
             :file-list="fileList"
             :http-request="doUpload"
             :on-remove="onRemove"
-            accept="image/*"
+            <!--
+              明确列出后端真正接受的三种（ALLOWED = jpeg/png/webp），不用通配写法：
+              · 通配写法会让文件选择器放行 HEIC/BMP/GIF，选了才被后端拒，
+                用户得到的是「上传失败」而不是「这种格式不支持」——iPhone 默认就是 HEIC。
+              · 顺带解决一个工具层面的坑：`image/` 后面紧跟星号构成的字符序列
+                会被「按正则去块注释」的测试当成注释开始，把后面一大段代码一并删掉，
+                于是那些测试里的「不得出现 X」类断言静默失效（见 no-quoted-block-comment 守卫）。
+            -->
+            accept="image/jpeg,image/png,image/webp"
             :limit="9"
           >
             <el-icon><Plus /></el-icon>
@@ -149,10 +157,16 @@ function openCreate() {
 }
 
 async function doUpload(opt: { file: File }) {
-  const url = await uploadImage(opt.file);
+  /*
+   * 预览用上传接口一并返回的 viewUrl，不再回头解析。
+   *
+   * /admin/cloud-files/urls 现在按「fileID 必须已出现在本租户的记录里」校验归属，
+   * 而此刻这张图还没保存进任何一条工作日志 —— 再去解析必然被拒，
+   * 管理员会看到一个空白的图片框。
+   */
+  const { url, viewUrl } = await uploadImage(opt.file);
   images.value.push(url);
-  await resolveCloud([url]); // 立即解析新图的临时URL用于预览
-  fileList.value.push({ name: url, url: cloudImgUrl(url) });
+  fileList.value.push({ name: url, url: viewUrl });
 }
 
 function onRemove(file: { url?: string }) {

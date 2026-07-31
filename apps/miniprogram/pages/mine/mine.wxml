@@ -56,9 +56,20 @@
 
   <!-- 申请进度（细行，不占大空间） -->
   <view wx:if="{{pendingBindings.length > 0}}" class="pending-lines">
-    <view class="pending-line" wx:for="{{pendingBindings}}" wx:key="id">
+    <!--
+      被驳回必须看得见、点得动。
+      原来只有那个 8rpx 圆点变红，文字仍是 23rpx 的淡灰、整行不可点 ——
+      业主申请绑定被驳回是需要他改信息重新申请的，这样等于悄悄说了一声，他会一直等下去。
+    -->
+    <view
+      class="pending-line {{item.rejected ? 'pending-line-rejected' : ''}}"
+      wx:for="{{pendingBindings}}"
+      wx:key="id"
+      bindtap="{{item.rejected ? 'goBind' : ''}}"
+    >
       <text class="pending-dot {{item.rejected ? 'dot-rejected' : ''}}"></text>
       <text class="pending-text">{{item.communityName}} {{item.displayName}} · {{item.statusLabel}}{{item.rejectReason ? '（' + item.rejectReason + '）' : ''}}</text>
+      <text wx:if="{{item.rejected}}" class="pending-action">重新申请 ›</text>
     </view>
   </view>
 

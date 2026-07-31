@@ -25,6 +25,13 @@ Page({
     loadingMore: false,
     unpaidCount: 0,
     unpaidTotal: '0.00',
+    /*
+     * 汇总是独立请求，必须有自己的加载/失败态。
+     * 光有初值 0 的话，首屏与请求失败时都会显示「¥ 0.00」——
+     * 业主据此以为自己没有欠费，而同屏的列表里列着十几笔。
+     */
+    summaryLoaded: false,
+    summaryError: false,
   },
 
   onLoad() {
@@ -57,11 +64,22 @@ Page({
   /** 待缴合计以权威 summary 为准（不受当前分页影响） */
   async loadSummary() {
     if (!this.data.house) return;
+    this.setData({ summaryError: false });
     try {
       const s = await request(`/owner/bills/summary?houseId=${this.data.house.houseId}`, { silent: true });
-      this.setData({ unpaidCount: s.unpaidCount || 0, unpaidTotal: s.unpaidTotal || '0.00' });
+      this.setData({
+        unpaidCount: s.unpaidCount || 0,
+        unpaidTotal: s.unpaidTotal || '0.00',
+        summaryLoaded: true,
+      });
     } catch (e) {
-      /* 保留旧值 */
+      /*
+       * 失败时不能装作有值。
+       * 原来只写「保留旧值」——首次加载时旧值就是 0.00，等于把「取不到」显示成「没欠费」。
+       * 已有值的情况下保留旧值是对的（刷新失败不该把已显示的数字抹掉），
+       * 所以只在从未成功过时才切到错误态。
+       */
+      if (!this.data.summaryLoaded) this.setData({ summaryError: true });
     }
   },
 

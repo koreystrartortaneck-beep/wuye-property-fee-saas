@@ -132,6 +132,23 @@
   background: #c45656;
 }
 
+/*
+ * 驳回态：整行转为警示色，并给出「重新申请」入口。
+ * 只把圆点变红是不够的 —— 圆点 8rpx，在一行 23rpx 的淡灰文字旁边等于没有。
+ */
+.pending-line-rejected .pending-text {
+  color: #c45656;
+  font-weight: 600;
+}
+
+.pending-action {
+  flex-shrink: 0;
+  margin-left: 12rpx;
+  font-size: 23rpx;
+  font-weight: 700;
+  color: #c45656;
+}
+
 .pending-text {
   font-size: 23rpx;
   color: #8b8199;

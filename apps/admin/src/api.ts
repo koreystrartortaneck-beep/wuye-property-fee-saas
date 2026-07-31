@@ -60,8 +60,15 @@ export async function api<T = unknown>(
   throw Object.assign(new Error(json.message), { code: json.code });
 }
 
-/** 上传单张图片到 /admin/upload，返回服务器相对 URL */
-export async function uploadImage(file: File): Promise<string> {
+/**
+ * 上传单张图片到 /admin/upload。
+ *
+ * 返回 { url, viewUrl }：url 是入库标识（cloud:// 或 /uploads/...），
+ * viewUrl 是可直接渲染的临时地址 —— 用它预览刚上传的图，
+ * 不要再回头调 /admin/cloud-files/urls：那个端点按「fileID 必须已存在于本租户记录中」
+ * 校验归属，而此刻这张图还没保存。
+ */
+export async function uploadImage(file: File): Promise<{ url: string; viewUrl: string }> {
   const headers: Record<string, string> = {};
   if (store.token) headers.Authorization = `Bearer ${store.token}`;
   if (isPlatformRole(store.profile?.role) && store.actingTenantId) {
@@ -71,7 +78,11 @@ export async function uploadImage(file: File): Promise<string> {
   form.append('file', file);
   const res = await fetch(`${API_BASE}/admin/upload`, { method: 'POST', headers, body: form });
   const json = await res.json();
-  if (json.code === 0) return json.data.url as string;
+  if (json.code === 0) {
+    const data = json.data as { url: string; viewUrl?: string };
+    // 自建部署没有 viewUrl 字段（返回的就是可直接访问的相对路径）
+    return { url: data.url, viewUrl: data.viewUrl || data.url };
+  }
   ElMessage.error(json.message || '上传失败');
   throw new Error(json.message);
 }

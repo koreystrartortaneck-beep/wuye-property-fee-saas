@@ -34,10 +34,26 @@ Page({
           totalAmount: Number(snap.totalAmount || p.totalAmount || 0).toFixed(2),
           paidAt: fmtDateTimeSec(snap.paidAt),
           houseName: `${snap.community || ''} ${snap.house || ''}`.trim(),
-          items: (snap.bills || []).map((b) => ({
-            title: b.title || '费用',
-            amount: Number(b.amount || 0).toFixed(2),
-          })),
+          /*
+           * 明细 = 各张账单原价 + 券抵扣行。
+           *
+           * 只列账单的话，各行之和是原价（比如 1200），而上方「实收金额」是扣券后的
+           * 1180 —— 这张收据自己对不上账，凭空少 20 元。而本页明确写着
+           * 「可发送给他人或用于报销」，对不上账的凭证会被财务退回。
+           *
+           * 历史订单的快照没有 discountAmount 字段（快照不可变），此时不显示这一行 ——
+           * 那些订单本来也没有用券，不显示是正确的。
+           */
+          items: [
+            ...(snap.bills || []).map((b) => ({
+              title: b.title || '费用',
+              amount: Number(b.amount || 0).toFixed(2),
+              negative: false,
+            })),
+            ...(Number(snap.discountAmount || 0) > 0
+              ? [{ title: '优惠券抵扣', amount: Number(snap.discountAmount).toFixed(2), negative: true }]
+              : []),
+          ],
           // 收据有效性完全由后端派生：退款订单标记作废
           void: !!p.receiptVoid,
           success: !p.receiptVoid,
@@ -75,7 +91,8 @@ Page({
       const dpr = (wx.getWindowInfo && wx.getWindowInfo().pixelRatio) || 2;
       const W = 620;
       const rowH = 46;
-      const H = 420 + r.items.length * rowH;
+      // +120：给信息行下方的收讫章留出空白带（否则章会压住支付时间那行）
+      const H = 540 + r.items.length * rowH;
       const query = wx.createSelectorQuery();
       query
         .select('#receiptCanvas')
@@ -119,9 +136,10 @@ Page({
           r.items.forEach((it) => {
             ctx.fillStyle = '#555';
             ctx.fillText(it.title, 48, y);
-            ctx.fillStyle = '#2e1a47';
+            // 抵扣行带负号，与屏幕上以及缴费确认页的写法一致（−¥20.00）
+            ctx.fillStyle = it.negative ? '#9b743a' : '#2e1a47';
             ctx.textAlign = 'right';
-            ctx.fillText('¥' + it.amount, W - 48, y);
+            ctx.fillText((it.negative ? '−¥' : '¥') + it.amount, W - 48, y);
             ctx.textAlign = 'left';
             y += rowH;
           });
@@ -145,6 +163,15 @@ Page({
             y += 44;
           });
           ctx.textAlign = 'left';
+          /*
+           * 收讫章也要画进图里。
+           *
+           * 屏幕上有红色「收讫」印章，而保存到相册的图原本没有 ——
+           * 业主发出去的凭证与他自己看到的不是同一张东西，
+           * 而收到的人（财务、房东）看不到这个已收款标记。
+           * （作废的收据不允许保存，所以这里只画收讫。）
+           */
+          this._stamp(ctx, W, y);
           setTimeout(() => {
             wx.canvasToTempFilePath({
               canvas,
@@ -154,6 +181,29 @@ Page({
           }, 60);
         });
     });
+  },
+
+  /** 收讫章：圆圈 + 旋转文字，位置在信息行下方的空白带，避免压住房号 */
+  _stamp(ctx, W, y) {
+    const cx = W - 118;
+    const cy = y + 40;
+    const rad = 56;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(196, 86, 86, 0.75)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.translate(cx, cy);
+    ctx.rotate((-18 * Math.PI) / 180);
+    ctx.fillStyle = 'rgba(196, 86, 86, 0.8)';
+    ctx.font = 'bold 34px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('收讫', 0, 0);
+    ctx.restore();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
   },
 
   _line(ctx, W, y) {

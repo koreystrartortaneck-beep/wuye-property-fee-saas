@@ -4,7 +4,8 @@
 
 .rc-card {
   position: relative;
-  padding: 48rpx 40rpx;
+  /* 底部多留 190rpx：收讫章占 150rpx 高，需要一条不压任何文字的空白带 */
+  padding: 48rpx 40rpx 190rpx;
   overflow: hidden;
 }
 
@@ -80,10 +81,15 @@
   letter-spacing: 2rpx;
 }
 
+/*
+ * 印章位置：原来 bottom:110rpx 正好落在「缴费房屋」「订单编号」两行上，
+ * 把房号遮掉一半 —— 而这张收据是要发出去报销的，房号被盖住就是实际问题。
+ * 改到卡片底部的空白带（卡片同时加了 padding-bottom 给它腾位置）。
+ */
 .rc-stamp {
   position: absolute;
   right: 36rpx;
-  bottom: 110rpx;
+  bottom: 24rpx;
   width: 150rpx;
   height: 150rpx;
   border: 5rpx solid rgba(196, 86, 86, 0.75);
