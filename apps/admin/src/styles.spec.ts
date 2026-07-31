@@ -174,3 +174,64 @@ describe('后台视觉一致性', () => {
     expect(problems).toEqual([]);
   });
 });
+
+/**
+ * 语义色的文字必须可读，且映射表的 key 必须与后端真实取值一致。
+ *
+ * 两条都是本次审计发现的、此前所有守卫都放过的问题：
+ *
+ * 1) Element Plus 的浅色标签把文字色直接取语义主色，而 tokens 把
+ *    --el-color-success 等映射到原始饱和色，实测对比度只有 2.04–3.26:1
+ *    （AA 要 4.5:1）。本文件早就定义了可读的 -text 变体、页面 scoped CSS 里
+ *    17 处也用对了，唯独 EP 这条变量链漏了——波及 38 个状态标签、27 个页面。
+ *
+ * 2) NOTIFY_CHANNEL_LABEL 的 key 写的是 SUBSCRIBE/SMS/NONE，而后端只写入
+ *    WX_SUBSCRIBE 与 MOCK。三个 key 一个都对不上，`|| row.channel` 每行兜底，
+ *    通道列一直显示英文。上一轮「修好了渲染侧」但没对齐 key，等于没修——
+ *    这正是需要机器来查的一类错。
+ */
+describe('语义色与枚举映射', () => {
+  const tokens = read('styles/tokens.css');
+
+  it('标签的语义色文字用可读的 -text 变体，不用原始饱和色', () => {
+    for (const [variant, token] of [
+      ['success', '--success-text'],
+      ['warning', '--warning-text'],
+      ['danger', '--danger-text'],
+    ] as const) {
+      const re = new RegExp(`\\.el-tag--${variant}[^{]*\\{[^}]*--el-tag-text-color:\\s*var\\(${token}\\)`);
+      expect(tokens).toMatch(re);
+    }
+    // info 也必须映射到本色阶内的灰，不能留 EP 默认的 #909399
+    expect(tokens).toMatch(/--el-color-info:\s*var\(/);
+  });
+
+  it('实心 success/warning 按钮的底色用 -text 变体（白字才够对比度）', () => {
+    expect(tokens).toMatch(/\.el-button--success[^}]*--el-button-bg-color:\s*var\(--success-text\)/);
+    expect(tokens).toMatch(/\.el-button--warning[^}]*--el-button-bg-color:\s*var\(--warning-text\)/);
+  });
+
+  it('通知通道映射的 key 与后端写入值一致', () => {
+    const finance = read('finance.ts');
+    const block = finance.slice(finance.indexOf('NOTIFY_CHANNEL_LABEL'));
+    const map = block.slice(0, block.indexOf('};'));
+    // 后端 notify.service 只写这两个值（schema 注释亦为 WX_SUBSCRIBE | MOCK）
+    expect(map).toContain('WX_SUBSCRIBE');
+    expect(map).toContain('MOCK');
+    /*
+     * 这三个 key 从未出现过，留着只会让人以为已覆盖。
+     * 必须用词边界匹配：'SUBSCRIBE:' 是 'WX_SUBSCRIBE:' 的子串，
+     * 用 toContain 会把正确的 key 误判为残留（本测试第一版就是这么错的）。
+     */
+    for (const stale of ['SUBSCRIBE', 'SMS', 'NONE']) {
+      expect(map).not.toMatch(new RegExp(`(?:^|[^_\\w])${stale}\\s*:`, 'm'));
+    }
+  });
+
+  it('HouseCell 里的 .cell-main 不得盖掉链接色', () => {
+    const ui = read('styles/ui.css');
+    expect(ui).toMatch(/\.house-link \.cell-main[^}]*color:\s*inherit/);
+    // 禁用态必须与正常态可区分
+    expect(ui).toMatch(/\.house-link:disabled[^}]*color:\s*var\(--text-secondary\)/);
+  });
+});

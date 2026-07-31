@@ -60,10 +60,18 @@ export const INVOICE_DELIVERY_LABEL: Record<string, string> = {
 };
 
 /** 通知发送通道 */
+/*
+ * key 必须与后端实际写入的值一致。
+ *
+ * 原来写的是 SUBSCRIBE / SMS / NONE，而 notify.service 写入的只有
+ * 'WX_SUBSCRIBE'（WX_MODE=real）与 'MOCK'（其余），schema 的注释也写着
+ * `// WX_SUBSCRIBE | MOCK`。三个 key 一个都对不上，`|| row.channel` 每行兜底，
+ * 通道列一直显示英文枚举——上一轮只修了渲染侧没对齐 key，等于没修。
+ * SMS / NONE 从未出现过，删掉。
+ */
 export const NOTIFY_CHANNEL_LABEL: Record<string, string> = {
-  SUBSCRIBE: '微信订阅消息',
-  SMS: '短信',
-  NONE: '未发送',
+  WX_SUBSCRIBE: '微信订阅消息',
+  MOCK: '模拟（未真发）',
 };
 
 export const RECON_RUN_STATUS_LABEL: Record<string, string> = { RUNNING: '进行中', COMPLETED: '已完成', FAILED: '失败' };

@@ -125,6 +125,8 @@
   --el-color-success: var(--success);
   --el-color-warning: var(--warning);
   --el-color-danger: var(--danger);
+  /* info 此前从未映射，EP 默认 #909399 不在本色阶内 */
+  --el-color-info: var(--c-gray-600);
   --el-color-error: var(--danger);
 
   --el-text-color-primary: var(--text-primary);
@@ -201,10 +203,63 @@ body {
   --el-button-hover-bg-color: var(--danger);
 }
 
+/*
+ * 状态标签的文字色必须用可读的 -text 变体。
+ *
+ * Element Plus 的浅色标签把**文字色**直接取语义主色：
+ *   .el-tag--success { --el-tag-text-color: var(--el-color-success) }
+ * 而上面把 --el-color-success 映射到了原始饱和色 #34c759。配 EP 默认的
+ * light-9 浅底，实测对比度只有：
+ *   success #34c759 / #f0f9eb = 2.04:1
+ *   warning #ff9500 / #fdf6ec = 2.05:1
+ *   danger  #ff3b30 / #fef0f0 = 3.26:1
+ *   info    #909399 / #f4f4f5 = 2.82:1
+ * WCAG AA 要求 4.5:1。而 .el-tag 又去掉了描边，状态信息完全靠这段读不清的
+ * 文字承载——波及全站 38 个状态标签、27 个页面。
+ *
+ * 本文件早就定义了 --success-text / --warning-text / --danger-text 并注明
+ * 「-text 为浅底上的可读文字色」，17 处页面 scoped CSS 也用对了，唯独
+ * Element Plus 这条变量链漏了。这里补上。
+ *
+ * --el-color-info 此前从未映射，EP 默认 #909399 是个不在本色阶里的外来灰，
+ * 一并接到 --text-secondary。
+ */
 .el-tag {
   border-radius: var(--r-full);
   border: none;
   font-weight: var(--fw-medium);
+}
+.el-tag--success {
+  --el-tag-text-color: var(--success-text);
+}
+.el-tag--warning {
+  --el-tag-text-color: var(--warning-text);
+}
+.el-tag--danger,
+.el-tag--error {
+  --el-tag-text-color: var(--danger-text);
+}
+.el-tag--info {
+  --el-tag-text-color: var(--text-secondary);
+}
+
+/*
+ * 实心 success / warning 按钮是白字压饱和底：
+ *   #fff / #34c759 = 2.20:1、#fff / #ff9500 = 2.21:1
+ * 而它们正是「通过实名」「办结工单」「放行核销」「暂停收款」这些行内主操作。
+ * 底色换成更深的 -text 变体后，白字对比度升到 4.9:1 以上。
+ */
+.el-button--success {
+  --el-button-bg-color: var(--success-text);
+  --el-button-border-color: var(--success-text);
+  --el-button-hover-bg-color: var(--success);
+  --el-button-hover-border-color: var(--success);
+}
+.el-button--warning {
+  --el-button-bg-color: var(--warning-text);
+  --el-button-border-color: var(--warning-text);
+  --el-button-hover-bg-color: var(--warning);
+  --el-button-hover-border-color: var(--warning);
 }
 
 .el-dialog {

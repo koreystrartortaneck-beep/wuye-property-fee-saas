@@ -263,8 +263,21 @@
 .house-link:hover {
   text-decoration: underline;
 }
+/*
+ * HouseCell 的结构是 <button class="house-link"><span class="cell-main">房号</span></button>。
+ * .cell-main 有 `color: var(--text-primary)` 的**直接声明**，永远压过 .house-link
+ * 的继承值——于是房号渲染成近黑色，蓝色一次都没生效，可点的房屋链接与
+ * Arrears 里的纯文本 .cell-main 视觉完全相同，用户无从判断哪个能点。
+ * 组件注释写着「凡出现房屋一律走本组件」以消除断头路，但视觉入口被自己吃掉了。
+ */
+.house-link .cell-main {
+  color: inherit;
+  font-weight: inherit;
+}
+/* 禁用态必须与正常态可区分：原来两者都是 text-primary，等于没有区别 */
 .house-link:disabled {
-  color: var(--text-primary);
+  color: var(--text-secondary);
+  font-weight: var(--fw-regular);
   cursor: default;
   text-decoration: none;
 }
