@@ -14,8 +14,9 @@ import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { signUploadPaths } from '../upload/upload-access';
+import { signUploadPaths, stripUploadSignature } from '../upload/upload-access';
 
 class CreateWorkLogDto {
   @IsString()
@@ -64,7 +65,23 @@ export class AdminWorkLogsController {
 
   @Post()
   create(@Current() cur: CurrentAdmin, @Body() dto: CreateWorkLogDto) {
-    return this.prisma.t.workLog.create({ data: { ...dto, createdBy: cur.adminId } as never });
+    /*
+     * 不用 `as never`：那会把整个 data 的字段校验关掉 —— 字段名写错、类型不符都编译通过，
+     * 直到运行时才炸。这里显式列字段，tenantId 由 prisma.t 注入。
+     *
+     * images 先剥签名：响应出口会统一给 /uploads/ 路径加访问令牌，若前端把读到的
+     * 带签名地址提交回来，入库的就是带令牌的路径，10 分钟后这条记录的图永久打不开。
+     */
+    const data: Omit<Prisma.WorkLogCreateInput, 'tenantId'> = {
+      communityId: dto.communityId,
+      category: dto.category,
+      title: dto.title ?? null,
+      description: dto.description ?? null,
+      images: stripUploadSignature(dto.images),
+      staffName: dto.staffName ?? null,
+      createdBy: cur.adminId,
+    };
+    return this.prisma.t.workLog.create({ data: data as Prisma.WorkLogCreateInput });
   }
 
   @Get()

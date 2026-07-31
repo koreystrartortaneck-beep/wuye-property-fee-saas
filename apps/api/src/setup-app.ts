@@ -4,6 +4,7 @@ import { RateLimitGuard } from './common/rate-limit.guard';
 import { GlobalExceptionFilter } from './common/http-exception.filter';
 import { ResponseInterceptor } from './common/response.interceptor';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
+import { SignUploadsInterceptor } from './upload/sign-uploads.interceptor';
 
 /**
  * 安全响应头。
@@ -38,7 +39,18 @@ export function setupApp(app: INestApplication): void {
   securityHeaders(app);
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  app.useGlobalInterceptors(new ResponseInterceptor(), new TenantContextInterceptor());
+  /*
+   * SignUploadsInterceptor 必须排在 ResponseInterceptor **之前**注册。
+   * Nest 的全局拦截器按注册顺序进入、逆序出来，所以先注册的后处理响应体 ——
+   * 排在前面才拿得到 ResponseInterceptor 包上 { code, data } 之后的整体，
+   * 顺序写反则只签到未包装的内层，看起来也「有签名」，但 data 之外的字段漏掉。
+   * 它对不含 /uploads/ 的响应零改动（原对象直接返回），所以全局注册没有副作用。
+   */
+  app.useGlobalInterceptors(
+    new SignUploadsInterceptor(),
+    new ResponseInterceptor(),
+    new TenantContextInterceptor(),
+  );
   /*
    * 速率限制守卫必须全局注册，否则各端点上的 @RateLimit 装饰器只是元数据、不生效。
    * 它对未标注的端点直接放行，所以全局注册没有副作用。

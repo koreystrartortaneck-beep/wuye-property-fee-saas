@@ -88,5 +88,33 @@ export function signUploadPaths(images: unknown, now = Date.now()): string[] {
   if (!Array.isArray(images)) return [];
   return images
     .filter((x): x is string => typeof x === 'string' && !!x)
-    .map((x) => (x.startsWith('/uploads/') ? signUploadUrl(x, now) : x));
+    .map((x) => signIfUploadPath(x, now));
+}
+
+/**
+ * 单个字符串：是本地上传路径就现签，否则原样返回。
+ *
+ * 幂等——已带签名的原样返回。签两次会得到 `...?exp=1&sig=a?exp=2&sig=b`，
+ * 校验时 exp 解析为 NaN，图片必然 403；而全局拦截器与残留的逐处调用会叠加，
+ * 所以幂等不是锦上添花，是正确性前提。
+ */
+export function signIfUploadPath(value: string, now = Date.now()): string {
+  if (!value.startsWith('/uploads/')) return value;
+  if (value.includes('sig=')) return value;
+  return signUploadUrl(value, now);
+}
+
+/**
+ * 去掉图片地址上的访问令牌，取回可入库的裸路径。
+ *
+ * 为什么需要：响应出口统一现签之后，客户端手里的地址是带签名的。
+ * 若某个编辑流程把读到的地址原样提交回来（前端很自然会这么做），
+ * 入库的就成了带签名的路径 —— 10 分钟后这条记录的图永久打不开，且无法从库里看出原因。
+ * 所有接收图片的写入口都必须先过这里，把入口收窄成「库里只存裸路径」。
+ */
+export function stripUploadSignature(images: unknown): string[] {
+  if (!Array.isArray(images)) return [];
+  return images
+    .filter((x): x is string => typeof x === 'string' && !!x)
+    .map((x) => (x.startsWith('/uploads/') ? x.replace(/\?.*$/, '') : x));
 }

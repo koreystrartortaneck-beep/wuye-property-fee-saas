@@ -4,7 +4,7 @@ import { BizException } from '../common/biz.exception';
 import { pageArgs, pageResult, PageQuery } from '../common/pagination';
 import { OwnerHousesService } from '../owner/owner-houses.controller';
 import { PrismaService } from '../prisma/prisma.service';
-import { signUploadPaths } from '../upload/upload-access';
+import { signUploadPaths, stripUploadSignature } from '../upload/upload-access';
 
 /**
  * 工单服务（报修/投诉/建议共用底座）。
@@ -31,7 +31,7 @@ export class TicketsService {
         wxUserId: ownerId,
         type: dto.type,
         content: dto.content,
-        images: dto.images,
+        images: stripUploadSignature(dto.images),
       },
     });
   }

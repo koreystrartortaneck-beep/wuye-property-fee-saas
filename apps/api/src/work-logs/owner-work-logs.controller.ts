@@ -60,6 +60,8 @@ export class OwnerWorkLogsController {
       where: { wxUserId: cur.ownerId, tenantId: log.tenantId, status: 'ACTIVE' },
     });
     if (!binding) throw new BizException(ErrorCode.NO_BINDING);
-    return log;
+    // 列表签了、详情忘了签 —— 结果是列表封面能显示、点进详情全部裂图。
+    // 凡是把 images 交给前端的出口都必须现签，漏一个就是一处坏掉的页面。
+    return { ...log, images: signUploadPaths(log.images) };
   }
 }
