@@ -197,7 +197,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
      * 日志也要脱敏。
      *
      * 全库有一套很扎实的脱敏器（audit.service 的 redactString，覆盖
-     * openid/手机号/token/私钥/JWT 形态），审计、告警、幂等记录都用了——唯独应用日志
+     * openid/手机号/token/私钥/JWT 形态），审计、告警、幂等记录都用了，而应用日志这条路径原先漏了——现已接上，下面这行即是
      * 这条路径没用。而落到这里的典型异常是 PrismaClientValidationError /
      * PrismaClientUnknownRequestError，Prisma 会把**完整调用参数**拼进 message：
      * wxUser.upsert 的 openid、adminUser.create 的 passwordHash、房屋的 ownerPhone

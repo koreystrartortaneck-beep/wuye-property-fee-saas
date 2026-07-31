@@ -143,7 +143,7 @@ export type BindingSource = (typeof BINDING_SOURCES)[number];
  * 只读角色让「平台侧看数据」这件日常动作不必再动用全权账号。
  * 它的读范围与超管一致（可跨租户），但**任何非 GET 请求一律拒绝**——
  * 这一点必须按 HTTP 方法拦截而不是靠 @Roles 注解：RolesGuard 的规则是
- * 「没标 @Roles 就放行任何已登录管理员」，而管理端 53 个写端点里有 45 个没标注解。
+ * 「没标 @Roles 就放行任何已登录管理员」，而管理端大多数写端点都没标注解。
  * 靠注解等于默认放行，靠方法才是 fail-closed。
  */
 export const ADMIN_ROLES = ['SUPER_ADMIN', 'PLATFORM_READONLY', 'TENANT_ADMIN', 'STAFF'] as const;

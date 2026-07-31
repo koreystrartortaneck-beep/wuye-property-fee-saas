@@ -11,9 +11,10 @@ import { ROLES_KEY, RolesGuard } from './roles.decorator';
  * 能退款、能冲正、能暂停收款、能读全部业主手机号。
  *
  * 关键设计约束：**必须按 HTTP 方法拦截，不能靠 @Roles 注解**。
- * RolesGuard 的规则是「没标 @Roles 就放行任何已登录管理员」，而管理端 53 个写端点里
- * 有 45 个既没有方法级也没有类级注解 —— 靠注解等于默认放行，靠方法才是 fail-closed。
- * 本文件的用例就是围绕这一点写的。
+ * RolesGuard 的规则是「没标 @Roles 就放行任何已登录管理员」，而管理端多数写端点
+ * 既没有方法级也没有类级注解 —— 靠注解等于默认放行，靠方法才是 fail-closed。
+ * 本文件的用例就是围绕这一点写的，并且有一条用例**现场数一遍**，
+ * 而不是把当时数出来的数字写死在注释里（那种数字注定会过期）。
  */
 describe('PLATFORM_READONLY 只读平台账号', () => {
   function guard(required?: string[]) {
@@ -154,5 +155,57 @@ describe('只读拦截不得被绕过', () => {
       );
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * 「无注解的写端点占多数」这个前提必须持续成立，否则本角色的实现方式就该重新考虑。
+ *
+ * 注释里原先写死了「53 个写端点里有 45 个没注解」。后来我自己加了启停账号与创建平台
+ * 账号两个端点，实际变成 55 / 45 —— 数字悄悄过期了，而过期的注释比没有注释更危险：
+ * 读的人会拿它当事实。所以改成现场数，让测试自己给出当前值。
+ */
+describe('「按方法拦截」这个选择的前提', () => {
+  it('管理端多数写端点确实没有 @Roles 注解（所以不能靠注解判定）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = require('node:fs') as typeof import('node:fs');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const path = require('node:path') as typeof import('node:path');
+    const SRC = path.join(__dirname, '..');
+
+    const files: string[] = [];
+    (function walk(dir: string) {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (e.name.endsWith('.controller.ts')) files.push(p);
+      }
+    })(SRC);
+
+    let total = 0;
+    let unannotated = 0;
+    for (const file of files) {
+      const src = fs
+        .readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+      if (!src.includes('AdminGuard')) continue;
+      for (const m of src.matchAll(/@(Post|Patch|Put|Delete)\(/g)) {
+        total += 1;
+        const at = m.index as number;
+        const before = src.slice(Math.max(0, at - 300), at);
+        const cls = src.slice(0, at);
+        const clsRoles = cls.includes('@Controller') ? cls.split('@Controller').pop()!.includes('@Roles(') : false;
+        if (!before.includes('@Roles(') && !clsRoles) unannotated += 1;
+      }
+    }
+
+    expect(total).toBeGreaterThan(30);
+    /*
+     * 只要「无注解」占多数，按方法拦截就是唯一 fail-closed 的做法。
+     * 若哪天全部端点都标了注解（比例降到很低），可以重新考虑改为按注解判定 ——
+     * 那时这条会失败，提醒人来重新评估，而不是让实现和注释各说各话。
+     */
+    expect(unannotated / total).toBeGreaterThan(0.5);
   });
 });
