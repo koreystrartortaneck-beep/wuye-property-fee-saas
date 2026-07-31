@@ -93,9 +93,19 @@ describe('跳转闭环', () => {
     for (const p of pushes) {
       const target = routes[p.path];
       if (!target) continue; // 路径存在性由上一条用例负责
-      const tsrc = fs.readFileSync(path.join(SRC, target), 'utf8');
+      /*
+       * 必须先剥注释：原实现直接在整份源码上 includes(`query.${k}`)，于是目标页
+       * 删掉真实读取、只在上方留一行提到参数名的说明注释，本用例照样通过（实测）。
+       * 这与「CSS 类名把注释算作定义」是同一类错误，在另一个文件复发了。
+       */
+      const tsrc = fs
+        .readFileSync(path.join(SRC, target), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
       for (const k of p.keys) {
-        if (!tsrc.includes(`query.${k}`)) dead.push(`${p.from} → ${p.path}?${k}（${target} 未读取）`);
+        // route.query.x 与 route.query['x'] 是等价写法，后者原本会被误报为断头路
+        const reads = new RegExp(`query(?:\\.${k}\\b|\\[['"\`]${k}['"\`]\\])`);
+        if (!reads.test(tsrc)) dead.push(`${p.from} → ${p.path}?${k}（${target} 未读取）`);
       }
     }
     if (dead.length) {

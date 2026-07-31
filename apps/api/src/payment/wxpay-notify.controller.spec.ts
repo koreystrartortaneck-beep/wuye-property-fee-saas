@@ -2,6 +2,21 @@ import { WxPayNotifyController } from './wxpay-notify.controller';
 import type { WxPayDirectProvider } from './wxpay-direct.provider';
 import type { PaymentService } from './payment.service';
 
+/**
+ * 真实微信支付回调携带的四个签名头。验签需要它们**全部**：serial 定位平台证书、
+ * timestamp+nonce+body 拼出待签串、signature 是签名本身。
+ *
+ * 此前测试只构造 serial 一个头，断言又写成 expect.any(Object)（{} 也满足）。
+ * 实测把 controller 改成 parseNotification({}, rawBody)——生产上验签永远不通过、
+ * 每一笔到账都被拒、钱到了系统不知道——421 个后端用例全绿。
+ */
+const SIGNED_HEADERS = {
+  'wechatpay-serial': 'serial',
+  'wechatpay-timestamp': '1780000000',
+  'wechatpay-nonce': 'nonce123',
+  'wechatpay-signature': 'c2ln',
+} as const;
+
 describe('WxPayNotifyController', () => {
   function response() {
     const res = {
@@ -21,9 +36,20 @@ describe('WxPayNotifyController', () => {
     const res = response();
     const rawBody = Buffer.from('{"id":"event"}');
 
-    await controller.notify({ headers: { 'wechatpay-serial': 'serial' }, rawBody } as never, res as never);
+    await controller.notify({ headers: SIGNED_HEADERS, rawBody } as never, res as never);
 
-    expect(provider.parseNotification).toHaveBeenCalledWith(expect.any(Object), rawBody);
+    // headers 必须逐字传到 provider：那四个头是验签的**唯一**输入。
+    // 原断言用 expect.any(Object)，{} 也满足——实测把 controller 改成传 {} 之后
+    // 421 个后端用例全绿，而生产上验签会永远失败、每一笔到账都被拒。
+    expect(provider.parseNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        'wechatpay-serial': expect.any(String),
+        'wechatpay-timestamp': expect.any(String),
+        'wechatpay-nonce': expect.any(String),
+        'wechatpay-signature': expect.any(String),
+      }),
+      rawBody,
+    );
     expect(service.handleWxPayNotification).toHaveBeenCalledWith(transaction);
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ code: 'SUCCESS', message: '成功' });

@@ -34,7 +34,8 @@ function classesIn(css: string): Set<string> {
 
 /** ui.css 顶层声明的共享类（不含伪类/组合选择器里的次要部分） */
 function sharedClasses(): Set<string> {
-  const css = read('styles/ui.css');
+  // 同样先剥注释：ui.css 顶部注释里提到 .toolbar/.pager，算进来会让共享类集合虚高
+  const css = read('styles/ui.css').replace(/\/\*[\s\S]*?\*\//g, '');
   const out = new Set<string>();
   // 只取选择器位置在行首的类名，避免把 .stat-value.is-good 里的 is-good 也算共享
   for (const m of css.matchAll(/(?:^|\n)\s*\.([a-zA-Z][\w-]*)/g)) out.add(m[1]);
@@ -90,9 +91,42 @@ describe('后台视觉一致性', () => {
     for (const file of files) {
       const sty = fs.readFileSync(file, 'utf8').match(/<style[^>]*>([\s\S]*?)<\/style>/);
       if (!sty) continue;
-      // 只看「行首即选择器」的规则，允许 .cell-sub.overdue 这类在共享类上追加修饰
-      for (const m of sty[1].matchAll(/(?:^|\n)\s*\.([a-zA-Z][\w-]*)\s*\{/g)) {
-        if (shared.has(m[1])) offenders.push(`${path.relative(SRC, file)} → .${m[1]}`);
+      /*
+       * 判据：规则的**作用对象**是否就是共享类本身。
+       *
+       * 取选择器最后一个后代分段（真正被这条规则修饰的那个元素），看它的类名集合：
+       * 若其中每一个类都是共享类，则这条规则在重新定义共享结构 → 违规；
+       * 若含至少一个非共享类，那是在共享类上追加本页修饰态 → 允许。
+       *
+       * 原实现用行首锚点 /(?:^|\n)\s*\.(cls)\s*\{/，只认「.foo {」一种形式，
+       * 而特异性更高（覆盖更彻底）的四种自然写法全部绕过——实测在 Payments.vue 里
+       * 注入 .toolbar{display:block} 的等价变体：
+       *   .toolbar {          → 抓到
+       *   div.toolbar {       → 漏
+       *   .el-card .toolbar { → 漏  ← 「只想微调本页卡片里的 toolbar」最自然的写法
+       *   * .toolbar {        → 漏
+       *   .toolbar, .zzz {    → 漏  ← 普通分组选择器
+       * 也就是说守卫只挡住了最不可能被写出来的那一种。
+       *
+       * 反过来，第一版加宽后又误伤了 .cell-sub.overdue、.empty p、
+       * :deep(.el-table__row) 这三类合法写法——它们的作用对象都不是共享类。
+       * 「作用对象」这个判据两头都对。
+       */
+      const css = sty[1].replace(/\/\*[\s\S]*?\*\//g, '');
+      for (const rule of css.split('}')) {
+        const brace = rule.indexOf('{');
+        if (brace === -1) continue;
+        const selector = rule.slice(0, brace);
+        if (selector.includes('@')) continue; // @media/@supports 的块头不是选择器
+        for (const part of selector.split(',')) {
+          // 最后一个后代分段即规则的作用对象（伪类/伪元素不改变作用对象，先剥掉）
+          const subject = part.trim().split(/[\s>+~]+/).pop() ?? '';
+          const classes = [...subject.matchAll(/\.([a-zA-Z][\w-]*)/g)].map((m) => m[1]);
+          if (classes.length === 0) continue;
+          if (classes.every((c) => shared.has(c))) {
+            offenders.push(`${path.relative(SRC, file)} → ${part.trim()}`);
+          }
+        }
       }
     }
     if (offenders.length) {

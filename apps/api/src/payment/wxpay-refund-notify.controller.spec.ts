@@ -2,6 +2,17 @@ import { WxPayRefundNotifyController } from './wxpay-refund-notify.controller';
 import type { WxPayDirectProvider } from './wxpay-direct.provider';
 import type { RefundService } from './refund.service';
 
+/**
+ * 退款回调与支付回调走同一套验签，同样需要四个头齐全。
+ * 原测试 headers 传 {}、断言用 expect.any(Object)，两边都是空壳。
+ */
+const SIGNED_HEADERS = {
+  'wechatpay-serial': 'serial',
+  'wechatpay-timestamp': '1780000000',
+  'wechatpay-nonce': 'nonce123',
+  'wechatpay-signature': 'c2ln',
+} as const;
+
 describe('WxPayRefundNotifyController', () => {
   function response() {
     const res = { status: jest.fn(), json: jest.fn() };
@@ -18,9 +29,19 @@ describe('WxPayRefundNotifyController', () => {
     const res = response();
     const rawBody = Buffer.from('{"id":"evt"}');
 
-    await controller.notify({ headers: {}, rawBody } as never, res as never);
+    await controller.notify({ headers: SIGNED_HEADERS, rawBody } as never, res as never);
 
-    expect(provider.parseRefundNotification).toHaveBeenCalledWith(expect.any(Object), rawBody);
+    // 四个签名头必须逐字传到 provider —— 它们是验签的唯一输入。
+    // expect.any(Object) 连 {} 都满足，等于不校验。
+    expect(provider.parseRefundNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        'wechatpay-serial': expect.any(String),
+        'wechatpay-timestamp': expect.any(String),
+        'wechatpay-nonce': expect.any(String),
+        'wechatpay-signature': expect.any(String),
+      }),
+      rawBody,
+    );
     expect(service.handleRefundNotification).toHaveBeenCalledWith(refund);
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ code: 'SUCCESS', message: '成功' });

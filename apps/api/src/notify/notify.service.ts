@@ -48,19 +48,37 @@ export class NotifyService implements BillNotifier {
   ) {}
 
   async onBillCreated(bill: Bill): Promise<void> {
-    await this.send('BILL_CREATED', bill, false);
+    // 一律去重。原先传 false，与 Outbox 的 bill.published 形成两条无条件发送的
+    // 并行路径，而「一次性订阅」一次授权只能发一条：两条路径抢同一份额度，
+    // 后到的那条必得 43101。生产 NotifyLog 里 BILL_CREATED 零条 SENT、4 条
+    // 43101 FAILED，正是这么来的——业主从未收到过出账通知。
+    await this.send('BILL_CREATED', bill, true);
   }
 
   async onReminder(bill: Bill, type: ReminderType): Promise<void> {
     await this.send(type, bill, true);
   }
 
-  private async send(type: NotifyType, bill: Bill, dedup: boolean): Promise<void> {
+  /**
+   * 唯一的投递实现：解析收件人 → 发送 → 写 NotifyLog。
+   *
+   * 返回 Outbox 语义的结果，好让 Outbox 投递复用同一份实现。此前 Outbox 走的是
+   * 另一套代码，导致三处不一致：
+   *   1) 它完全不查 NotifyLog，既不去重也不留痕——「通知记录」页看不到经 Outbox
+   *      发出的任何一条，物业无法判断业主到底收到没有；
+   *   2) 它从 event.payload 取 title/dueDate，而 bill.published 的 payload 只有
+   *      billId/houseId/period/amount。于是费用名称退化成账期（「2026-07」），
+   *      dueDate 为空串 → formatDueDate 返回空 → 微信判 47003 参数非法 →
+   *      被判可重试 → 重试 5 次后触发 CRITICAL 告警。现在被 43101 掩盖着，
+   *      业主一旦有额度就会立刻暴露；
+   *   3) 两套代码各自演进，模板字段映射改一处漏一处。
+   */
+  private async send(type: NotifyType, bill: Bill, dedup: boolean): Promise<OutboxDeliveryOutcome> {
     if (dedup) {
       const sent = await this.prisma.raw.notifyLog.findFirst({
         where: { billId: bill.id, type, status: 'SENT' },
       });
-      if (sent) return;
+      if (sent) return 'SKIPPED';
     }
 
     const bindings = await this.prisma.raw.houseBinding.findMany({
@@ -72,10 +90,25 @@ export class NotifyService implements BillNotifier {
       await this.prisma.raw.notifyLog.create({
         data: { tenantId: bill.tenantId, billId: bill.id, type, channel: 'MOCK', status: 'SKIPPED', error: '房屋无绑定用户' },
       });
-      return;
+      return 'SKIPPED';
     }
 
-    for (const binding of bindings) {
+    /*
+     * 按 openid 去重。同一个微信号可能对同一房屋有多条 ACTIVE 绑定（例如先手机号
+     * 自动匹配、后又手工提交过一次），逐条发会让业主收到重复消息，并且白白吃掉
+     * 「一次性订阅」的额度——额度是按人算的，发两条就要两次授权。
+     * 原 Outbox 投递路径做了这个去重，本方法没有；合并两条路径时必须保留。
+     */
+    const seenOpenids = new Set<string>();
+    const recipients = bindings.filter((b) => {
+      if (seenOpenids.has(b.wxUser.openid)) return false;
+      seenOpenids.add(b.wxUser.openid);
+      return true;
+    });
+
+    let delivered = 0;
+    let retryable = false;
+    for (const binding of recipients) {
       const result = await this.wx
         .sendSubscribeMessage({
           openid: binding.wxUser.openid,
@@ -102,8 +135,17 @@ export class NotifyService implements BillNotifier {
           error: result.ok ? null : (result as { error?: string }).error,
         },
       });
+
+      if (result.ok) {
+        delivered += 1;
+        continue;
+      }
+      // 未订阅/额度不足是业主的选择，重试也没用；其余（网络、微信侧抖动）才重试。
+      if (!SUBSCRIPTION_DENIED_RE.test((result as { error?: string }).error ?? '')) retryable = true;
     }
-    this.logger.log(`通知 ${type} bill=${bill.id} 推送 ${bindings.length} 人`);
+    this.logger.log(`通知 ${type} bill=${bill.id} 推送 ${recipients.length} 人，成功 ${delivered}`);
+    if (retryable) return 'RETRY';
+    return delivered > 0 ? 'DELIVERED' : 'SKIPPED';
   }
 
   /**
@@ -119,33 +161,23 @@ export class NotifyService implements BillNotifier {
       this.logger.log(`Outbox 事件 ${event.eventType} 暂无订阅模板，跳过投递 event=${event.id}`);
       return 'SKIPPED';
     }
-    const openids = await this.resolveRecipientOpenids(event);
-    if (openids.length === 0) return 'SKIPPED';
-
+    // 三个有模板的事件都是账单类。从库里取账单而不是读 payload：payload 缺
+    // title/dueDate，且即使补上也会与账单后续变更（改期、调额）脱节。
     const payload = (event.payload ?? {}) as Record<string, unknown>;
-    const data = buildSubscribeData(templateType, {
-      title: String(payload.title ?? payload.period ?? ''),
-      amount: String(payload.amount ?? ''),
-      dueDate: String(payload.dueDate ?? ''),
-    });
-
-    let delivered = 0;
-    let retryable = false;
-    for (const openid of openids) {
-      const result = await this.wx
-        .sendSubscribeMessage({ openid, templateType, data })
-        .catch((e: Error) => ({ ok: false, error: e.message }));
-      if (result.ok) {
-        delivered += 1;
-        continue;
-      }
-      const error = (result as { error?: string }).error ?? '';
-      if (SUBSCRIPTION_DENIED_RE.test(error)) continue; // 未订阅：跳过，不重试
-      retryable = true; // 其余失败视为可重试
+    const billId = typeof payload.billId === 'string' ? payload.billId : null;
+    if (event.aggregateType !== 'Bill' || !billId) {
+      this.logger.warn(`Outbox 事件缺少 billId，无法投递 event=${event.id}`);
+      return 'SKIPPED';
     }
-    if (retryable) return 'RETRY';
-    return delivered > 0 ? 'DELIVERED' : 'SKIPPED';
+    const bill = await this.prisma.raw.bill.findUnique({ where: { id: billId } });
+    if (!bill) {
+      // 账单已被物理删除（正常流程不会发生）：重试无意义
+      this.logger.warn(`Outbox 事件对应账单不存在，跳过 event=${event.id} bill=${billId}`);
+      return 'SKIPPED';
+    }
+    return this.send(templateType, bill, true);
   }
+
 
   /** 领取并投递一批 Outbox 事件；投递失败退避重试，业务事务不受影响。 */
   async dispatchOutboxBatch(input: {
@@ -210,23 +242,4 @@ export class NotifyService implements BillNotifier {
     }
   }
 
-  private async resolveRecipientOpenids(event: DeliverableOutboxEvent): Promise<string[]> {
-    const payload = (event.payload ?? {}) as Record<string, unknown>;
-    if (event.aggregateType === 'Bill' && typeof payload.houseId === 'string') {
-      const bindings = await this.prisma.raw.houseBinding.findMany({
-        where: { houseId: payload.houseId, status: 'ACTIVE' },
-        include: { wxUser: { select: { openid: true } } },
-      });
-      return [...new Set(bindings.map((b) => b.wxUser.openid))];
-    }
-    const wxUserId = typeof payload.wxUserId === 'string' ? payload.wxUserId : null;
-    if (wxUserId) {
-      const user = await this.prisma.raw.wxUser.findUnique({
-        where: { id: wxUserId },
-        select: { openid: true },
-      });
-      return user?.openid ? [user.openid] : [];
-    }
-    return [];
-  }
 }

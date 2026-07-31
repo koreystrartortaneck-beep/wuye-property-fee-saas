@@ -5,6 +5,8 @@ node_modules/
 dist/
 .DS_Store
 outputs/*.zip
+# 工作日报含真实姓名/电话/门牌，属个人信息，不入库
+outputs/*.md
 .workbuddy/
 .worktrees/
 apps/miniprogram/project.private.config.json

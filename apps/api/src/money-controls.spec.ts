@@ -80,8 +80,11 @@ describe('资金入账必须留痕', () => {
     expect(body).toContain('audit.append');
     expect(body).toContain("actorType: 'SYSTEM'");
     expect(body).toContain("action: 'PAY'");
-    // 必须把确认来源记下来：区分「微信推过来的」还是「我们查出来的」
-    expect(body).toContain('source');
+    // 必须把确认来源记下来：区分「微信推过来的」还是「我们查出来的」。
+    // 注意不能写 toContain('source')——它是 'resourceType' 的子串（re-source-Type），
+    // 任何 audit.append 都带 resourceType，那条断言恒为真。实测删掉 source 字段后
+    // 本文件 4 个用例全绿。同一类子串陷阱本会话已犯第二次。
+    expect(body).toMatch(/\bsource\s*[,:]/);
     // 第二个参数传 tx 才是同事务；审计与入账不能一个成一个不成
     expect(body).toMatch(/audit\.append\(\s*\{[\s\S]*?\},\s*tx,\s*\)/);
   });

@@ -3,74 +3,24 @@ import { join } from 'node:path';
 import { toCents } from '../billing/engine/money';
 import { PaymentService } from './payment.service';
 
-/**
- * 资金安全：向微信下单的金额，必须与回调校验用的金额来自同一处。
+/*
+ * 本文件曾有两块「复刻式」用例，现已删除：
  *
- * 真实事故链（修复前，只要业主用一次券就必然发生）：
- *   1. createPayment 里 Payment.totalAmount 落库 = 账单原额 − 券抵扣（payableCents）；
- *   2. 但 provider.createOrder 传的是 totalCents（**账单原额**）；
- *   3. 微信按原价扣款成功，钱真的从业主账户扣走；
- *   4. 回调带回原额，handleWxPayNotification 里
- *      `transaction.amount.total !== toCents(payment.totalAmount)` 判定
- *      「支付回调金额不一致」抛错；
- *   5. 微信重试仍然失败；queryAndReconcile 有同样校验，恢复任务也救不回来。
- *   → 业主付了原价、账单永远停在未缴、系统不知道钱在哪。
+ *  1) describe('下单金额与回调校验金额必须一致')——6 个用例。它的两个 helper
+ *     chargedCents 与 expectedCentsOnCallback 函数体逐字相同、入参同一个值，
+ *     所谓「核心断言」expect(charged).toBe(expected) 恒为真；整块 import 了
+ *     PaymentService 却从不调用它。实测把历史资金 bug 原样注入回
+ *     payment.service.ts（按账单原额而非抵扣后金额向微信下单，业主用券必被多扣、
+ *     账单永远停在未缴），本文件 16 个用例全绿。真守卫在
+ *     payment.service.spec.ts 的「用券后向微信下单的金额是抵扣后的实付额」。
  *
- * 这组用例用「同一份账单 + 券」跑两侧计算，断言两个数字必然相等。
+ *  2) describe('可用券列表与实际接受范围一致')——3 个用例，两个 helper 分别复刻
+ *     quoteBill 的过滤与 consumeCouponInTx 的判定，再断言两个复刻品相等。
+ *     原注释已自认「改真实代码不会让它失败、别把它当成回归防线」——既然如此就
+ *     不该以绿色用例的形式计入总数，读 CI 输出的人区分不出来。
+ *
+ * 保留下面这块：它调用真实的 consumeCouponInTx，实测注入错误会失败。
  */
-describe('下单金额与回调校验金额必须一致', () => {
-  /** 与 createPayment 一致：落库的实付金额字符串 */
-  function persistedTotalAmount(billYuan: string, couponFaceYuan: string): string {
-    const billCents = toCents(billYuan);
-    const face = toCents(couponFaceYuan);
-    const discount = Math.min(face, billCents);
-    return ((billCents - discount) / 100).toFixed(2);
-  }
-
-  /** 修复后的下单金额：从落库字段反算，而不是另算一遍 */
-  function chargedCents(persisted: string): number {
-    return toCents(persisted);
-  }
-
-  /** 回调侧的期望金额：handleWxPayNotification 里的算法 */
-  function expectedCentsOnCallback(persisted: string): number {
-    return toCents(persisted);
-  }
-
-  const cases: Array<{ bill: string; face: string; wantCharged: number }> = [
-    { bill: '250.00', face: '30.00', wantCharged: 22000 },
-    { bill: '2.50', face: '1.00', wantCharged: 150 },
-    { bill: '1000.00', face: '0.01', wantCharged: 99999 },
-    { bill: '33.33', face: '11.11', wantCharged: 2222 },
-  ];
-
-  for (const c of cases) {
-    it(`账单 ¥${c.bill} 用 ¥${c.face} 券：向微信收 ${c.wantCharged} 分，且与回调校验值相等`, () => {
-      const persisted = persistedTotalAmount(c.bill, c.face);
-      const charged = chargedCents(persisted);
-      const expected = expectedCentsOnCallback(persisted);
-
-      expect(charged).toBe(c.wantCharged);
-      // 核心断言：两侧必须严格相等，否则回调必然被判金额不一致
-      expect(charged).toBe(expected);
-      // 反向断言：绝不能等于账单原额（那正是修复前的错误值）
-      expect(charged).not.toBe(toCents(c.bill));
-    });
-  }
-
-  it('不用券时下单金额等于账单原额', () => {
-    const persisted = persistedTotalAmount('88.80', '0');
-    expect(chargedCents(persisted)).toBe(toCents('88.80'));
-  });
-
-  it('分为最小单位，抵扣后不产生小数分', () => {
-    for (const c of cases) {
-      const persisted = persistedTotalAmount(c.bill, c.face);
-      expect(persisted).toMatch(/^\d+\.\d{2}$/);
-      expect(Number.isInteger(chargedCents(persisted))).toBe(true);
-    }
-  });
-});
 
 /**
  * 券面额覆盖全额时必须在事务内拒绝。

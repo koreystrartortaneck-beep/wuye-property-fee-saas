@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { MODULE_METADATA } from '@nestjs/common/constants';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -817,30 +819,55 @@ describe('OutboxService', () => {
   });
 });
 
-describe('NotifyService Outbox 投递适配器', () => {
-  function makeDeliverer(overrides: {
-    bindings?: Array<{ wxUser: { openid: string } }>;
-    wxUser?: { openid: string } | null;
-    sendSubscribeMessage?: jest.Mock;
-  } = {}) {
-    const wx = {
-      sendSubscribeMessage: overrides.sendSubscribeMessage ?? jest.fn().mockResolvedValue({ ok: true }),
-    };
-    const outbox = {
-      claimBatch: jest.fn(),
-      markPublished: jest.fn().mockResolvedValue(undefined),
-      markFailed: jest.fn().mockResolvedValue(undefined),
-    };
-    const prisma = {
-      raw: {
-        houseBinding: { findMany: jest.fn().mockResolvedValue(overrides.bindings ?? []) },
-        wxUser: { findUnique: jest.fn().mockResolvedValue(overrides.wxUser ?? null) },
-        outboxEvent: { findMany: jest.fn().mockResolvedValue([]) },
+/** 两个 describe 共用的投递环境（守卫用例也要用，故置于模块级） */
+function makeDeliverer(overrides: {
+  bindings?: Array<{ wxUser: { id?: string; openid: string } }>;
+  wxUser?: { openid: string } | null;
+  sendSubscribeMessage?: jest.Mock;
+  bill?: unknown;
+  alreadySent?: unknown;
+} = {}) {
+  const wx = {
+    sendSubscribeMessage: overrides.sendSubscribeMessage ?? jest.fn().mockResolvedValue({ ok: true }),
+  };
+  const outbox = {
+    claimBatch: jest.fn(),
+    markPublished: jest.fn().mockResolvedValue(undefined),
+    markFailed: jest.fn().mockResolvedValue(undefined),
+  };
+  /*
+   * 投递现在复用 send()：从库里取账单（payload 缺 title/dueDate，取库才拿得到
+   * 正确的费用名称与到期日），并写 NotifyLog（此前 Outbox 路径一条都不写，
+   * 「通知记录」页看不到经它发出的任何消息）。所以 mock 要多这两张表。
+   */
+  const bill = overrides.bill === undefined
+    ? {
+        id: 'b-1',
+        tenantId: 'tenant-1',
+        houseId: 'house-1',
+        title: '住宅物业费 2026-07',
+        amount: { toString: () => '100.00' },
+        dueDate: new Date('2026-08-15T15:59:59.000Z'),
+      }
+    : overrides.bill;
+  const notifyLogCreate = jest.fn().mockResolvedValue(undefined);
+  const prisma = {
+    raw: {
+      bill: { findUnique: jest.fn().mockResolvedValue(bill) },
+      notifyLog: {
+        findFirst: jest.fn().mockResolvedValue(overrides.alreadySent ?? null),
+        create: notifyLogCreate,
       },
-    };
-    const service = new NotifyService(prisma as never, wx as never, outbox as never);
-    return { service, wx, outbox, prisma };
-  }
+      houseBinding: { findMany: jest.fn().mockResolvedValue(overrides.bindings ?? []) },
+      wxUser: { findUnique: jest.fn().mockResolvedValue(overrides.wxUser ?? null) },
+      outboxEvent: { findMany: jest.fn().mockResolvedValue([]) },
+    },
+  };
+  const service = new NotifyService(prisma as never, wx as never, outbox as never);
+  return { service, wx, outbox, prisma, notifyLogCreate };
+}
+describe('NotifyService Outbox 投递适配器', () => {
+
 
   it('无订阅模板的事件（如开票）跳过投递，不呼叫微信', async () => {
     const { service, wx } = makeDeliverer({ wxUser: { openid: 'openid-1' } });
@@ -885,7 +912,7 @@ describe('NotifyService Outbox 投递适配器', () => {
         tenantId: 'tenant-1',
         aggregateType: 'Bill',
         eventType: 'bill.published',
-        payload: { houseId: 'house-1' },
+        payload: { billId: 'b-1', houseId: 'house-1' },
       }),
     ).resolves.toBe('SKIPPED');
   });
@@ -899,7 +926,7 @@ describe('NotifyService Outbox 投递适配器', () => {
         tenantId: 'tenant-1',
         aggregateType: 'Bill',
         eventType: 'bill.published',
-        payload: { houseId: 'house-1' },
+        payload: { billId: 'b-1', houseId: 'house-1' },
       }),
     ).resolves.toBe('RETRY');
   });
@@ -912,8 +939,8 @@ describe('NotifyService Outbox 投递适配器', () => {
     const { service, outbox } = makeDeliverer({ bindings: [{ wxUser: { openid: 'openid-1' } }], sendSubscribeMessage: send });
     const lease = new Date('2030-01-01T00:00:30.000Z');
     outbox.claimBatch.mockResolvedValue([
-      { id: 'ok-1', tenantId: 'tenant-1', aggregateType: 'Bill', eventType: 'bill.published', payload: { houseId: 'house-1' }, claimOwner: 'w-1', claimExpiresAt: lease },
-      { id: 'retry-1', tenantId: 'tenant-1', aggregateType: 'Bill', eventType: 'bill.published', payload: { houseId: 'house-1' }, claimOwner: 'w-1', claimExpiresAt: lease },
+      { id: 'ok-1', tenantId: 'tenant-1', aggregateType: 'Bill', eventType: 'bill.published', payload: { billId: 'b-1', houseId: 'house-1' }, claimOwner: 'w-1', claimExpiresAt: lease },
+      { id: 'retry-1', tenantId: 'tenant-1', aggregateType: 'Bill', eventType: 'bill.published', payload: { billId: 'b-1', houseId: 'house-1' }, claimOwner: 'w-1', claimExpiresAt: lease },
     ]);
 
     const stats = await service.dispatchOutboxBatch({ tenantId: 'tenant-1', workerId: 'w-1' });
@@ -932,5 +959,115 @@ describe('NotifyService Outbox 投递适配器', () => {
     delete process.env.OUTBOX_DISPATCH_ENABLED;
     await service.scheduledOutboxDispatch();
     expect(outbox.claimBatch).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 通知只能有一条投递实现。
+ *
+ * 生产实测（NotifyLog 28 条）：BILL_CREATED **零条 SENT**，4 条 43101 FAILED
+ * ——业主从来没有收到过出账通知。根因是发布账单时有两条并行路径都无条件发：
+ *   1) publishBatch 事务外的 notifier.onBillCreated 循环（dedup 传 false）；
+ *   2) Outbox 的 bill.published 事件，走另一套代码、完全不查 NotifyLog。
+ * 而「一次性订阅」一次授权只能发一条，两条路径抢同一份额度，后到的必得 43101。
+ *
+ * 第二条路径还有两处独立缺陷：payload 只有 billId/houseId/period/amount，
+ * 于是费用名称退化成账期、dueDate 为空串（微信判 47003 → 被当成可重试 →
+ * 耗尽 5 次 attempts → CRITICAL 告警）；且它一条 NotifyLog 都不写，
+ * 物业在「通知记录」页看不到经它发出的任何消息。
+ */
+describe('通知投递的单一实现', () => {
+  /*
+   * 必须剥注释再断言。本文件这几条守卫的第一版没剥，而上方注释里写着
+   * 「原先传 false」「payload 只有 …」这些说明文字，于是
+   * expect(body).not.toContain('false') 直接被注释命中而失败（假阳性）；
+   * 反过来若断言的是 toContain，注释就会制造假绿。
+   * 「注释被当成代码」这一类错误本会话已出现四次，故此处显式剥离。
+   */
+  const src = readFileSync(join(__dirname, 'notify.service.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+
+  it('onBillCreated 必须去重，不能再无条件发', () => {
+    const at = src.indexOf('async onBillCreated');
+    expect(at).toBeGreaterThan(-1);
+    const body = src.slice(at, src.indexOf('async onReminder'));
+    expect(body).toContain("this.send('BILL_CREATED', bill, true)");
+    expect(body).not.toContain('false');
+  });
+
+  it('deliverOutboxEvent 复用 send()，不得自建第二套发送逻辑', () => {
+    const at = src.indexOf('async deliverOutboxEvent');
+    const body = src.slice(at, src.indexOf('\n  }\n', at));
+    expect(body).toContain('this.send(templateType, bill');
+    // 自己拼模板字段、自己调微信，就是第二套实现
+    expect(body).not.toContain('buildSubscribeData');
+    expect(body).not.toContain('sendSubscribeMessage');
+  });
+
+  it('投递从库里取账单，不从 payload 取 title/dueDate', () => {
+    const at = src.indexOf('async deliverOutboxEvent');
+    const body = src.slice(at, src.indexOf('\n  }\n', at));
+    expect(body).toContain('bill.findUnique');
+    expect(body).not.toMatch(/payload\.(title|dueDate)/);
+  });
+
+  it('每个收件人都写 NotifyLog（含失败），否则物业无从判断是否送达', async () => {
+    const { service, notifyLogCreate } = makeDeliverer({
+      bindings: [{ wxUser: { id: 'u1', openid: 'openid-1' } }],
+      sendSubscribeMessage: jest.fn().mockResolvedValue({ ok: false, error: '43101 refuse' }),
+    });
+    await service.deliverOutboxEvent({
+      id: 'e-log',
+      tenantId: 'tenant-1',
+      aggregateType: 'Bill',
+      eventType: 'bill.published',
+      payload: { billId: 'b-1', houseId: 'house-1' },
+    });
+    expect(notifyLogCreate).toHaveBeenCalledTimes(1);
+    expect(notifyLogCreate.mock.calls[0][0].data).toMatchObject({
+      billId: 'b-1',
+      type: 'BILL_CREATED',
+      status: 'FAILED',
+    });
+  });
+
+  it('已 SENT 过的账单不再重发（两条触发源共用同一份去重）', async () => {
+    const send = jest.fn().mockResolvedValue({ ok: true });
+    const { service } = makeDeliverer({
+      bindings: [{ wxUser: { id: 'u1', openid: 'openid-1' } }],
+      sendSubscribeMessage: send,
+      alreadySent: { id: 'log-1' },
+    });
+    await expect(
+      service.deliverOutboxEvent({
+        id: 'e-dedup',
+        tenantId: 'tenant-1',
+        aggregateType: 'Bill',
+        eventType: 'bill.published',
+        payload: { billId: 'b-1', houseId: 'house-1' },
+      }),
+    ).resolves.toBe('SKIPPED');
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('同一 openid 的多条绑定只发一次（额度按人算，发两次要两次授权）', async () => {
+    const send = jest.fn().mockResolvedValue({ ok: true });
+    const { service } = makeDeliverer({
+      bindings: [
+        { wxUser: { id: 'u1', openid: 'openid-1' } },
+        { wxUser: { id: 'u1', openid: 'openid-1' } },
+        { wxUser: { id: 'u2', openid: 'openid-2' } },
+      ],
+      sendSubscribeMessage: send,
+    });
+    await service.deliverOutboxEvent({
+      id: 'e-uniq',
+      tenantId: 'tenant-1',
+      aggregateType: 'Bill',
+      eventType: 'bill.published',
+      payload: { billId: 'b-1', houseId: 'house-1' },
+    });
+    expect(send).toHaveBeenCalledTimes(2);
   });
 });
