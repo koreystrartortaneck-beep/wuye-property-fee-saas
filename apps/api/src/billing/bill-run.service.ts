@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ErrorCode, MeterType, RuleType, ShareBy } from '@pf/shared';
 import { BizException } from '../common/biz.exception';
 import { PrismaService } from '../prisma/prisma.service';
@@ -138,7 +139,16 @@ export class BillRunService {
      * 这一处是上一批规模改造漏掉的：当时只改了「发布批次」与「账单导入」两处，
      * 而出账本身还在逐条写 —— scale.spec 的守卫也只覆盖了那两处。
      */
-    const pending: Array<Record<string, unknown>> = [];
+    /*
+     * 类型取 BillCreateManyInput 去掉 tenantId —— 租户 ID 由 prisma.t 的租户扩展
+     * 自动注入（tenant-extension 的 injectData 对数组也逐项注入），所以这里不能写、
+     * 也不该写。
+     *
+     * 不用 Record<string, unknown>：那会让 Prisma 对**其余所有字段**的校验一并失效
+     * （拼错字段名、类型不符都不报错），而 createMany 是批量写，错一个字段就是几千行
+     * 脏数据。这里只放弃 tenantId 一项的检查，其余照常。
+     */
+    const pending: Array<Omit<Prisma.BillCreateManyInput, 'tenantId'>> = [];
     const stageBill = (houseId: string, cents: number, snapshot: Record<string, unknown>) => {
       pending.push({
         communityId: rule.communityId,
@@ -169,7 +179,8 @@ export class BillRunService {
     const flushBills = async () => {
       if (pending.length === 0) return;
       const res = await this.prisma.t.bill.createMany({
-        data: pending as never,
+        // tenantId 由租户扩展注入，故此处补上类型出口（运行时值由扩展提供）
+        data: pending as Prisma.BillCreateManyInput[],
         skipDuplicates: true,
       });
       generated = res.count;

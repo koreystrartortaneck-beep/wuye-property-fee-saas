@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Injectable, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
 import { HOUSE_TYPES, HouseType } from '@pf/shared';
@@ -154,7 +155,13 @@ export class HousesService {
     const toCreate = valid.filter((r) => !idByCode.has(r.code));
     if (toCreate.length) {
       const res = await this.prisma.t.house.createMany({
-        data: toCreate.map((r) => ({ ...r, communityId: dto.communityId })) as never,
+        /*
+         * 只对 tenantId 留类型出口 —— 它由 prisma.t 的租户扩展自动注入
+         * （tenant-extension 的 injectData 对数组也逐项注入），这里不能写也不该写。
+         * 不用 `as never`：那会让 Prisma 对**其余所有字段**的校验一并失效，
+         * 而 createMany 是批量写，错一个字段名就是几千行脏数据。
+         */
+        data: toCreate.map((r) => ({ ...r, communityId: dto.communityId })) as Prisma.HouseCreateManyInput[],
         // 兜住 @@unique([communityId, code])：同一次导入里文件内重复的房号
         skipDuplicates: true,
       });

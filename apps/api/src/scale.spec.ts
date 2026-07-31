@@ -250,3 +250,69 @@ describe('跳过明细必须汇总后落库', () => {
     expect(body).not.toContain('skippedDetail');
   });
 });
+
+/**
+ * 批量写的 data 不得用 `as never` / `Record<string, unknown>` 绕过类型检查。
+ *
+ * 这是我这轮改造时**两次**踩到的同一个模式（bill-run 与 houses 各一处）：
+ * 把逐条 create 换成 createMany 时，因为租户扩展会自动注入 tenantId、
+ * 而 Prisma 的 CreateManyInput 要求它必填，于是顺手写了 `as never` 让它过。
+ *
+ * 代价是 Prisma 对**其余所有字段**的校验一并失效 —— 字段名拼错、漏必填字段都不报错。
+ * 而 createMany 是批量写：错一个字段名就是几千行脏数据，且不会有任何运行时提示。
+ * 实测在收紧类型后注入「houseId 写成 housId」「删掉必填的 period」，tsc 立刻报错；
+ * 用 as never 时两者都静默通过。
+ *
+ * 正确写法是只对 tenantId 留出口：
+ *   Array<Omit<Prisma.XCreateManyInput, 'tenantId'>>  或
+ *   ... as Prisma.XCreateManyInput[]
+ * 后者仍是断言，但 TS 会做「类型是否充分重叠」的检查，拼错字段名照样报 TS2352。
+ */
+describe('批量写不得绕过类型检查', () => {
+  it('createMany 的 data 不用 as never', () => {
+    const offenders: string[] = [];
+    const walk = (dir: string): string[] => {
+      const out: string[] = [];
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) out.push(...walk(p));
+        else if (e.name.endsWith('.ts') && !e.name.endsWith('.spec.ts')) out.push(p);
+      }
+      return out;
+    };
+    for (const file of walk(SRC)) {
+      const src = fs
+        .readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+      // 取每个 createMany( 之后的一小段，看 data 那一行有没有 as never
+      for (const m of src.matchAll(/createMany\(\s*\{/g)) {
+        const seg = src.slice(m.index as number, (m.index as number) + 600);
+        const dataLine = /data:\s*([^\n]*)/.exec(seg)?.[1] ?? '';
+        if (/as never/.test(dataLine)) {
+          offenders.push(`${path.relative(SRC, file)} → data: … as never`);
+        }
+      }
+    }
+    if (offenders.length) {
+      throw new Error(
+        'createMany 的 data 用了 as never，Prisma 对所有字段的校验一并失效 ——' +
+          '字段名拼错、漏必填字段都不报错，而批量写错一个字段就是几千行脏数据：\n  ' +
+          offenders.join('\n  ') +
+          "\n改用 Omit<Prisma.XCreateManyInput, 'tenantId'>（租户 ID 由租户扩展注入）。",
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('攒批数组不用 Record<string, unknown>（等于放弃全部字段检查）', () => {
+    const offenders: string[] = [];
+    for (const rel of ['billing/bill-run.service.ts', 'billing/bill-import.service.ts', 'admin/houses.controller.ts']) {
+      const src = read(rel);
+      if (/const pending: Array<Record<string, unknown>>/.test(src)) {
+        offenders.push(`${rel} → pending 用了 Record<string, unknown>`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
