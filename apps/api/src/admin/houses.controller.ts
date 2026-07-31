@@ -6,6 +6,7 @@ import { HOUSE_TYPES, HouseType } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
+import { assertCommunityInTenant } from './community-scope';
 import { PrismaService } from '../prisma/prisma.service';
 
 class HouseRowDto {
@@ -124,6 +125,14 @@ export class HousesService {
 
   /** 批量导入：唯一键 (communityId, code) upsert，逐行汇报结果 */
   async import(dto: ImportHousesDto) {
+    /*
+     * 先确认小区属于本公司再导入。
+     *
+     * 不校验的话，一批房屋会挂到别家公司的小区上：prisma.t 保证 tenantId 是对的，
+     * 但 communityId 指向别处 —— 房屋在本公司的任何列表里都查不到（列表按小区过滤），
+     * 而导入结果显示「成功 N 条」。物业会以为导好了，直到发现房屋一个都不在。
+     */
+    await assertCommunityInTenant(this.prisma, dto.communityId);
     let created = 0;
     let updated = 0;
     const failed: { index: number; reason: string }[] = [];

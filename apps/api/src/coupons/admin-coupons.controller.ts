@@ -17,6 +17,7 @@ import { AdminGuard } from '../auth/admin.guard';
 import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery } from '../common/pagination';
 import { Prisma } from '@prisma/client';
+import { assertCommunityInTenant } from '../admin/community-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import { CouponsService } from './coupons.service';
 
@@ -97,7 +98,8 @@ export class AdminCouponsController {
   ) {}
 
   @Post('coupons')
-  create(@Body() dto: CreateCouponDto) {
+  async create(@Body() dto: CreateCouponDto) {
+    await assertCommunityInTenant(this.prisma, dto.communityId);
     return this.prisma.t.coupon.create({
       data: {
         ...dto,

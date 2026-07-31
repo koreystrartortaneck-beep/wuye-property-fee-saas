@@ -15,6 +15,7 @@ import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { Prisma } from '@prisma/client';
+import { assertCommunityInTenant } from '../admin/community-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import { signUploadPaths, stripUploadSignature } from '../upload/upload-access';
 
@@ -64,7 +65,8 @@ export class AdminWorkLogsController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Post()
-  create(@Current() cur: CurrentAdmin, @Body() dto: CreateWorkLogDto) {
+  async create(@Current() cur: CurrentAdmin, @Body() dto: CreateWorkLogDto) {
+    await assertCommunityInTenant(this.prisma, dto.communityId);
     /*
      * 不用 `as never`：那会把整个 data 的字段校验关掉 —— 字段名写错、类型不符都编译通过，
      * 直到运行时才炸。这里显式列字段，tenantId 由 prisma.t 注入。

@@ -7,6 +7,7 @@ import { RolesGuard } from '../auth/roles.decorator';
 import { BizException } from '../common/biz.exception';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { Prisma } from '@prisma/client';
+import { assertCommunityInTenant } from '../admin/community-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import { validateRuleParams } from './engine/rule-params';
 
@@ -104,7 +105,8 @@ function disposition(params: unknown): string | null {
 export class FeeRulesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(dto: CreateFeeRuleDto) {
+  async create(dto: CreateFeeRuleDto) {
+    await assertCommunityInTenant(this.prisma, dto.communityId);
     if (dto.ruleType === 'FORMULA') {
       throw new BizException(ErrorCode.FORMULA_INVALID, 'FORMULA 规则已停用，请改用固定/面积/计量/公摊规则或账单导入');
     }

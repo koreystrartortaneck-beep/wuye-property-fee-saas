@@ -16,6 +16,7 @@ import { AdminGuard } from '../auth/admin.guard';
 import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { Prisma } from '@prisma/client';
+import { assertCommunityInTenant } from '../admin/community-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import { ServicesService } from './services.service';
 
@@ -117,7 +118,8 @@ class ListOrdersQuery extends PageQuery {
 class ServiceItemsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(dto: CreateItemDto) {
+  async create(dto: CreateItemDto) {
+    await assertCommunityInTenant(this.prisma, dto.communityId);
     /*
      * 不用 `as never`：它把整个 data 的字段校验关掉，字段名写错也编译通过。
      * price 必须显式转 —— DTO 里是 number，列是 Decimal(10,2)，靠 as never

@@ -5,6 +5,7 @@ import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { Prisma } from '@prisma/client';
+import { assertCommunityInTenant } from '../admin/community-scope';
 import { PrismaService } from '../prisma/prisma.service';
 
 class CreateAnnouncementDto {
@@ -53,7 +54,8 @@ export class AdminAnnouncementsController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Post()
-  create(@Current() cur: CurrentAdmin, @Body() dto: CreateAnnouncementDto) {
+  async create(@Current() cur: CurrentAdmin, @Body() dto: CreateAnnouncementDto) {
+    await assertCommunityInTenant(this.prisma, dto.communityId);
     return this.prisma.t.announcement.create({
       // 不整体转 never：否则其余字段的校验一并失效。tenantId 由租户扩展注入。
       data: {
