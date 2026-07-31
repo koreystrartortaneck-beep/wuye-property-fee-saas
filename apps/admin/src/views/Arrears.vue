@@ -116,7 +116,7 @@
         <EmptyState
           v-if="filter.overdueDays"
           icon="🔎"
-          title="没有符合条件的欠费住户"
+          title="没有符合条件的欠费业主"
           desc="当前按「逾期天数」做了筛选，放宽条件可以看到更多"
         >
           <template #action><el-button @click="clearFilter">清除筛选</el-button></template>
@@ -125,7 +125,7 @@
           v-else
           icon="✅"
           title="太好了，当前没有欠费"
-          desc="发布账单后，未缴清的住户会自动出现在这里"
+          desc="发布账单后，未缴清的业主会自动出现在这里"
         />
       </template>
     </el-table>
@@ -186,7 +186,7 @@ const truncated = ref(false);
  *
  * 表格开了 reserve-selection（按 row-key 跨数据刷新保留勾选），这本是为了翻页时
  * 不丢选择；但配上「筛选后直接 load」就有真实后果：勾了 A 小区的 20 户，切到
- * B 小区，那 20 户仍在 selected 里，点「批量催缴」会给已经不在视野里的住户发提醒，
+ * B 小区，那 20 户仍在 selected 里，点「批量催缴」会给已经不在视野里的业主发提醒，
  * 而操作者以为自己发的是当前列表。
  */
 async function reload() {
@@ -229,7 +229,7 @@ async function load() {
 }
 
 function viewBills(row: Row) {
-  // 进住户档案而非账单列表：催缴时要同时看到欠费、缴费历史与联系方式
+  // 进业主档案而非账单列表：催缴时要同时看到欠费、缴费历史与联系方式
   void router.push(`/houses/${row.houseId}`);
 }
 
@@ -269,7 +269,7 @@ async function dun() {
         '。发送结果可在「通知记录」查看。',
     );
     // 发完就清掉选择并重新加载：不清的话勾选会跨筛选保留（reserve-selection），
-    // 下一次点催缴可能把已经被筛掉的住户又发一遍。
+    // 下一次点催缴可能把已经被筛掉的业主又发一遍。
     selectionRef.value?.clearSelection();
     selected.value = [];
     dunRequestId = '';
@@ -306,8 +306,8 @@ onMounted(load);
   margin-bottom: var(--sp-3);
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
   flex-wrap: wrap;
 }
 

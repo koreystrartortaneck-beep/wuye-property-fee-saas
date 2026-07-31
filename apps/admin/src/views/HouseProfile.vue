@@ -350,8 +350,8 @@ onMounted(load);
   padding: var(--sp-4);
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
   flex-wrap: wrap;
 }
 .hero-main {
@@ -398,8 +398,8 @@ onMounted(load);
   margin-top: var(--sp-4);
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
   padding: 0 var(--sp-4) var(--sp-3);
 }
 .pf-empty {

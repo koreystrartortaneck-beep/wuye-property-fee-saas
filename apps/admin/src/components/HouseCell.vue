@@ -2,7 +2,7 @@
   <button
     class="house-link"
     :disabled="!houseId"
-    :title="houseId ? '打开住户档案' : undefined"
+    :title="houseId ? '打开业主档案' : undefined"
     @click.stop="open"
   >
     <span class="cell-main">{{ mainText }}</span>
@@ -12,7 +12,7 @@
 
 <script setup lang="ts">
 /**
- * 表格里的「房屋」单元格，点击直达住户档案。
+ * 表格里的「房屋」单元格，点击直达业主档案。
  *
  * 房屋是后台所有单据的交汇点：一条绑定申请、一张工单、一个访客码，
  * 处理时都要先回答「这户是谁、欠不欠费、之前有没有别人绑过」。

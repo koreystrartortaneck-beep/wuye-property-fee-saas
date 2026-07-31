@@ -113,7 +113,7 @@ async function load() {
   );
   readings.value = data.readings;
   missing.value = data.missing;
-  // 名称映射（missing 自带；readings 里的从房产列表补）
+  // 名称映射（missing 自带；readings 里的从房屋列表补）
   const map = new Map<string, string>();
   for (const h of data.missing) map.set(h.id, `${h.displayName}（${h.code}）`);
   const page = await api<{ list: { id: string; displayName: string; code: string }[] }>(

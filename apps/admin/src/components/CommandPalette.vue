@@ -41,7 +41,7 @@
         </template>
 
         <template v-if="houseHits.length">
-          <div class="palette-section">房屋 · 回车打开住户档案</div>
+          <div class="palette-section">房屋 · 回车打开业主档案</div>
           <button
             v-for="(h, i) in houseHits"
             :key="h.id"
@@ -63,7 +63,7 @@
           没有找到「{{ keyword }}」
         </div>
         <div v-if="!keyword" class="palette-tip">
-          输入房号或业主姓名可直接定位住户；输入功能名可跳转页面
+          输入房号或业主姓名可直接定位业主；输入功能名可跳转页面
         </div>
       </div>
     </div>
@@ -158,7 +158,7 @@ function go(path: string) {
 
 function goHouse(h: House) {
   visible.value = false;
-  // 直达住户档案：该户的账单/缴费/绑定/报修/开票一次看全，
+  // 直达业主档案：该户的账单/缴费/绑定/报修/开票一次看全，
   // 这是「业主来电问费用」场景的落点。
   void router.push(`/houses/${h.id}`);
 }

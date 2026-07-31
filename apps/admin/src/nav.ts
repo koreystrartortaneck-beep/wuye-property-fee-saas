@@ -46,10 +46,10 @@ export const NAV: NavGroup[] = [
   },
   {
     key: 'residents',
-    label: '住户',
+    label: '业主',
     icon: 'HomeFilled',
     pages: [
-      { path: '/houses', label: '房屋与业主', hint: '点任意一行查住户档案（账单/缴费/绑定/报修/开票）；支持批量导入' },
+      { path: '/houses', label: '房屋与业主', hint: '点任意一行查业主档案（账单/缴费/绑定/报修/开票）；支持批量导入' },
       {
         path: '/bindings',
         label: '实名审核',
@@ -74,7 +74,7 @@ export const NAV: NavGroup[] = [
         path: '/arrears',
         label: '欠费与催缴',
         title: '欠费与催缴',
-        hint: '按住户看谁欠费、欠多久，可批量推送催缴提醒或导出清单',
+        hint: '按业主看谁欠费、欠多久，可批量推送催缴提醒或导出清单',
       },
       { path: '/bills', label: '账单查询', hint: '查看每户的账单、缴费与逾期情况' },
       { path: '/bill-import', label: '导入账单', hint: '每户金额不同时，用表格批量导入' },

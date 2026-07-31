@@ -539,10 +539,10 @@ onMounted(async () => {
   justify-content: space-between;
   gap: var(--sp-4);
   padding: var(--sp-4);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   background: var(--bg-card);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-card);
   flex-wrap: wrap;
 }
 .verdict.ok {

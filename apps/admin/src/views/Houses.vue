@@ -10,7 +10,7 @@
       <el-input v-model="filter.keyword" placeholder="房号/业主/手机号" style="width: 200px" clearable @keyup.enter="reload" />
       <el-button @click="reload">查询</el-button>
       <div class="toolbar-spacer" />
-      <el-button type="primary" :disabled="!filter.communityId" @click="openCreate">新增房产</el-button>
+      <el-button type="primary" :disabled="!filter.communityId" @click="openCreate">新增房屋</el-button>
       <el-button type="success" :disabled="!filter.communityId" @click="importDialog = true">CSV 批量导入</el-button>
     </div>
 
@@ -81,7 +81,7 @@
     />
 
     <!-- 新增/编辑 -->
-    <el-dialog v-model="dialog" :title="editing ? '编辑房产' : '新增房产'" width="min(480px, 92vw)">
+    <el-dialog v-model="dialog" :title="editing ? '编辑房屋' : '新增房屋'" width="min(480px, 92vw)">
       <el-form label-width="90px">
         <el-form-item label="类型">
           <el-select v-model="form.type" :disabled="!!editing">
@@ -101,7 +101,7 @@
     </el-dialog>
 
     <!-- CSV 导入 -->
-    <el-dialog v-model="importDialog" title="CSV 批量导入房产" width="min(640px, 92vw)">
+    <el-dialog v-model="importDialog" title="CSV 批量导入房屋" width="min(640px, 92vw)">
       <p class="hint">
         列顺序：<b>类型,编号,显示名称,面积,业主姓名,业主手机</b>（首行为表头会自动跳过；类型填 住宅/车位/商铺 或 RESIDENCE/PARKING/SHOP）
       </p>

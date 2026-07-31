@@ -5,11 +5,11 @@
 
   <view class="bind-card card">
     <view class="bind-card-title">手机号快速绑定</view>
-    <view class="bind-card-desc">物业已登记您的手机号时，可自动匹配名下房产</view>
+    <view class="bind-card-desc">物业已登记您的手机号时，可自动匹配名下房屋</view>
     <!-- real 模式：微信授权按钮；mock 模式：手动输入 -->
     <block wx:if="{{!mockAuth}}">
       <button class="dark-button match-btn-full" open-type="getPhoneNumber" bindgetphonenumber="onGetPhone">
-        微信授权手机号，自动匹配房产
+        微信授权手机号，自动匹配房屋
       </button>
     </block>
     <view wx:else class="phone-row">

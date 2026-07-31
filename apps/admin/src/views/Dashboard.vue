@@ -12,13 +12,13 @@
     </div>
 
     <!--
-      查户：业主来电问「我这个月交了没」是日常最高频动作，之前只能先进「住户」页
+      查户：业主来电问「我这个月交了没」是日常最高频动作，之前只能先进「业主」页
       再搜，用户反馈找不到档案入口。这里直接给一个首屏搜索框，唯一命中直接进档案。
     -->
     <el-card class="block lookup">
       <div class="lk-row">
         <div class="lk-text">
-          <b class="lk-title">查住户档案</b>
+          <b class="lk-title">查业主档案</b>
           <span class="lk-desc">输入房号、业主姓名或手机号，直接看这户的账单、缴费、绑定、报修、开票</span>
         </div>
         <el-input
@@ -183,7 +183,7 @@ const rowsData = ref<CommunityRow[]>([]);
 const period = ref('');
 const loading = ref(false);
 
-/** 查户：唯一命中直接进档案，多条则落到住户列表（已带关键词），零条给明确提示 */
+/** 查户：唯一命中直接进档案，多条则落到业主列表（已带关键词），零条给明确提示 */
 const lookupKeyword = ref('');
 const lookingUp = ref(false);
 

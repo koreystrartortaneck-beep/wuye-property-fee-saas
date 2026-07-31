@@ -1,3 +1,12 @@
+/*
+ * 路由不再携带 meta.title。
+ *
+ * 这些标题从来没有显示过：页面标题取自 nav.ts 的 locate()（Layout.vue），
+ * 全仓库只有 router.ts 自己的守卫读过 meta.superOnly，没有任何地方读 meta.title、
+ * 也没有任何地方给 document.title 赋值。而这 23 条死文案保存着一整套与实际显示
+ * 系统性冲突的旧词汇（房产管理/工作照片墙/收费规则/租户管理/绑定审核/收缴看板…），
+ * 任何人照着它改文案都会改错地方——这是下一轮术语漂移的温床。
+ */
 import { createRouter, createWebHashHistory } from 'vue-router';
 import { store } from './store';
 import Layout from './layout/Layout.vue';
@@ -11,36 +20,35 @@ export const router = createRouter({
       component: Layout,
       children: [
         { path: '', redirect: '/dashboard' },
-        { path: 'dashboard', component: () => import('./views/Dashboard.vue'), meta: { title: '收缴看板' } },
-        { path: 'communities', component: () => import('./views/Communities.vue'), meta: { title: '小区管理' } },
-        { path: 'houses', component: () => import('./views/Houses.vue'), meta: { title: '房产管理' } },
+        { path: 'dashboard', component: () => import('./views/Dashboard.vue') },
+        { path: 'communities', component: () => import('./views/Communities.vue') },
+        { path: 'houses', component: () => import('./views/Houses.vue') },
         {
           path: 'houses/:houseId',
           component: () => import('./views/HouseProfile.vue'),
-          meta: { title: '住户档案' },
         },
-        { path: 'bindings', component: () => import('./views/Bindings.vue'), meta: { title: '绑定审核' } },
-        { path: 'tickets', component: () => import('./views/Tickets.vue'), meta: { title: '报事报修' } },
-        { path: 'announcements', component: () => import('./views/Announcements.vue'), meta: { title: '社区公告' } },
-        { path: 'visitor-passes', component: () => import('./views/VisitorPasses.vue'), meta: { title: '访客通行' } },
-        { path: 'work-logs', component: () => import('./views/WorkLogs.vue'), meta: { title: '工作照片墙' } },
-        { path: 'services', component: () => import('./views/Services.vue'), meta: { title: '生活服务' } },
-        { path: 'coupons', component: () => import('./views/Coupons.vue'), meta: { title: '优惠券' } },
-        { path: 'fee-rules', component: () => import('./views/FeeRules.vue'), meta: { title: '收费规则' } },
-        { path: 'meters', component: () => import('./views/MeterReadings.vue'), meta: { title: '抄表录入' } },
-        { path: 'share-pools', component: () => import('./views/SharePools.vue'), meta: { title: '公摊录入' } },
-        { path: 'bill-run', component: () => import('./views/BillRun.vue'), meta: { title: '出账' } },
-        { path: 'arrears', component: () => import('./views/Arrears.vue'), meta: { title: '欠费与催缴' } },
-        { path: 'bills', component: () => import('./views/BillList.vue'), meta: { title: '账单查询' } },
-        { path: 'bill-import', component: () => import('./views/BillImport.vue'), meta: { title: '导入账单' } },
-        { path: 'payments', component: () => import('./views/Payments.vue'), meta: { title: '支付与退款' } },
-        { path: 'reconciliations', component: () => import('./views/Reconciliations.vue'), meta: { title: '对账管理' } },
-        { path: 'invoices', component: () => import('./views/InvoiceApplications.vue'), meta: { title: '开票申请' } },
-        { path: 'billing-settings', component: () => import('./views/BillingSettings.vue'), meta: { title: '收款策略' } },
-        { path: 'operations', component: () => import('./views/Operations.vue'), meta: { title: '运行状况' } },
-        { path: 'audit-logs', component: () => import('./views/AuditLogs.vue'), meta: { title: '审计日志' } },
-        { path: 'notify-logs', component: () => import('./views/NotifyLogs.vue'), meta: { title: '通知记录' } },
-        { path: 'tenants', component: () => import('./views/Tenants.vue'), meta: { title: '租户管理', superOnly: true } },
+        { path: 'bindings', component: () => import('./views/Bindings.vue') },
+        { path: 'tickets', component: () => import('./views/Tickets.vue') },
+        { path: 'announcements', component: () => import('./views/Announcements.vue') },
+        { path: 'visitor-passes', component: () => import('./views/VisitorPasses.vue') },
+        { path: 'work-logs', component: () => import('./views/WorkLogs.vue') },
+        { path: 'services', component: () => import('./views/Services.vue') },
+        { path: 'coupons', component: () => import('./views/Coupons.vue') },
+        { path: 'fee-rules', component: () => import('./views/FeeRules.vue') },
+        { path: 'meters', component: () => import('./views/MeterReadings.vue') },
+        { path: 'share-pools', component: () => import('./views/SharePools.vue') },
+        { path: 'bill-run', component: () => import('./views/BillRun.vue') },
+        { path: 'arrears', component: () => import('./views/Arrears.vue') },
+        { path: 'bills', component: () => import('./views/BillList.vue') },
+        { path: 'bill-import', component: () => import('./views/BillImport.vue') },
+        { path: 'payments', component: () => import('./views/Payments.vue') },
+        { path: 'reconciliations', component: () => import('./views/Reconciliations.vue') },
+        { path: 'invoices', component: () => import('./views/InvoiceApplications.vue') },
+        { path: 'billing-settings', component: () => import('./views/BillingSettings.vue') },
+        { path: 'operations', component: () => import('./views/Operations.vue') },
+        { path: 'audit-logs', component: () => import('./views/AuditLogs.vue') },
+        { path: 'notify-logs', component: () => import('./views/NotifyLogs.vue') },
+        { path: 'tenants', component: () => import('./views/Tenants.vue'), meta: { superOnly: true } },
       ],
     },
   ],

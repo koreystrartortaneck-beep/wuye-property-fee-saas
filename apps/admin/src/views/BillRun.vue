@@ -116,7 +116,7 @@
         <p class="ok-line">✓ 本次生成 <b>{{ lastRun.generated }}</b> 户</p>
         <p v-if="lastRun.skipped > 0" class="warn-line">
           ⚠ 有 <b>{{ lastRun.skipped }}</b> 户没能生成：{{ skipText(lastRun) }}
-          <span class="warn-tip">（请到「住户 → 房屋与业主」补齐这些房屋的信息后再重新生成）</span>
+          <span class="warn-tip">（请到「业主 → 房屋与业主」补齐这些房屋的信息后再重新生成）</span>
         </p>
       </div>
     </div>
@@ -589,10 +589,10 @@ onMounted(async () => {
   justify-content: space-between;
   gap: var(--sp-4);
   padding: var(--sp-3) var(--sp-4);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   border: 1px solid var(--border);
   background: var(--bg-card);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-card);
   margin-bottom: var(--sp-4);
   flex-wrap: wrap;
 }
@@ -645,15 +645,15 @@ onMounted(async () => {
 .step {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
   margin-bottom: var(--sp-3);
   padding: var(--sp-4);
   transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .step.active {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft), var(--shadow-sm);
+  box-shadow: 0 0 0 3px var(--primary-soft), var(--shadow-card);
 }
 .step.muted {
   background: transparent;

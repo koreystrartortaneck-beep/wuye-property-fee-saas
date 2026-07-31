@@ -269,3 +269,72 @@ describe('语义色与枚举映射', () => {
     expect(ui).toMatch(/\.house-link:disabled[^}]*color:\s*var\(--text-secondary\)/);
   });
 });
+
+/**
+ * 卡片级容器必须用卡片令牌。
+ *
+ * 判据取自 .el-card 自身的定义（ui.css）：`--r-lg` 圆角 + `--shadow-card` 阴影。
+ * 有 8 处页面手写的面板用了 `--r-md`(10px) + `--shadow-sm`，与同屏的 el-card
+ * 差 4px 圆角和一档阴影——两者常常上下相邻（欠费页的概览条压在表格卡上方、
+ * 住户档案的 hero 压在标签卡上方、出账页的三个步骤卡与状态条），差异肉眼可见，
+ * 这正是「整体性差」的一种。
+ *
+ * 判据是「同时有 background: var(--bg-card) 与 box-shadow」= 它就是一张卡片，
+ * 而不是「凡出现 --r-md 都算错」——.hollow（虚线空占位）与 .picked-bill
+ * （行内已选账单小块）用 --r-md 是对的，它们不是卡片、也没有阴影。
+ */
+describe('卡片令牌一致', () => {
+  it('.el-card 的规范值就是 --r-lg + --shadow-card（前提校验）', () => {
+    const ui = read('styles/ui.css').replace(/\/\*[\s\S]*?\*\//g, '');
+    const m = ui.match(/\.el-card\s*\{([^}]*)\}/);
+    expect(m).not.toBeNull();
+    expect(m![1]).toContain('border-radius: var(--r-lg)');
+    expect(m![1]).toContain('box-shadow: var(--shadow-card)');
+  });
+
+  /*
+   * 例外：白底 + 微阴影，但不是内容卡片的元素。
+   *
+   * 侧栏导航项与分段控件的选中态是「胶囊从灰色轨道上浮起」，用的就是白底加一层
+   * 很浅的阴影；换成卡片级的 --shadow-card 会让一个 32px 高的胶囊拖着内容卡那么大
+   * 一片投影，反而破坏层级。判据（bg-card + 阴影）对内容容器成立，对这类小控件
+   * 不成立，所以显式列出而不是放宽判据——放宽会把真正该管的面板一起漏掉。
+   */
+  const NOT_A_CARD: Record<string, string> = {
+    'layout/Layout.vue → .nav-item.on': '侧栏导航选中态胶囊，白底微阴影是刻意的',
+    'layout/Layout.vue → .seg.on': '分段控件选中态胶囊，同上',
+  };
+
+  it('带 bg-card 底和阴影的手写面板，圆角与阴影跟卡片一致', () => {
+    const offenders: string[] = [];
+    for (const file of files) {
+      const src = fs.readFileSync(file, 'utf8');
+      const sty = src.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+      if (!sty) continue;
+      const css = sty[1].replace(/\/\*[\s\S]*?\*\//g, '');
+      for (const m of css.matchAll(/(\n\s*\.[a-zA-Z][\w-]*(?:[.:][\w-]+)?\s*)\{([^}]*)\}/g)) {
+        const sel = m[1].trim();
+        const body = m[2];
+        if (!body.includes('var(--bg-card)') || !body.includes('box-shadow')) continue;
+        if (body.includes('box-shadow: none')) continue;
+        const rel = path.relative(SRC, file);
+        if (`${rel} → ${sel}` in NOT_A_CARD) continue;
+        if (/border-radius:\s*var\(--r-(?:xs|sm|md)\)/.test(body)) {
+          offenders.push(`${rel} → ${sel} 的圆角不是 --r-lg`);
+        }
+        if (/box-shadow:[^;]*var\(--shadow-(?:xs|sm)\)/.test(body)) {
+          offenders.push(`${rel} → ${sel} 的阴影不是 --shadow-card`);
+        }
+      }
+    }
+    if (offenders.length) {
+      throw new Error(
+        '以下手写面板本质上是卡片（有 bg-card 底和阴影），但圆角/阴影与 el-card 不一致，' +
+          '同屏相邻时能直接看出差异：\n  ' +
+          offenders.join('\n  ') +
+          '\n请改用 --r-lg 与 --shadow-card；若它其实不是卡片，就去掉 bg-card 或阴影。',
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
+});

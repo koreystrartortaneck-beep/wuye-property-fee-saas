@@ -308,7 +308,7 @@ async function settleOffline() {
   settling.value = true;
   try {
     await api('/admin/payments/offline', { method: 'POST', body: payload });
-    ElMessage.success('已核销入账');
+    ElMessage.success('已确认入账');
     offline.value = { billId: '', voucherNo: '', paidAt: '', payerName: '' };
     offlineRequestId.value = '';
     await load();

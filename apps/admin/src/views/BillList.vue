@@ -202,7 +202,7 @@ const filter = ref({
   period: '',
   status: (route.query.status as string) || '',
   batchId: (route.query.batchId as string) || '',
-  // 由「欠费与催缴 → 查账单」带入，直接定位到该住户
+  // 由「欠费与催缴 → 查账单」带入，直接定位到该业主
   houseId: (route.query.houseId as string) || '',
 });
 const bills = ref<Bill[]>([]);

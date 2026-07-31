@@ -6,7 +6,7 @@
       <el-button type="primary" @click="find">查验</el-button>
       <template v-if="found">
         <span class="found">{{ found.coupon.name }}
-          <el-tag :type="found.status === 'UNUSED' ? 'success' : 'info'" class="ml">{{ found.status === 'UNUSED' ? '未使用' : '已核销' }}</el-tag>
+          <el-tag :type="found.status === 'UNUSED' ? 'success' : 'info'" class="ml">{{ found.status === 'UNUSED' ? '未使用' : '已使用' }}</el-tag>
         </span>
         <el-button v-if="found.status === 'UNUSED'" type="success" @click="verify">确认核销</el-button>
       </template>
@@ -160,7 +160,7 @@ async function find() {
 async function verify() {
   if (!found.value) return;
   await api(`/admin/coupons/verify/${verifyCode.value.toUpperCase()}`, { method: 'POST' });
-  ElMessage.success('已核销');
+  ElMessage.success('已标记为使用');
   found.value = { ...found.value, status: 'USED' };
   await load();
 }

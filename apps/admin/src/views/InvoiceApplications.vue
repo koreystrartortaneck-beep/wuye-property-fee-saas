@@ -53,7 +53,7 @@
             size="small"
             :type="row.status === 'REVERSAL_REQUIRED' ? 'danger' : 'warning'"
             @click="openReverse(row)"
-          >{{ row.status === 'REVERSAL_REQUIRED' ? '待红冲 · 立即处理' : '红冲' }}</el-button>
+          >{{ row.status === 'REVERSAL_REQUIRED' ? '待作废重开 · 立即处理' : '作废重开' }}</el-button>
         </template>
       </el-table-column>
       <template #empty>
@@ -190,14 +190,14 @@ async function submitProcess() {
 
 async function openReverse(row: Invoice) {
   try {
-    await ElMessageBox.confirm(`确认对申请单 ${row.applicationNo} 执行红冲（作废已开发票）？`, '红冲确认', {
+    await ElMessageBox.confirm(`确认作废申请单 ${row.applicationNo} 已开出的发票并重开？`, '作废重开确认', {
       type: 'warning',
     });
   } catch {
     return;
   }
   await api(`/admin/invoices/${row.id}/transition`, { method: 'POST', body: { status: 'REVERSED' } });
-  ElMessage.success('已红冲');
+  ElMessage.success('已作废，可重新开票');
   void refreshBadges();
   await load();
 }

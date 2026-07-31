@@ -61,10 +61,10 @@ Page({
     await loadMyHouses();
     wx.hideLoading();
     if (res.matchedHouses > 0) {
-      wx.showToast({ title: `已自动绑定 ${res.matchedHouses} 处房产`, icon: 'success' });
+      wx.showToast({ title: `已自动绑定 ${res.matchedHouses} 处房屋`, icon: 'success' });
       setTimeout(() => wx.switchTab({ url: '/pages/index/index' }), 1200);
     } else {
-      wx.showToast({ title: '未匹配到登记房产，请在下方申请绑定', icon: 'none', duration: 2500 });
+      wx.showToast({ title: '未匹配到登记房屋，请在下方申请绑定', icon: 'none', duration: 2500 });
     }
   },
 
