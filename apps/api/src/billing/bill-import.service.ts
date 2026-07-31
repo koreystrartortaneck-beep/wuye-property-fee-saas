@@ -356,31 +356,37 @@ export class BillImportService {
               createdBy: input.adminId,
             },
           });
-          for (const row of validRows) {
-            try {
-              await tx.bill.create({
-                data: {
-                  tenantId,
-                  communityId: input.communityId,
-                  houseId: row.houseId as string,
-                  ruleId: null,
-                  batchId: b.id,
-                  source: 'IMPORT',
-                  sourceRowKey: row.rowKey,
-                  period: input.period,
-                  title: row.title,
-                  snapshot: { importedFrom: input.fileName, houseCode: row.houseCode } as never,
-                  amount: row.amount,
-                  status: 'DRAFT',
-                  dueDate,
-                },
-              });
-            } catch (error) {
-              // 行键幂等：撞 (tenantId,batchId,sourceRowKey) 视为已存在 → 跳过。
-              if ((error as { code?: string }).code === 'P2002') continue;
-              throw error;
-            }
-          }
+          /*
+           * 一次 createMany 取代逐行 create。
+           *
+           * 逐行是每行 1 次数据库往返，而事务没有设 timeout、走 Prisma 默认 5000ms：
+           *     100 行 →  102 次 ≈ 0.3s
+           *   1600 行 → 1602 次 ≈ 4.8s  ← 临界点
+           *   3000 行 → 3002 次 ≈ 9.0s  → P2028 事务超时、全量回滚
+           * 而上传限制是 5MB（约 3000 行 xlsx 只有 60KB），行数本身没有上限，
+           * 也就是说一个楼盘的完整账单表根本导不进来，且失败时物业只看到一个 500。
+           *
+           * skipDuplicates 完整承接原来的 P2002 行键幂等语义
+           * （@@unique([tenantId, batchId, sourceRowKey])）。
+           */
+          await tx.bill.createMany({
+            data: validRows.map((row) => ({
+              tenantId,
+              communityId: input.communityId,
+              houseId: row.houseId as string,
+              ruleId: null,
+              batchId: b.id,
+              source: 'IMPORT',
+              sourceRowKey: row.rowKey,
+              period: input.period,
+              title: row.title,
+              snapshot: { importedFrom: input.fileName, houseCode: row.houseCode } as never,
+              amount: row.amount,
+              status: 'DRAFT',
+              dueDate,
+            })),
+            skipDuplicates: true,
+          });
           await this.audit.append(
             {
               tenantId,
@@ -401,6 +407,10 @@ export class BillImportService {
             tx,
           );
           return b;
+        }, {
+          // 与 outbox.service.ts 对齐。默认 5s 在 1600 行左右就会超时并全量回滚。
+          maxWait: 5_000,
+          timeout: 30_000,
         });
         return { batchId: batch.id, status: 'DRAFT', summary };
       } catch (error) {

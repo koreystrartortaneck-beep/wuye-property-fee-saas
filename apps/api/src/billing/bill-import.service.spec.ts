@@ -18,7 +18,12 @@ describe('BillImportService 导入解析与校验', () => {
   function makePrisma(overrides: Record<string, unknown> = {}) {
     const tx = {
       billBatch: { create: jest.fn().mockResolvedValue({ id: 'batch-1', status: 'DRAFT' }) },
-      bill: { create: jest.fn().mockResolvedValue({ id: 'bill-x' }) },
+      bill: {
+        create: jest.fn().mockResolvedValue({ id: 'bill-x' }),
+        // 导入改为一次 createMany：逐行 create 时 1600 行左右就会撞 Prisma 默认 5s
+        // 事务超时并全量回滚，而上传大小限制换算成行数约 3000 行、没有行数上限
+        createMany: jest.fn().mockResolvedValue({ count: 2 }),
+      },
     };
     return {
       tx,
@@ -28,7 +33,10 @@ describe('BillImportService 导入解析与校验', () => {
           bill: { findMany: jest.fn().mockResolvedValue([]) },
           community: { findFirst: jest.fn().mockResolvedValue({ id: 'community-1' }) },
           billBatch: { findFirst: jest.fn().mockResolvedValue(null) },
-          $transaction: jest.fn(async (cb: (client: typeof tx) => unknown) => cb(tx)),
+          $transaction: jest.fn(
+          // 第二个参数是事务选项：导入必须显式设 timeout（默认 5s 在约 1600 行回滚）
+          async (cb: (client: typeof tx) => unknown, _opts?: { maxWait?: number; timeout?: number }) => cb(tx),
+        ),
         },
         ...overrides,
       },
@@ -102,10 +110,22 @@ describe('BillImportService 导入解析与校验', () => {
     expect(tx.billBatch.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ source: 'IMPORT', status: 'DRAFT', importFileHash: expect.any(String) }),
     }));
-    expect(tx.bill.create).toHaveBeenCalledTimes(2);
-    expect(tx.bill.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ status: 'DRAFT', source: 'IMPORT', sourceRowKey: 'A1' }),
-    }));
+    // 必须是一次批量写，不能逐行
+    expect(tx.bill.create).not.toHaveBeenCalled();
+    expect(tx.bill.createMany).toHaveBeenCalledTimes(1);
+    const args = tx.bill.createMany.mock.calls[0][0];
+    // skipDuplicates 承接原来靠捕获 P2002 实现的行键幂等
+    // （@@unique([tenantId, batchId, sourceRowKey])）
+    expect(args.skipDuplicates).toBe(true);
+    expect(args.data).toHaveLength(2);
+    expect(args.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ status: 'DRAFT', source: 'IMPORT', sourceRowKey: 'A1' }),
+      ]),
+    );
+    // 事务必须显式设超时
+    const txOpts = prisma.raw.$transaction.mock.calls[0][1] as { timeout?: number } | undefined;
+    expect(txOpts?.timeout ?? 0).toBeGreaterThanOrEqual(30_000);
     expect(audit.append).toHaveBeenCalledWith(expect.objectContaining({ action: 'CREATE', resourceType: 'BillBatch' }), tx);
   });
 

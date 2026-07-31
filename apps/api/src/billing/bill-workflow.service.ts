@@ -3,7 +3,6 @@ import { ErrorCode } from '@pf/shared';
 import { AuditService } from '../audit/audit.service';
 import { BizException } from '../common/biz.exception';
 import { IdempotencyService } from '../common/idempotency.service';
-import { BILL_NOTIFIER, BillNotifier, NoopBillNotifier } from '../notify/notify.tokens';
 import { OutboxService } from '../notify/outbox.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { runWithTenant } from '../tenant/tenant-cls';
@@ -42,7 +41,6 @@ export class BillWorkflowService {
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly idempotency: IdempotencyService,
-    @Optional() @Inject(BILL_NOTIFIER) private readonly notifier: BillNotifier = new NoopBillNotifier(),
     @Optional() @Inject(BILL_ORDER_CLOSER) private readonly orderCloser: BillOrderCloser | null = null,
   ) {}
 
@@ -88,13 +86,23 @@ export class BillWorkflowService {
 
       try {
         const now = new Date();
-        const { publishedCount, bills } = await this.prisma.raw.$transaction(async (tx) => {
+        const { publishedCount } = await this.prisma.raw.$transaction(async (tx) => {
           const b = await tx.billBatch.updateMany({
             where: { id: input.batchId, tenantId, status: { in: ['DRAFT', 'GENERATING', 'READY'] } },
             data: { status: 'PUBLISHED', publishedAt: now, publishedBy: input.adminId },
           });
           if (b.count !== 1) throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '批次状态已变更');
-          const drafts = await tx.bill.findMany({ where: { batchId: input.batchId, status: 'DRAFT' } });
+          /*
+           * 只取投递与通知真正要用的列。原来取整行（含 snapshot 这个 Json 列），
+           * 3000 户批次一次拉进内存约数 MB，且全部要过 Decimal 反序列化。
+           */
+          const drafts = await tx.bill.findMany({
+            where: { batchId: input.batchId, status: 'DRAFT' },
+            select: {
+              id: true, tenantId: true, communityId: true, houseId: true,
+              period: true, title: true, amount: true, dueDate: true,
+            },
+          });
           const upd = await tx.bill.updateMany({
             where: { batchId: input.batchId, status: 'DRAFT' },
             data: { status: 'UNPAID', publishedAt: now, publishedBy: input.adminId },
@@ -114,31 +122,70 @@ export class BillWorkflowService {
             },
             tx,
           );
-          for (const bill of drafts) {
-            await this.outbox.enqueue(
-              {
-                tenantId,
-                communityId,
-                aggregateType: 'Bill',
-                aggregateId: bill.id,
-                eventType: 'bill.published',
-                dedupKey: `bill.published:${bill.id}`,
-                payload: { billId: bill.id, houseId: bill.houseId, period: bill.period, amount: String(bill.amount) },
+          /*
+           * 一次 createMany 取代逐条 enqueue。
+           *
+           * outbox.enqueue 在事务内每次是 2 次数据库往返（取库时间 + insert），
+           * 于是发布 N 户是 2N+3 次往返：
+           *     4 户 → 11 次 ≈ 33ms（当前规模，无感）
+           *   500 户 → 1003 次 ≈ 3.0s（濒临超时）
+           *  3000 户 → 6003 次 ≈ 18s → **必然 P2028 事务超时、全量回滚**
+           * 而这个 $transaction 没有传 timeout，走 Prisma 默认 5000ms
+           * （同一份 outbox.service.ts 里三处事务都显式设了 30s，说明这里是漏了）。
+           *
+           * 更要命的是失败不可恢复：超时后 catch 调 idempotency.fail，而 FAILED 是
+           * 终态（idempotency.service.ts 注释明写 "FAILED is terminal"），后续同键
+           * 请求只会重放这个失败；而管理端 BillRun.vue 的 publishRequestId 被缓存
+           * 复用、只在切账期时清空。于是「确认发布」这个不可绕过的动作会**永久失败**，
+           * 3000 户小区的账单再也发不出去、业主看不到、收不了钱。
+           *
+           * availableAt 在事务外取一次系统时间即可：它只用于投递退避排序，不参与
+           * 业务判定，不需要每条都问一次数据库时间。
+           */
+          await tx.outboxEvent.createMany({
+            data: drafts.map((bill) => ({
+              tenantId,
+              communityId,
+              aggregateType: 'Bill',
+              aggregateId: bill.id,
+              eventType: 'bill.published',
+              dedupKey: `bill.published:${bill.id}`,
+              payload: {
+                billId: bill.id,
+                houseId: bill.houseId,
+                period: bill.period,
+                amount: String(bill.amount),
               },
-              tx,
-            );
-          }
-          return { publishedCount: upd.count, bills: drafts };
+              status: 'PENDING',
+              attempts: 0,
+              availableAt: now,
+            })),
+            // 承接 enqueue 原有的 P2002 幂等语义：同 dedupKey 已存在则跳过
+            skipDuplicates: true,
+          });
+          return { publishedCount: upd.count };
+        }, {
+          // 与 outbox.service.ts 的三处事务对齐。默认 5s 在几百户时就会超时，
+          // 而这里超时等于永久发不出账单（见上）。
+          maxWait: 5_000,
+          timeout: 30_000,
         });
 
-        // 通知放在事务外：失败不回滚发布（NotifyLog 自记录，Outbox 事件已落库）。
-        for (const bill of bills) {
-          try {
-            await this.notifier.onBillCreated(bill as never);
-          } catch (e) {
-            this.logger.warn(`发布通知失败 bill=${bill.id}: ${e instanceof Error ? e.message : e}`);
-          }
-        }
+        /*
+         * 通知一律由 Outbox 投递，这里不再逐条 onBillCreated。
+         *
+         * bill.published 事件在 notify.service 里映射到 BILL_CREATED 模板，与这个
+         * 循环发的是同一条消息。两条路径并存时都会真发（onBillCreated 曾传
+         * dedup=false），而「一次性订阅」一次授权只能发一条，后到的那条必得 43101
+         * ——生产 NotifyLog 里 BILL_CREATED 零条 SENT、4 条 43101 FAILED 就是这么来的。
+         *
+         * 保留 Outbox 而不是保留这个循环，因为：它有退避重试、有租约、进程重启后
+         * 事件仍在库里；而循环是 best-effort，warn 一行就没了。代价是通知延迟最多
+         * 30 秒（dispatch cron 周期），对出账通知完全可接受。
+         *
+         * 另外这个循环本身在规模上也不可行：3000 户 = 3000 次串行微信调用，
+         * 挂在「确认发布」这个 HTTP 请求里必然撞网关超时。
+         */
 
         const response = { batchId: input.batchId, status: 'PUBLISHED', publishedCount };
         await this.idempotency.complete({ tenantId, recordId: reservation.recordId, responseCode: 0, responseBody: response });

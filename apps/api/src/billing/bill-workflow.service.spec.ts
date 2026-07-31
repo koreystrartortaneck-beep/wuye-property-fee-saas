@@ -41,6 +41,9 @@ describe('BillWorkflowService 草稿发布 / 作废 / 重开', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn().mockResolvedValue({ id: 'bill-new', status: 'UNPAID' }),
       },
+      // 发布改为一次 createMany 批量落事件（原先逐条 enqueue，每条 2 次往返，
+      // 3000 户 = 6003 次、约 18s，必然撞 Prisma 默认 5s 事务超时）
+      outboxEvent: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
   }
 
@@ -54,7 +57,11 @@ describe('BillWorkflowService 草稿发布 / 作废 / 重开', () => {
           count: jest.fn().mockResolvedValue(1),
         },
         payment: { findUnique: jest.fn().mockResolvedValue(null) },
-        $transaction: jest.fn(async (cb: (client: typeof tx) => unknown) => cb(tx)),
+        // 第二个参数是事务选项（maxWait/timeout）——发布批次必须显式设 timeout，
+        // 故桩要接收并记录它
+        $transaction: jest.fn(
+          async (cb: (client: typeof tx) => unknown, _opts?: { maxWait?: number; timeout?: number }) => cb(tx),
+        ),
       },
       ...overrides,
     };
@@ -66,14 +73,16 @@ describe('BillWorkflowService 草稿发布 / 作废 / 重开', () => {
       audit as never,
       outbox as never,
       idempotency as never,
-      notifier as never,
+      // notifier 已从 BillWorkflowService 移除：发布通知统一由 Outbox 投递
+      // （bill.published → BILL_CREATED 模板），事务外的逐条 onBillCreated 循环
+      // 与它是同一条消息，两条并存会抢掉业主唯一一次订阅额度。
       orderCloser as never,
     );
   }
 
   const publishInput = { batchId: 'batch-1', adminId: 'admin-1', actingTenantId: 'tenant-1', requestId: 'req-1' };
 
-  it('发布草稿批次：原子将草稿账单转 UNPAID，事务内写审计与 Outbox，并通知', async () => {
+  it('发布草稿批次：原子将草稿账单转 UNPAID，事务内写审计与 Outbox（一次批量写）', async () => {
     const tx = makeTx();
     const prisma = makePrisma(tx);
     const service = makeService(prisma);
@@ -90,8 +99,34 @@ describe('BillWorkflowService 草稿发布 / 作废 / 重开', () => {
       data: expect.objectContaining({ status: 'UNPAID' }),
     }));
     expect(audit.append).toHaveBeenCalledWith(expect.objectContaining({ action: 'PUBLISH', resourceType: 'BillBatch' }), tx);
-    expect(outbox.enqueue).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'bill.published', aggregateId: 'bill-1' }), tx);
-    expect(notifier.onBillCreated).toHaveBeenCalled();
+    /*
+     * 事件必须一次批量写入，不能逐条 enqueue：enqueue 在事务内每条 2 次数据库
+     * 往返，3000 户 ≈ 6003 次 ≈ 18s，而事务超时是 Prisma 默认的 5s → P2028 全量
+     * 回滚；回滚后 idempotency 记 FAILED（终态），前端又复用同一个 requestId，
+     * 于是「确认发布」永久失败、账单再也发不出去。
+     */
+    expect(outbox.enqueue).not.toHaveBeenCalled();
+    expect(tx.outboxEvent.createMany).toHaveBeenCalledTimes(1);
+    const args = tx.outboxEvent.createMany.mock.calls[0][0];
+    expect(args.skipDuplicates).toBe(true); // 承接原 enqueue 的 dedupKey 幂等语义
+    expect(args.data).toEqual([
+      expect.objectContaining({
+        eventType: 'bill.published',
+        aggregateId: 'bill-1',
+        dedupKey: 'bill.published:bill-1',
+        status: 'PENDING',
+      }),
+    ]);
+    // 事务必须显式设超时：默认 5s 在几百户时就不够
+    const txOpts = prisma.raw.$transaction.mock.calls[0][1] as { timeout?: number } | undefined;
+    expect(txOpts?.timeout ?? 0).toBeGreaterThanOrEqual(30_000);
+    /*
+     * 不再在事务外逐条 onBillCreated：它与 Outbox 的 bill.published 映射到同一个
+     * BILL_CREATED 模板，两条路径都真发时会抢掉业主唯一一次订阅额度，后到的必得
+     * 43101（生产 NotifyLog 里 BILL_CREATED 零条 SENT 就是这么来的）。
+     * 且 3000 户 = 3000 次串行微信调用挂在 HTTP 请求里，必然网关超时。
+     */
+    expect(notifier.onBillCreated).not.toHaveBeenCalled();
     expect(idempotency.complete).toHaveBeenCalled();
   });
 
