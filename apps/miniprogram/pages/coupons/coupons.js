@@ -1,6 +1,7 @@
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
 const labels = require('../../utils/labels');
+const { fmtDate } = require('../../utils/datetime');
 const STATUS_LABEL = labels.USER_COUPON_STATUS;
 const TYPE_LABEL = labels.COUPON_TYPE;
 
@@ -69,7 +70,7 @@ Page({
           big: v.big,
           sub: v.sub,
           desc: c.description || '',
-          validTo: (c.validTo || '').slice(0, 10),
+          validTo: fmtDate(c.validTo),
           remaining: c.remaining,
           claimedByMe: c.claimedByMe,
           soldOut: c.remaining <= 0,
@@ -90,7 +91,7 @@ Page({
           big: v.big,
           sub: v.sub,
           desc: uc.coupon.description || '',
-          validTo: (uc.coupon.validTo || '').slice(0, 10),
+          validTo: fmtDate(uc.coupon.validTo),
           status: uc.status,
           statusLabel: STATUS_LABEL[uc.status] || uc.status,
         };

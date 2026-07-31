@@ -1,5 +1,6 @@
 const { request } = require('../../utils/request');
 const labels = require('../../utils/labels');
+const { fmtDateTime } = require('../../utils/datetime');
 const STATUS_LABEL = labels.INVOICE_STATUS;
 const TITLE_TYPE_LABEL = labels.INVOICE_TITLE_TYPE;
 
@@ -33,7 +34,7 @@ Page({
           title: a.title,
           amount: Number(a.amount || 0).toFixed(2),
           invoiceNo: a.invoiceNo || '',
-          time: (a.appliedAt || '').replace('T', ' ').slice(0, 16),
+          time: fmtDateTime(a.appliedAt),
         })),
       });
     } catch (e) {

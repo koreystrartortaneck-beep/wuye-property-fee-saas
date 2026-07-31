@@ -1,6 +1,7 @@
 const { request } = require('../../utils/request');
 const { imageUrl } = require('../../utils/upload');
 const { loadMyHouses } = require('../../utils/auth');
+const { fmtDate } = require('../../utils/datetime');
 
 const ORDER_STATUS = { PENDING: '待接单', ACCEPTED: '已接单', DONE: '已完成', CANCELED: '已取消' };
 
@@ -80,7 +81,7 @@ Page({
           name: o.serviceName || '',
           price: Number(o.price || 0).toFixed(2),
           unit: o.unit || '',
-          date: (o.expectDate || '').slice(0, 10),
+          date: fmtDate(o.expectDate),
           remark: o.remark || '',
           status: o.status,
           statusLabel: ORDER_STATUS[o.status] || o.status,

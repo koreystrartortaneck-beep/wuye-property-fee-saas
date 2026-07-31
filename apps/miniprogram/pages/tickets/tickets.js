@@ -1,5 +1,6 @@
 const { request } = require('../../utils/request');
 const labels = require('../../utils/labels');
+const { fmtDateTime } = require('../../utils/datetime');
 const STATUS_LABEL = labels.TICKET_STATUS;
 const TYPE_LABEL = labels.TICKET_TYPE;
 
@@ -47,7 +48,7 @@ Page({
       statusLabel: STATUS_LABEL[t.status] || t.status,
       status: t.status,
       houseName: t.house && t.house.community ? `${t.house.community.name} ${t.house.displayName}` : '',
-      time: (t.createdAt || '').replace('T', ' ').slice(0, 16),
+      time: fmtDateTime(t.createdAt),
       rated: t.rating !== null,
     }));
     this.setData({

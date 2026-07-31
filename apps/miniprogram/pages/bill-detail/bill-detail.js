@@ -1,5 +1,6 @@
 const { request } = require('../../utils/request');
 const labels = require('../../utils/labels');
+const { fmtDate, fmtDateTime } = require('../../utils/datetime');
 const STATUS_LABEL = labels.BILL_STATUS;
 const METER_LABEL = labels.METER_TYPE;
 const SHARE_LABEL = labels.SHARE_BY;
@@ -86,8 +87,8 @@ Page({
         status: b.status,
         statusLabel: overdue ? '已逾期' : STATUS_LABEL[b.status] || b.status,
         houseName: b.house ? b.house.displayName : '',
-        dueDate: (b.dueDate || '').slice(0, 10),
-        paidAt: b.paidAt ? b.paidAt.replace('T', ' ').slice(0, 16) : '',
+        dueDate: fmtDate(b.dueDate),
+        paidAt: fmtDateTime(b.paidAt),
       },
       calcRows,
       overdue,

@@ -1,6 +1,7 @@
 const { request } = require('../../utils/request');
 const { imageUrl } = require('../../utils/upload');
 const { loadMyHouses } = require('../../utils/auth');
+const { fmtDateTime } = require('../../utils/datetime');
 
 const CATEGORY_LABEL = { INSPECTION: '巡检', CLEANING: '保洁', GREENING: '绿化', SECURITY: '安保', REPAIR: '维修', OTHER: '其他' };
 const FILTERS = [
@@ -64,7 +65,7 @@ Page({
       cover: imageUrl((w.images || [])[0]),
       count: (w.images || []).length,
       staffName: w.staffName || '',
-      time: (w.createdAt || '').replace('T', ' ').slice(0, 16),
+      time: fmtDateTime(w.createdAt),
     }));
     this.setData({
       list: page === 1 ? mapped : this.data.list.concat(mapped),

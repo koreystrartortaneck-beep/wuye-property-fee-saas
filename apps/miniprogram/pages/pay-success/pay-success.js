@@ -1,6 +1,7 @@
 const { request } = require('../../utils/request');
 const { canApplyInvoice } = require('../../utils/invoice');
 const { accrueSubscribeQuota } = require('../../utils/subscribe');
+const { fmtDateTime } = require('../../utils/datetime');
 
 Page({
   data: {
@@ -25,7 +26,7 @@ Page({
       this.setData({
         orderNo: order.orderNo || '',
         amount: Number(order.totalAmount || 0).toFixed(2),
-        payTime: order.paidAt ? order.paidAt.replace('T', ' ').slice(0, 16) : '',
+        payTime: fmtDateTime(order.paidAt),
         house: order.house
           ? `${order.house.communityName || ''} ${order.house.displayName || ''}`.trim()
           : this.data.house,

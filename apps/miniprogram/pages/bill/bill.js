@@ -2,6 +2,7 @@ const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
 const labels = require('../../utils/labels');
 const { accrueSubscribeQuota } = require('../../utils/subscribe');
+const { fmtDate } = require('../../utils/datetime');
 const STATUS_LABEL = labels.BILL_STATUS;
 
 const THEMES = ['sapphire', 'emerald', 'amber'];
@@ -107,8 +108,8 @@ Page({
     const mapped = res.list.map((b, i) => {
       const overdue = b.status === 'UNPAID' && new Date(b.dueDate) < now;
       let subline = '';
-      if (b.status === 'PAID' && b.paidAt) subline = `缴于 ${b.paidAt.slice(0, 10)}`;
-      else if (b.status === 'UNPAID') subline = `到期 ${(b.dueDate || '').slice(0, 10)}`;
+      if (b.status === 'PAID' && b.paidAt) subline = `缴于 ${fmtDate(b.paidAt)}`;
+      else if (b.status === 'UNPAID') subline = `到期 ${fmtDate(b.dueDate)}`;
       else if (b.status === 'REFUNDED') subline = '已退款';
       else if (b.status === 'REFUNDING') subline = '退款处理中';
       else subline = '已作废';

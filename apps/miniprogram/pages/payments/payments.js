@@ -1,6 +1,7 @@
 const { request } = require('../../utils/request');
 const { canApplyInvoice } = require('../../utils/invoice');
 const labels = require('../../utils/labels');
+const { fmtDateTime } = require('../../utils/datetime');
 const STATUS_LABEL = labels.PAYMENT_STATUS;
 
 
@@ -47,7 +48,7 @@ Page({
       refunded: p.status === 'REFUNDED',
       // 开票资格完全由订单状态派生：仅成功且未退款订单可开票
       canInvoice: canApplyInvoice(p),
-      time: (p.paidAt || p.createdAt || '').replace('T', ' ').slice(0, 16),
+      time: fmtDateTime(p.paidAt || p.createdAt),
       billTitles: (p.bills || []).map((b) => b.title).join(' · '),
     }));
     this.setData({

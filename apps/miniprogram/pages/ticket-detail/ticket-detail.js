@@ -1,6 +1,7 @@
 const { request } = require('../../utils/request');
 const { imageUrl } = require('../../utils/upload');
 const labels = require('../../utils/labels');
+const { fmtDateTime } = require('../../utils/datetime');
 const STATUS_LABEL = labels.TICKET_STATUS;
 const TYPE_LABEL = labels.TICKET_TYPE;
 
@@ -42,7 +43,7 @@ Page({
 
   async fetch() {
     const t = await request(`/owner/tickets/${this.id}`, { silent: true });
-    const fmt = (s) => (s ? s.replace('T', ' ').slice(0, 16) : '');
+    const fmt = (s) => fmtDateTime(s);
     const timeline = [{ label: '提交工单', time: fmt(t.createdAt), done: true }];
     timeline.push({
       label: t.assigneeName ? `物业受理（${t.assigneeName}）` : '物业受理',

@@ -1,5 +1,6 @@
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
+const { fmtDate } = require('../../utils/datetime');
 
 Page({
   data: { list: [], loading: true, error: false },
@@ -24,7 +25,7 @@ Page({
         title: a.title || '',
         preview: (a.content || '').slice(0, 60),
         pinned: a.pinned,
-        date: (a.publishedAt || '').slice(0, 10),
+        date: fmtDate(a.publishedAt),
       }));
       this.setData({ list: mapped, loading: false, error: false });
     } catch (e) {

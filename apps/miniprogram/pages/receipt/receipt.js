@@ -1,4 +1,5 @@
 const { request } = require('../../utils/request');
+const { fmtDateTimeSec } = require('../../utils/datetime');
 
 Page({
   data: { r: null, loading: true, error: false, noReceipt: false, saving: false },
@@ -31,7 +32,7 @@ Page({
           receiptNo: snap.receiptNo || '',
           orderNo: snap.orderNo || p.orderNo || '',
           totalAmount: Number(snap.totalAmount || p.totalAmount || 0).toFixed(2),
-          paidAt: snap.paidAt ? String(snap.paidAt).replace('T', ' ').slice(0, 19) : '',
+          paidAt: fmtDateTimeSec(snap.paidAt),
           houseName: `${snap.community || ''} ${snap.house || ''}`.trim(),
           items: (snap.bills || []).map((b) => ({
             title: b.title || '费用',

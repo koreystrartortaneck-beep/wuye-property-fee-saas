@@ -1,4 +1,5 @@
 const { request } = require('../../utils/request');
+const { fmtDateTime } = require('../../utils/datetime');
 
 Page({
   data: { ann: null, loading: true, error: false },
@@ -27,7 +28,7 @@ Page({
         ann: {
           title: a.title || '',
           content: a.content || '',
-          date: (a.publishedAt || '').replace('T', ' ').slice(0, 16),
+          date: fmtDateTime(a.publishedAt),
         },
       });
     } catch (e) {

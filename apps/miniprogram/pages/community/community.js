@@ -1,6 +1,7 @@
 const { request } = require('../../utils/request');
 const { imageUrl } = require('../../utils/upload');
 const { loadMyHouses } = require('../../utils/auth');
+const { fmtDate } = require('../../utils/datetime');
 
 const WORK_CAT = { INSPECTION: '巡检', CLEANING: '保洁', GREENING: '绿化', SECURITY: '安保', REPAIR: '维修', OTHER: '公示' };
 
@@ -8,7 +9,7 @@ function buildFeed(anns, works) {
   const annItems = (anns || []).map((a) => ({
     type: 'ann', id: a.id, title: a.title,
     preview: (a.content || '').replace(/\n+/g, ' ').slice(0, 60),
-    pinned: a.pinned, date: (a.publishedAt || '').slice(0, 10),
+    pinned: a.pinned, date: fmtDate(a.publishedAt),
     ts: Date.parse(a.publishedAt) || 0,
   }));
   const workItems = (works || [])
@@ -17,7 +18,7 @@ function buildFeed(anns, works) {
       type: 'work', id: w.id, title: w.title || WORK_CAT[w.category] || '物业公示',
       preview: w.description || '', tag: WORK_CAT[w.category] || '公示',
       cover: imageUrl(w.images[0]), count: (w.images || []).length,
-      date: (w.createdAt || '').slice(0, 10), ts: Date.parse(w.createdAt) || 0,
+      date: fmtDate(w.createdAt), ts: Date.parse(w.createdAt) || 0,
     }));
   const pinned = annItems.filter((a) => a.pinned).sort((x, y) => y.ts - x.ts);
   const rest = annItems.filter((a) => !a.pinned).concat(workItems).sort((x, y) => y.ts - x.ts);

@@ -1,5 +1,6 @@
 const { request } = require('../../utils/request');
 const { imageUrl } = require('../../utils/upload');
+const { fmtDateTime } = require('../../utils/datetime');
 
 const CATEGORY_LABEL = { INSPECTION: '日常巡检', CLEANING: '保洁', GREENING: '绿化', SECURITY: '安保', REPAIR: '维修', OTHER: '其他' };
 
@@ -33,7 +34,7 @@ Page({
           description: w.description || '',
           images: (w.images || []).map(imageUrl),
           staffName: w.staffName || '',
-          time: (w.createdAt || '').replace('T', ' ').slice(0, 16),
+          time: fmtDateTime(w.createdAt),
         },
       });
     } catch (e) {

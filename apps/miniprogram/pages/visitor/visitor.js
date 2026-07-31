@@ -1,6 +1,7 @@
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
 const labels = require('../../utils/labels');
+const { fmtDate } = require('../../utils/datetime');
 const STATUS_LABEL = labels.PASS_STATUS;
 
 
@@ -65,7 +66,7 @@ Page({
           code: p.code,
           visitorName: p.visitorName || '',
           plateNo: p.plateNo || '',
-          date: (p.visitDate || '').slice(0, 10),
+          date: fmtDate(p.visitDate),
           houseName: p.house ? `${p.house.community.name} ${p.house.displayName}` : '',
           status: p.status,
           statusLabel: STATUS_LABEL[p.status] || p.status,
