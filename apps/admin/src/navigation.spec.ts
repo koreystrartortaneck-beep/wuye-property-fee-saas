@@ -403,3 +403,75 @@ describe('计数不得取自截断列表', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * 后端新增角色时，前端必须跟上——否则功能只做了一半。
+ *
+ * 我加 PLATFORM_READONLY 时就漏了前端三处：
+ *   · store.ts 的 role 联合类型里没有它 —— TS 不报错（服务端返回的字符串照样赋进去），
+ *     但 Layout 的角色文案表按 role 取值，取不到就显示 undefined；
+ *   · api.ts 的 X-Tenant-Id 只在 role === 'SUPER_ADMIN' 时注入 —— 只读账号拿不到
+ *     租户视角，而运营数据是租户内的（后端 requireTenant 会拒），运维页直接打不开；
+ *   · 各页面的写按钮照常渲染 —— 点下去只得到一句「无权限访问」，用户会以为系统坏了。
+ *
+ * 第三条刻意用「顶部统一提示」而不是逐页隐藏按钮：逐页隐藏一定会漏，
+ * 而漏掉的那个按钮点下去仍然报错；统一说明则覆盖全部页面。
+ */
+describe('角色新增时前端的跟进', () => {
+  const roles = ['SUPER_ADMIN', 'PLATFORM_READONLY', 'TENANT_ADMIN', 'STAFF'];
+
+  it('store 的 role 联合类型覆盖后端全部角色', () => {
+    const src = fs.readFileSync(path.join(SRC, 'store.ts'), 'utf8');
+    const missing = roles.filter((r) => !src.includes(`'${r}'`));
+    if (missing.length) {
+      throw new Error(
+        `store.ts 的 role 类型缺少：${missing.join('、')}。` +
+          'TS 不会报错（服务端返回的字符串照样赋进去），但按 role 取值的地方会取到 undefined。',
+      );
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('角色文案表覆盖全部角色（缺一个就显示 undefined）', () => {
+    const src = fs.readFileSync(path.join(SRC, 'layout/Layout.vue'), 'utf8');
+    /*
+     * 必须定位到**定义处**而不是首次出现处：roleLabel 首次出现在模板里的
+     * {{ roleLabel }}（第 61 行附近），从那里切 400 字符切不到映射表，
+     * 于是断言把正确实现判成缺全部角色。本用例第一版就是这么错的。
+     */
+    const at = src.indexOf('const roleLabel');
+    expect(at).toBeGreaterThan(-1);
+    const block = src.slice(at, at + 500);
+    const missing = roles.filter((r) => !block.includes(r));
+    if (missing.length) {
+      throw new Error(`Layout 的角色文案表缺少：${missing.join('、')}，这些角色会显示 undefined`);
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('X-Tenant-Id 按「平台角色」注入，而不是写死 SUPER_ADMIN', () => {
+    /*
+     * 写死 SUPER_ADMIN 会让只读平台账号拿不到租户视角 —— 而运营数据是租户内的，
+     * 后端 requireTenant 会拒绝无租户视角的请求，运维页直接打不开。
+     */
+    const src = stripComments(fs.readFileSync(path.join(SRC, 'api.ts'), 'utf8'));
+    expect(src).toMatch(/function isPlatformRole/);
+    const hardcoded = [...src.matchAll(/role === 'SUPER_ADMIN'\s*&&\s*store\.actingTenantId/g)];
+    if (hardcoded.length) {
+      throw new Error(
+        `api.ts 里还有 ${hardcoded.length} 处把租户头判定写死成 SUPER_ADMIN，` +
+          '只读平台账号会拿不到租户视角。请改用 isPlatformRole()。',
+      );
+    }
+    expect(hardcoded).toEqual([]);
+  });
+
+  it('只读账号有全局提示（而不是靠逐页隐藏按钮）', () => {
+    const src = fs.readFileSync(path.join(SRC, 'layout/Layout.vue'), 'utf8');
+    expect(src).toMatch(/v-if="readonly"/);
+    expect(src).toMatch(/isReadonlyRole/);
+    // 提示要说清「能看、不能改」，以及该怎么办
+    expect(src).toMatch(/只读/);
+    expect(src).toMatch(/管理员账号/);
+  });
+});

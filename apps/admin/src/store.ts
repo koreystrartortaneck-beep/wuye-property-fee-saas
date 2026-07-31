@@ -2,7 +2,13 @@ import { reactive } from 'vue';
 
 export interface Profile {
   name: string;
-  role: 'SUPER_ADMIN' | 'TENANT_ADMIN' | 'STAFF';
+  /*
+   * PLATFORM_READONLY：只读平台管理员。读范围与超管一致（可跨租户），
+   * 但后端 RolesGuard 会拒绝它的任何非 GET 请求。
+   * 前端必须据此隐藏写操作 —— 否则按钮照常显示、点了才报 40300，
+   * 用户不知道是自己没权限还是系统坏了。
+   */
+  role: 'SUPER_ADMIN' | 'PLATFORM_READONLY' | 'TENANT_ADMIN' | 'STAFF';
   tenantId: string | null;
 }
 

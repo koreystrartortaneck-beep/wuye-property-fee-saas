@@ -1,12 +1,24 @@
 import { ElMessage } from 'element-plus';
 import { store } from './store';
 
+/** 平台角色：不属于任何租户，可通过 X-Tenant-Id 切换视角 */
+export function isPlatformRole(role?: string): boolean {
+  return role === 'SUPER_ADMIN' || role === 'PLATFORM_READONLY';
+}
+
+/** 只读平台角色：后端拒绝它的一切非 GET 请求，前端据此隐藏写操作 */
+export function isReadonlyRole(role?: string): boolean {
+  return role === 'PLATFORM_READONLY';
+}
+
 /** API 前缀：dev 走 Vite 代理 /api/v1；生产可由 VITE_API_BASE 覆盖（如 /wuye/api/v1） */
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || '/api/v1';
 
 /**
  * 统一 API 封装。
- * - 注入 Bearer token；SUPER_ADMIN 切换租户时注入 X-Tenant-Id
+ * - 注入 Bearer token；平台角色（SUPER_ADMIN / PLATFORM_READONLY）切换租户时注入
+ *   X-Tenant-Id。只读角色也要带：运营数据是租户内的（后端 requireTenant 会拒绝
+ *   无租户视角的请求），不带的话只读账号打不开运维页。
  * - code!==0：toast 错误并抛出；40100：清登录态跳登录页
  */
 export async function api<T = unknown>(
@@ -15,7 +27,7 @@ export async function api<T = unknown>(
 ): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (store.token) headers.Authorization = `Bearer ${store.token}`;
-  if (store.profile?.role === 'SUPER_ADMIN' && store.actingTenantId) {
+  if (isPlatformRole(store.profile?.role) && store.actingTenantId) {
     headers['X-Tenant-Id'] = store.actingTenantId;
   }
 
@@ -39,7 +51,7 @@ export async function api<T = unknown>(
 export async function uploadImage(file: File): Promise<string> {
   const headers: Record<string, string> = {};
   if (store.token) headers.Authorization = `Bearer ${store.token}`;
-  if (store.profile?.role === 'SUPER_ADMIN' && store.actingTenantId) {
+  if (isPlatformRole(store.profile?.role) && store.actingTenantId) {
     headers['X-Tenant-Id'] = store.actingTenantId;
   }
   const form = new FormData();
@@ -62,7 +74,7 @@ export async function uploadForm<T = unknown>(
 ): Promise<T> {
   const headers: Record<string, string> = {};
   if (store.token) headers.Authorization = `Bearer ${store.token}`;
-  if (store.profile?.role === 'SUPER_ADMIN' && store.actingTenantId) {
+  if (isPlatformRole(store.profile?.role) && store.actingTenantId) {
     headers['X-Tenant-Id'] = store.actingTenantId;
   }
   const form = new FormData();

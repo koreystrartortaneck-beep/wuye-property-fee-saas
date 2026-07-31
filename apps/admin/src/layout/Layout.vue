@@ -63,6 +63,23 @@
         </div>
       </header>
 
+      <!--
+        只读账号必须一眼看出自己是只读，否则会以为系统坏了：
+        后端 RolesGuard 拒绝它的一切非 GET 请求，而各页面的写按钮照常渲染，
+        点下去只会得到一句「无权限访问」。
+        统一在顶部说明，比逐页去隐藏几十个按钮更可靠 —— 逐页隐藏一定会漏，
+        而漏掉的那个按钮点下去仍然报错。
+      -->
+      <el-alert
+        v-if="readonly"
+        type="info"
+        show-icon
+        :closable="false"
+        class="ro-banner"
+        title="只读账号：可以查看全部数据，但所有新增、修改、删除操作都会被拒绝"
+        description="需要改动数据请使用物业公司的管理员账号登录。"
+      />
+
       <div class="page-head">
         <div class="page-head-top">
           <h1 class="page-title">{{ pageTitle }}</h1>
@@ -105,7 +122,7 @@ import {
   Tickets,
   Wallet,
 } from '@element-plus/icons-vue';
-import { api, type Page } from '../api';
+import { api, type Page, isPlatformRole, isReadonlyRole } from '../api';
 import { store } from '../store';
 import { NAV, locate, type NavGroup } from '../nav';
 import { badges, refreshBadges, startBadgePolling, stopBadgePolling } from '../badges';
@@ -127,9 +144,21 @@ const route = useRoute();
 const router = useRouter();
 const palette = ref<{ open: () => void } | null>(null);
 
-const isSuper = computed(() => store.profile?.role === 'SUPER_ADMIN');
+/*
+ * isSuper 决定「切换租户」等平台能力是否可见。只读平台角色也需要切换租户 ——
+ * 运营数据是租户内的（后端 requireTenant 会拒绝无租户视角的请求），
+ * 不给它切换入口就打不开运维页。
+ */
+const isSuper = computed(() => isPlatformRole(store.profile?.role));
+const readonly = computed(() => isReadonlyRole(store.profile?.role));
 const roleLabel = computed(
-  () => ({ SUPER_ADMIN: '平台超管', TENANT_ADMIN: '管理员', STAFF: '员工' })[store.profile?.role ?? 'STAFF'],
+  () =>
+    ({
+      SUPER_ADMIN: '平台超管',
+      PLATFORM_READONLY: '平台只读',
+      TENANT_ADMIN: '管理员',
+      STAFF: '员工',
+    })[store.profile?.role ?? 'STAFF'],
 );
 const tenants = ref<{ id: string; name: string }[]>([]);
 const actingTenant = ref(store.actingTenantId);
@@ -228,6 +257,11 @@ function logout() {
 </script>
 
 <style scoped>
+/* 只读提示：贴着页头，不占太多纵向空间 */
+.ro-banner {
+  margin: 0 var(--sp-5) var(--sp-3);
+}
+
 .shell {
   display: flex;
   min-height: 100vh;
