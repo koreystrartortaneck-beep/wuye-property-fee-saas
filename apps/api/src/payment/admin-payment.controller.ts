@@ -4,7 +4,7 @@ import { IsDate, IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator'
 import { PAYMENT_CHANNELS, PAYMENT_STATUSES, PaymentChannel, PaymentStatus } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
-import { RolesGuard } from '../auth/roles.decorator';
+import { Roles, RolesGuard } from '../auth/roles.decorator';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { OfflinePaymentService } from './offline-payment.service';
@@ -112,6 +112,12 @@ export class AdminPaymentController {
     });
   }
 
+  /*
+   * 冲正把已收的线下款作废（账单回到未缴），等同于资金出账，限定 TENANT_ADMIN。
+   * 线下现金核销（上面的 /offline）刻意不限制：那是收费员的日常工作，
+   * 且它只会把账单从未缴改成已缴、不会把钱退出去，风险方向相反。
+   */
+  @Roles('TENANT_ADMIN')
   @Post(':orderNo/reverse-offline')
   reverseOffline(@Current() cur: CurrentAdmin, @Param('orderNo') orderNo: string, @Body() dto: ReverseOfflineDto) {
     return this.offline.reverseOffline({

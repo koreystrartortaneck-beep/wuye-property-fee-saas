@@ -396,6 +396,9 @@ export class PaymentService {
       transactionId: string | null;
       channel: string;
       totalAmount: unknown;
+      // 审计需要租户与小区归属；调用方传的都是完整的 Payment 行，本就带这两列
+      tenantId: string;
+      communityId: string | null;
       paymentBills: Array<{ billId: string; bill?: ReceiptBill | null }>;
     },
     transaction: WxPayTransaction,
@@ -437,6 +440,42 @@ export class PaymentService {
         data: { status: 'PAID', paidAt },
       });
       if (bills.count !== payment.paymentBills.length) throw new Error('支付订单关联账单状态异常');
+
+      /*
+       * 微信支付成功入账必须写审计。
+       *
+       * 这是整条资金链上最核心的一步——钱真正到账、账单销账。而生产审计日志 73 条里
+       * 有「业主下单」Payment/CREATE、「线下收款」Payment/PAY、「退款」Refund/REFUND
+       * （含 SYSTEM 类型），唯独没有这一步：查一笔钱的来龙去脉时，审计链会从 CREATE
+       * 直接跳到 REFUND，中间「什么时候确认收到钱」是空的。
+       *
+       * 「系统动作也写审计」本就是这个系统的既有约定（退款终态、发票冲红都用
+       * actorType: 'SYSTEM'），所以这里不是设计选择，是遗漏。
+       *
+       * 放在同一事务内：审计与入账要么都成，要么都不成，不能出现「钱记了、审计没记」。
+       * source 一并记下（WXPAY_NOTIFY 是回调、WXPAY_QUERY 是主动查单），
+       * 排查时能区分「微信推过来的」还是「我们查出来的」。
+       */
+      await this.audit.append(
+        {
+          tenantId: payment.tenantId,
+          communityId: payment.communityId,
+          actorType: 'SYSTEM',
+          actorId: null,
+          action: 'PAY',
+          resourceType: 'Payment',
+          resourceId: payment.id,
+          afterSummary: {
+            orderNo: payment.orderNo,
+            transactionId: transaction.transaction_id,
+            totalAmount: String(payment.totalAmount),
+            paidAt: paidAt.toISOString(),
+            source,
+            billIds: payment.paymentBills.map((item) => item.billId),
+          },
+        },
+        tx,
+      );
     });
 
     return { orderNo: payment.orderNo, status: 'SUCCESS' };

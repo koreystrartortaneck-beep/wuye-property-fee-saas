@@ -575,6 +575,34 @@ describe('PaymentService', () => {
       const snapshot = successData.receiptSnapshot as Record<string, unknown>;
       expect(snapshot.orderNo).toBe('WY202607220001');
       expect(JSON.stringify(snapshot)).not.toContain('openid');
+
+      /*
+       * 支付成功入账必须写审计，且与入账同事务。
+       *
+       * 这是整条资金链最核心的一步——钱真正到账、账单销账。而生产审计日志 73 条里
+       * 有「业主下单」Payment/CREATE、「线下收款」Payment/PAY、「退款」Refund/REFUND
+       * （含 SYSTEM 类型），唯独没有这一步：查一笔钱时审计链会从 CREATE 直接跳到
+       * REFUND，中间「什么时候确认收到钱」是空的。
+       * 「系统动作也写审计」本就是既有约定（退款终态、发票冲红都用 SYSTEM），
+       * 所以这不是设计选择而是遗漏。
+       */
+      expect(audit.append).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorType: 'SYSTEM',
+          action: 'PAY',
+          resourceType: 'Payment',
+          resourceId: 'payment-1',
+          afterSummary: expect.objectContaining({
+            orderNo: 'WY202607220001',
+            transactionId: '420000000001',
+            // 区分「微信推过来的」还是「我们查出来的」
+            source: 'WXPAY_NOTIFY',
+            billIds: ['bill-1'],
+          }),
+        }),
+        // 第二个参数是事务客户端：审计与入账要么都成、要么都不成
+        expect.anything(),
+      );
     });
 
     it('query-first then notify：已 SUCCESS 仍记录回调证据与 wxpayNotifiedAt，不重复入账', async () => {
