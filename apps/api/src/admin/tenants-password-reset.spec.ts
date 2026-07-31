@@ -241,3 +241,73 @@ describe('创建只读平台账号', () => {
     expect(tx.adminUser.create).not.toHaveBeenCalled();
   });
 });
+
+describe('启停管理员账号', () => {
+  /*
+   * 后台此前只能启停**整个租户**，没有任何办法处理单个账号。于是联调、灰度、离职
+   * 留下的账号只能一直 ACTIVE 挂着 —— 生产上就有一个 wxpay-test-admin（微信支付联调
+   * 时建的，从未登录过，mustChangePassword 仍为 true），而它是活着的 TENANT_ADMIN，
+   * 能发起退款和冲正。
+   */
+  const ADMIN2 = { id: 'a2', tenantId: 't1', username: 'wxpay-test-admin', role: 'TENANT_ADMIN' };
+
+  function make(admin: unknown = ADMIN2) {
+    const tx = { adminUser: { update: jest.fn().mockResolvedValue({}) } };
+    const prisma = {
+      raw: {
+        adminUser: { findUnique: jest.fn().mockResolvedValue(admin) },
+        $transaction: jest.fn(async (cb: (c: typeof tx) => unknown) => cb(tx)),
+      },
+    };
+    const audit = { append: jest.fn().mockResolvedValue(undefined) };
+    return { service: new TenantsService(prisma as never, audit as never), tx, audit };
+  }
+
+  it('停用时同步吊销该账号全部旧令牌（否则旧会话还能用 12 小时）', async () => {
+    const { service, tx } = make();
+    const res = await service.setAdminStatus('t1', 'a2', 'DISABLED', 'super-1');
+    expect(res).toEqual({ username: 'wxpay-test-admin', status: 'DISABLED' });
+    const data = tx.adminUser.update.mock.calls[0][0].data;
+    expect(data.status).toBe('DISABLED');
+    expect(data.tokenVersion).toEqual({ increment: 1 });
+  });
+
+  it('写审计并记明是停用还是启用', async () => {
+    const { service, audit } = make();
+    await service.setAdminStatus('t1', 'a2', 'DISABLED', 'super-1');
+    expect(audit.append.mock.calls[0][0].reason).toContain('停用');
+    const { service: s2, audit: a2 } = make();
+    await s2.setAdminStatus('t1', 'a2', 'ACTIVE', 'super-1');
+    expect(a2.append.mock.calls[0][0].reason).toContain('启用');
+  });
+
+  it('审计与状态变更同事务', async () => {
+    const { service, audit, tx } = make();
+    await service.setAdminStatus('t1', 'a2', 'DISABLED', 'super-1');
+    expect(audit.append.mock.calls[0][1]).toBe(tx);
+  });
+
+  it('不能停用当前登录的账号（会立刻锁死自己且无入口恢复）', async () => {
+    const { service, tx } = make({ ...ADMIN2, id: 'super-1' });
+    await expect(service.setAdminStatus('t1', 'super-1', 'DISABLED', 'super-1')).rejects.toMatchObject({
+      code: 40000,
+    });
+    expect(tx.adminUser.update).not.toHaveBeenCalled();
+  });
+
+  it('跨租户拒绝', async () => {
+    const { service, tx } = make({ ...ADMIN2, tenantId: 'OTHER' });
+    await expect(service.setAdminStatus('t1', 'a2', 'DISABLED', 'super-1')).rejects.toMatchObject({
+      code: 40400,
+    });
+    expect(tx.adminUser.update).not.toHaveBeenCalled();
+  });
+
+  it('不能通过租户入口停用超管', async () => {
+    const { service, tx } = make({ ...ADMIN2, role: 'SUPER_ADMIN' });
+    await expect(service.setAdminStatus('t1', 'a2', 'DISABLED', 'super-1')).rejects.toMatchObject({
+      code: 40300,
+    });
+    expect(tx.adminUser.update).not.toHaveBeenCalled();
+  });
+});

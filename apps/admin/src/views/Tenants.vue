@@ -21,6 +21,13 @@
             <el-tag v-if="a.mustChangePassword" type="warning" size="small" effect="light" class="ml">
               待首次改密
             </el-tag>
+            <!--
+              停用状态更要可见：联调/灰度/离职留下的账号若一直 ACTIVE 挂着，
+              就是一个能发起退款与冲正的活账号，而列表原先只显示账号名。
+            -->
+            <el-tag v-if="a.status !== 'ACTIVE'" type="info" size="small" effect="light" class="ml">
+              已停用
+            </el-tag>
           </div>
           <span v-if="!row.admins?.length" class="cell-sub">无</span>
         </template>
@@ -35,14 +42,18 @@
             或者用灰度期那个后门模块的 mkadmin（能造超管、绕强口令、不写审计）。
             缺失的合法通道会长期把不安全的通道留在代码里。
           -->
-          <el-button
-            v-for="a in row.admins"
-            :key="a.id"
-            size="small"
-            @click="resetPassword(row, a)"
-          >
-            重置密码
-          </el-button>
+          <template v-for="a in row.admins" :key="a.id">
+            <el-button size="small" :disabled="a.status !== 'ACTIVE'" @click="resetPassword(row, a)">
+              重置密码
+            </el-button>
+            <el-button
+              size="small"
+              :type="a.status === 'ACTIVE' ? 'warning' : 'success'"
+              @click="toggleAdmin(row, a)"
+            >
+              {{ a.status === 'ACTIVE' ? '停用' : '启用' }}
+            </el-button>
+          </template>
         </template>
       </el-table-column>
           <template #empty>
@@ -158,6 +169,33 @@ async function resetPassword(tenant: Tenant, admin: { id: string; username: stri
       dangerouslyUseHTMLString: false,
     },
   );
+  await load();
+}
+
+/**
+ * 启停单个管理员账号。
+ *
+ * 后台此前只能启停整个租户，单个账号无从处理 —— 生产上就留着一个微信支付联调时建的
+ * wxpay-test-admin，从未登录过却一直 ACTIVE，而它能发起退款与冲正。
+ */
+async function toggleAdmin(tenant: Tenant, admin: { id: string; username: string; status: string }) {
+  const next = admin.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
+  try {
+    await ElMessageBox.confirm(
+      next === 'DISABLED'
+        ? `停用「${tenant.name}」的管理员 ${admin.username}？\n该账号将立即无法登录，已登录的会话也会失效。`
+        : `重新启用管理员 ${admin.username}？`,
+      next === 'DISABLED' ? '停用账号' : '启用账号',
+      { type: 'warning', confirmButtonText: next === 'DISABLED' ? '停用' : '启用', cancelButtonText: '取消' },
+    );
+  } catch {
+    return;
+  }
+  await api(`/admin/tenants/${tenant.id}/admins/${admin.id}/status`, {
+    method: 'PATCH',
+    body: { status: next },
+  });
+  ElMessage.success(next === 'DISABLED' ? '已停用，该账号的登录会话已失效' : '已启用');
   await load();
 }
 

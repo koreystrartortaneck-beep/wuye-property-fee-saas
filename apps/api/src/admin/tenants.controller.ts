@@ -64,6 +64,12 @@ class UpdateTenantDto {
   status?: 'ACTIVE' | 'DISABLED';
 }
 
+/** 启停管理员账号 */
+class SetAdminStatusDto {
+  @IsIn(['ACTIVE', 'DISABLED'])
+  status!: 'ACTIVE' | 'DISABLED';
+}
+
 /** 创建只读平台账号。口令由服务端生成，不由调用方指定。 */
 class CreatePlatformReadonlyDto {
   @IsString()
@@ -155,6 +161,62 @@ export class TenantsService {
 
   async update(id: string, dto: UpdateTenantDto) {
     return this.prisma.raw.tenant.update({ where: { id }, data: dto });
+  }
+
+  /**
+   * 启用/停用某租户下的管理员账号。
+   *
+   * 为什么需要这个端点：后台此前只能启停**整个租户**，没有任何办法处理单个账号。
+   * 于是联调、灰度、离职留下的账号只能一直 ACTIVE 挂着 —— 生产上就有一个
+   * `wxpay-test-admin`（微信支付联调时建的，从未登录过，mustChangePassword 仍为 true），
+   * 而它是一个活着的 TENANT_ADMIN，能发起退款和冲正。
+   *
+   * 停用即时生效：AdminGuard 每次请求都查 status，且这里同时递增 tokenVersion
+   * 吊销该账号已签发的全部令牌 —— 不然停用之后旧会话还能继续用 12 小时。
+   */
+  async setAdminStatus(
+    tenantId: string,
+    adminId: string,
+    status: 'ACTIVE' | 'DISABLED',
+    operatorId: string,
+  ): Promise<{ username: string; status: string }> {
+    const admin = await this.prisma.raw.adminUser.findUnique({ where: { id: adminId } });
+    if (!admin || admin.tenantId !== tenantId) {
+      throw new BizException(ErrorCode.NOT_FOUND, '该租户下没有这个管理员账号');
+    }
+    if (admin.role === 'SUPER_ADMIN') {
+      throw new BizException(ErrorCode.FORBIDDEN, '超级管理员账号不能通过租户入口停用');
+    }
+    if (admin.id === operatorId) {
+      // 把自己停掉会立刻锁死自己，且没有别的入口能恢复
+      throw new BizException(ErrorCode.VALIDATION, '不能停用当前登录的账号');
+    }
+
+    await this.prisma.raw.$transaction(async (tx) => {
+      await tx.adminUser.update({
+        where: { id: adminId },
+        data: {
+          status,
+          // 停用要吊销旧令牌；启用不必动，但一并递增更简单也更安全
+          tokenVersion: { increment: 1 },
+        },
+      });
+      await this.audit.append(
+        {
+          tenantId,
+          actorType: 'ADMIN',
+          actorId: operatorId,
+          action: 'UPDATE',
+          resourceType: 'AdminUser',
+          resourceId: adminId,
+          reason: status === 'DISABLED' ? '停用管理员账号' : '启用管理员账号',
+          afterSummary: { status, tokenRevoked: true },
+        },
+        tx as never,
+      );
+    });
+
+    return { username: admin.username, status };
   }
 
   /**
@@ -275,6 +337,16 @@ export class TenantsService {
 @Roles('SUPER_ADMIN')
 export class TenantsController {
   constructor(private readonly service: TenantsService) {}
+
+  @Patch(':tenantId/admins/:adminId/status')
+  setAdminStatus(
+    @Current() cur: CurrentAdmin,
+    @Param('tenantId') tenantId: string,
+    @Param('adminId') adminId: string,
+    @Body() dto: SetAdminStatusDto,
+  ) {
+    return this.service.setAdminStatus(tenantId, adminId, dto.status, cur.adminId);
+  }
 
   @Post('platform-readonly')
   createPlatformReadonly(@Current() cur: CurrentAdmin, @Body() dto: CreatePlatformReadonlyDto) {
