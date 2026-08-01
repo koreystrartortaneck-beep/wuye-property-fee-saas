@@ -13,6 +13,20 @@ import { PAYMENT_PROVIDER, PaymentProvider, PaymentProviderError, WxPayTransacti
 /** 进行中订单（占用账单）的状态集合 */
 const ACTIVE_PAYMENT_STATUSES = ['CREATED', 'PREPAY_UNKNOWN'] as const;
 
+/** 可入账的订单行（回调与查单两条路径传进来的都是完整 Payment 行） */
+type SettleablePayment = {
+  id: string;
+  orderNo: string;
+  status: string;
+  transactionId: string | null;
+  channel: string;
+  totalAmount: unknown;
+  // 审计需要租户与小区归属；调用方传的都是完整的 Payment 行，本就带这两列
+  tenantId: string;
+  communityId: string | null;
+  paymentBills: Array<{ billId: string; bill?: ReceiptBill | null }>;
+};
+
 interface ReceiptBill {
   title?: string | null;
   period?: string | null;
@@ -411,18 +425,7 @@ export class PaymentService {
    * source 记录确认来源（回调/查单/mock），供审计与对账区分。
    */
   private async applyWxPaySuccess(
-    payment: {
-      id: string;
-      orderNo: string;
-      status: string;
-      transactionId: string | null;
-      channel: string;
-      totalAmount: unknown;
-      // 审计需要租户与小区归属；调用方传的都是完整的 Payment 行，本就带这两列
-      tenantId: string;
-      communityId: string | null;
-      paymentBills: Array<{ billId: string; bill?: ReceiptBill | null }>;
-    },
+    payment: SettleablePayment,
     transaction: WxPayTransaction,
     source: 'WXPAY_NOTIFY' | 'WXPAY_QUERY',
   ): Promise<{ orderNo: string; status: 'SUCCESS' }> {
@@ -434,6 +437,34 @@ export class PaymentService {
       throw new Error(`支付回调订单状态不可入账：${payment.status}`);
     }
 
+    /*
+     * 从这里往下必须处于**订单所属租户的上下文**中。
+     *
+     * 2026-08-01 事故的真正根因就是缺了这一层。入账事务里要写一条 PAY 审计，
+     * 而 audit.append 的第一句是 assertTenantAccess(tenantId) —— 没有租户上下文就抛
+     * FORBIDDEN「缺少租户上下文」。微信回调没有登录态，定时兜底任务也没有，
+     * 于是两条系统路径都在这里抛错、整个入账事务回滚：
+     *   · 回调：业主的钱扣了，订单留在 CREATED、账单留在 UNPAID，页面停在「入账中」
+     *   · 兜底：每轮扫描抛同一个错，这条保底路径从未真正救回过任何一笔
+     * 生产实测（订单 WY20260801018839）：回调 14:55:50 到达并验签通过，
+     * 微信重试 4 次全部失败，失败原因正是「无权限访问：缺少租户上下文」。
+     *
+     * 这不是新写法：reconciliation.service（对账 cron）与 refund.service（退款回调）
+     * 早就是 runWithTenant(record.tenantId, ...) —— 只有支付入账这一条漏了。
+     * 回调处理订单 X，本质上就是在 X 所属租户里操作，上下文从订单本身推出来即可。
+     *
+     * 拆成独立方法而不是把函数体裹进闭包：闭包里的 return 语义容易看错，
+     * 而这段是资金落账的代码。
+     */
+    return runWithTenant(payment.tenantId, () => this.settleWxPayInTenant(payment, transaction, source));
+  }
+
+  /** applyWxPaySuccess 的落账主体；调用方已保证处于订单所属租户的上下文中。 */
+  private async settleWxPayInTenant(
+    payment: SettleablePayment,
+    transaction: WxPayTransaction,
+    source: 'WXPAY_NOTIFY' | 'WXPAY_QUERY',
+  ): Promise<{ orderNo: string; status: 'SUCCESS' }> {
     const paidAt = transaction.success_time ? new Date(transaction.success_time) : new Date();
     if (Number.isNaN(paidAt.getTime())) throw new Error('支付回调成功时间无效');
     const { receiptNo, snapshot } = this.buildReceipt(payment, paidAt, transaction.transaction_id);
@@ -798,7 +829,10 @@ export class PaymentService {
    * 原实现两件事共用一个 30 分钟门槛，于是「早点让钱到账」被「别误关单」拖住了 ——
    * 真实事故里业主付款后干等了半小时，就是这个耦合造成的。
    */
-  async reconcileStaleWxPay(orderNo: string, options: { allowClose?: boolean } = {}) {
+  async reconcileStaleWxPay(
+    orderNo: string,
+    options: { allowClose?: boolean; expectTenantId?: string } = {},
+  ) {
     /*
      * allowClose = 是否允许写入「未支付终态」（关单 / 判失败）。
      * 这两种写入都会终结订单并释放账单，对还在收银台输密码的业主是破坏性的，
@@ -806,6 +840,18 @@ export class PaymentService {
      */
     const allowClose = options.allowClose !== false;
     const payment = await this.prisma.raw.payment.findUnique({ where: { orderNo } });
+    /*
+     * 跨租户防护。这里按 orderNo 用 prisma.raw 查（回调与定时任务都没有租户上下文，
+     * 只能用 raw），所以必须由调用方显式声明「我期望它属于哪个租户」。
+     *
+     * 原先这条防护是**顺带**成立的：入账时 audit.append 会 assertTenantAccess，
+     * 管理员租户与订单租户不一致就抛「租户上下文不匹配」。而修复入账问题时
+     * settleWxPayInTenant 已按订单租户建立上下文，那道副作用防护随之消失 ——
+     * 所以要在这里补成显式的。订单号形如 WY+日期+6 位随机数，并非不可猜。
+     */
+    if (payment && options.expectTenantId && payment.tenantId !== options.expectTenantId) {
+      throw new BizException(ErrorCode.NOT_FOUND);
+    }
     if (
       !payment ||
       payment.channel !== 'WXPAY' ||

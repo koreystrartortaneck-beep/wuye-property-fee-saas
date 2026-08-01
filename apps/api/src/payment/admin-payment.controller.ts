@@ -223,8 +223,13 @@ export class AdminPaymentController {
    */
   @Roles('TENANT_ADMIN')
   @Post(':orderNo/force-sync')
-  forceSync(@Param('orderNo') orderNo: string) {
-    return this.paymentService.reconcileStaleWxPay(orderNo);
+  forceSync(@Current() cur: CurrentAdmin, @Param('orderNo') orderNo: string) {
+    /*
+     * 必须带上自己的租户：查单是按 orderNo 用 prisma.raw 做的（回调与定时任务
+     * 没有租户上下文，只能这样），不声明期望租户就等于任何管理员都能对别家公司的
+     * 订单发起查单/关单。订单号形如 WY+日期+6 位随机数，并非不可猜。
+     */
+    return this.paymentService.reconcileStaleWxPay(orderNo, { expectTenantId: cur.tenantId ?? undefined });
   }
 
   @Roles('TENANT_ADMIN')
