@@ -150,9 +150,24 @@
     </template>
   </el-dialog>
 
-  <!-- 退款详情 -->
-  <el-dialog v-model="refundDialog" title="退款详情" width="min(560px, 92vw)">
+  <!--
+    退款溯源。
+    2026-08-01：一笔退款微信 3 秒就退完了、业主微信里已到账，而这里显示「退款中」
+    整整 10 分钟 —— 退款回调一次没到，全靠查单兜底才对齐。那 10 分钟里，
+    收费员在这个弹窗里只能看到一个「退款中」：看不出微信到底退没退、
+    看不出回调有没有来过，也没有任何按钮能立刻去问一次。
+  -->
+  <el-dialog v-model="refundDialog" title="退款溯源" width="min(680px, 94vw)">
     <template v-if="refundDetail">
+      <el-alert
+        :type="refundDetail.settlement?.done ? 'success' : refundDetail.status === 'FAILED' ? 'error' : 'warning'"
+        :closable="false"
+        show-icon
+        class="trace-verdict"
+      >
+        <template #title>{{ refundVerdict }}</template>
+      </el-alert>
+
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item label="退款单号">{{ refundDetail.refundNo }}</el-descriptions-item>
         <el-descriptions-item label="状态">
@@ -160,9 +175,19 @@
         </el-descriptions-item>
         <el-descriptions-item label="退款金额">¥{{ yuan(refundDetail.refundAmount) }}</el-descriptions-item>
         <el-descriptions-item label="原金额">¥{{ yuan(refundDetail.originalAmount) }}</el-descriptions-item>
+        <el-descriptions-item label="确认方式">
+          {{ CONFIRM_SOURCE_LABEL[refundDetail.settlement?.via || ''] || '尚未确认' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="微信回调">
+          <el-tag :type="refundDetail.settlement?.wxCallbackArrived ? 'success' : 'danger'" size="small">
+            {{ refundDetail.settlement?.wxCallbackArrived ? '已到达' : '从未到达' }}
+          </el-tag>
+        </el-descriptions-item>
         <el-descriptions-item label="原因" :span="2">{{ refundDetail.reason }}</el-descriptions-item>
         <el-descriptions-item label="申请时间">{{ dt(refundDetail.requestedAt) }}</el-descriptions-item>
         <el-descriptions-item label="退款完成">{{ dt(refundDetail.refundedAt) }}</el-descriptions-item>
+        <el-descriptions-item label="最近查单">{{ dt(refundDetail.settlement?.queriedAt) }}</el-descriptions-item>
+        <el-descriptions-item label="失败原因">{{ refundDetail.failureMessage || '—' }}</el-descriptions-item>
       </el-descriptions>
       <div class="json-title">退款尝试</div>
       <el-table :data="refundDetail.attempts || []" size="small">
@@ -180,8 +205,51 @@
           <EmptyState icon="↩️" title="还没有退款尝试" desc="发起退款后每次向微信提交的结果都会记录在此，失败可重试" />
         </template>
 </el-table>
+
+      <div class="json-title">退款事件</div>
+      <el-table :data="refundDetail.events || []" size="small">
+        <el-table-column label="事件" width="120">
+          <template #default="{ row }">{{ PAYMENT_EVENT_LABEL[row.type] || row.type }}</template>
+        </el-table-column>
+        <el-table-column label="处理" width="90">
+          <template #default="{ row }">{{ PAYMENT_EVENT_STATUS_LABEL[row.status] || row.status }}</template>
+        </el-table-column>
+        <el-table-column label="发生时间" min-width="150">
+          <template #default="{ row }">{{ dt(row.occurredAt) }}</template>
+        </el-table-column>
+        <el-table-column label="说明" min-width="160">
+          <template #default="{ row }">{{ row.lastError || row.source || '—' }}</template>
+        </el-table-column>
+        <template #empty>
+          <EmptyState
+            icon="↩️"
+            title="还没有退款事件"
+            desc="微信退款回调到达时会在这里留下一条；一条都没有说明回调没来过，退款结果是靠主动查单确认的"
+          />
+        </template>
+      </el-table>
     </template>
     <el-empty v-else description="该订单暂无退款记录" />
+    <template #footer>
+      <!--
+        立即查单：退款侧此前只有 2 分钟一轮的 cron（改之前 10 分钟），
+        业主打电话问「钱到了没」时，收费员只能回「你再等等」。
+      -->
+      <el-button
+        v-if="refundDetail && !refundDetail.settlement?.done"
+        type="primary"
+        :loading="querying"
+        @click="doForceQuery"
+      >立即向微信查单</el-button>
+      <!-- 失败的退款可以重发；最常见的失败是商户余额不足，充值后需要有人再点一次 -->
+      <el-button
+        v-if="refundDetail && refundDetail.status === 'FAILED'"
+        type="danger"
+        :loading="retrying"
+        @click="doRetryRefund"
+      >重新发起退款</el-button>
+      <el-button @click="refundDialog = false">关闭</el-button>
+    </template>
   </el-dialog>
 
   <!--
@@ -264,7 +332,7 @@
 import EmptyState from '../components/EmptyState.vue';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import HouseCell from '../components/HouseCell.vue';
 import { useCommunities } from '../composables';
@@ -315,7 +383,25 @@ interface Refund {
   reason: string;
   requestedAt: string;
   refundedAt: string | null;
+  failureMessage?: string | null;
   attempts: { attemptNo: number; status: string; createdAt: string; failureMessage?: string; channelStatus?: string }[];
+  /*
+   * 后端派生的结论。via 不是存下来的列 —— Refund 表没有 confirmedBy，
+   * 由「回调到过没有」推出来：到过算回调确认，没到过说明是查单补回的。
+   */
+  settlement?: {
+    done: boolean;
+    via: string | null;
+    wxCallbackArrived: boolean;
+    queriedAt: string | null;
+  };
+  events?: Array<{
+    type: string;
+    status: string;
+    source: string | null;
+    occurredAt: string;
+    lastError: string | null;
+  }>;
 }
 
 const { communities } = useCommunities();
@@ -537,13 +623,86 @@ async function doForceSync() {
   }
 }
 
+const querying = ref(false);
+const retrying = ref(false);
+
+/**
+ * 一句话结论。
+ * 「靠查单补回」要单独说出来 —— 那说明微信回调这条链路没通，
+ * 钱虽然对上了，但每一笔都要多等一轮扫描，是需要上报的运维事实。
+ */
+const refundVerdict = computed(() => {
+  const r = refundDetail.value;
+  if (!r) return '';
+  if (r.status === 'FAILED') {
+    return `退款失败：${r.failureMessage || '原因未记录'}`;
+  }
+  if (!r.settlement?.done) {
+    return r.settlement?.wxCallbackArrived
+      ? '微信回调已到达，但退款还没确认完成 —— 请点「立即向微信查单」'
+      : '退款已提交微信，尚未确认完成。业主可能已经收到钱了 —— 请点「立即向微信查单」核实';
+  }
+  return r.settlement.via === 'WXPAY_NOTIFY'
+    ? '已退款成功，由微信回调确认（链路正常）'
+    : '已退款成功，但是靠主动查单补回来的 —— 说明微信退款回调没有到达，若反复出现请联系技术支持';
+});
+
 async function showRefund(row: Payment) {
   refundDetail.value = null;
   refundDialog.value = true;
+  currentOrderNo.value = row.orderNo;
   try {
-    refundDetail.value = await api<Refund>(`/admin/refunds/${row.orderNo}`, { silent: true });
+    refundDetail.value = await api<Refund>(`/admin/refunds/trace/${row.orderNo}`, { silent: true });
   } catch {
     refundDetail.value = null;
+  }
+}
+
+const currentOrderNo = ref('');
+
+async function doForceQuery() {
+  if (!currentOrderNo.value) return;
+  querying.value = true;
+  try {
+    await api(`/admin/refunds/${currentOrderNo.value}/force-query`, { method: 'POST' });
+    // 重新读溯源而不是只弹提示：结论必须当场可见
+    refundDetail.value = await api<Refund>(`/admin/refunds/trace/${currentOrderNo.value}`);
+    ElMessage.success(refundDetail.value?.settlement?.done ? '已确认退款成功' : '微信侧仍在处理中');
+    load();
+  } finally {
+    querying.value = false;
+  }
+}
+
+/**
+ * 重新发起退款。走的还是创建接口（后端会复用同一张退款单并再试一次），
+ * 但必须换一个 requestId —— 沿用旧的会命中幂等重放，拿回上一次的失败结果，
+ * 而界面上看起来像是「又失败了」。
+ */
+async function doRetryRefund() {
+  const r = refundDetail.value;
+  if (!r || !currentOrderNo.value) return;
+  await ElMessageBox.confirm(
+    `将对订单 ${currentOrderNo.value} 重新发起全额退款 ¥${yuan(r.refundAmount)}。\n` +
+      '若上次失败原因是商户余额不足，请先确认已充值，否则会再次失败。',
+    '重新发起退款',
+    { type: 'warning', confirmButtonText: '确认重发', cancelButtonText: '取消' },
+  );
+  retrying.value = true;
+  try {
+    await api('/admin/refunds', {
+      method: 'POST',
+      body: JSON.stringify({
+        orderNo: currentOrderNo.value,
+        reason: r.reason,
+        requestId: genRequestId(),
+      }),
+    });
+    refundDetail.value = await api<Refund>(`/admin/refunds/trace/${currentOrderNo.value}`);
+    ElMessage.success(refundDetail.value?.settlement?.done ? '退款成功' : '已重新提交，正在处理');
+    load();
+  } finally {
+    retrying.value = false;
   }
 }
 </script>

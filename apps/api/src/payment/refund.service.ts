@@ -482,6 +482,86 @@ export class RefundService {
     });
   }
 
+  /**
+   * 退款溯源：回答「钱退到了吗 / 怎么确认的 / 微信回调到过吗 / 卡住的话为什么」。
+   *
+   * 2026-08-01 的教训：一笔 ¥1 的退款微信 3 秒就退完了、业主微信里已到账，
+   * 而后台显示「退款中」整整 10 分钟 —— 因为**退款回调一次都没到**，
+   * 全靠 10 分钟一轮的查单兜底才对齐。而那 10 分钟里，后台只能看到一个
+   * PROCESSING：看不出微信到底退没退、看不出回调有没有来、也没有任何按钮能推一把。
+   *
+   * 支付侧已经补过同样的能力（/admin/payments/trace + force-sync），
+   * 退款侧当时漏了。这个方法是退款侧的对应物。
+   */
+  async trace(orderNo: string, actingTenantId?: string | null) {
+    const refund = await this.prisma.raw.refund.findFirst({
+      where: {
+        paymentOrderNo: orderNo,
+        ...(actingTenantId ? { tenantId: actingTenantId } : {}),
+      },
+      include: { attempts: { orderBy: { attemptNo: 'asc' } } },
+    });
+    if (!refund) throw new BizException(ErrorCode.NOT_FOUND);
+
+    const events = await this.prisma.raw.paymentEvent.findMany({
+      where: { refundId: refund.id },
+      orderBy: { occurredAt: 'asc' },
+      select: {
+        type: true, status: true, source: true, occurredAt: true,
+        processedAt: true, attempts: true, lastError: true, summary: true,
+      },
+      take: 50,
+    });
+
+    return {
+      ...refund,
+      /*
+       * 明确给出结论，而不是让人对着一堆时间戳自己推。
+       *
+       * via 是**派生**的，不是存下来的：Refund 表没有 confirmedBy 这样的列，
+       * 而 finalizeSuccess 既可能由回调触发、也可能由查单触发。
+       * 判据：回调到过（notifyReceivedAt 有值）就算回调确认，否则是查单补回的。
+       * 「一直靠查单补回」本身就是需要上报的运维事实 —— 说明回调链路没通。
+       */
+      settlement: {
+        done: refund.status === 'SUCCESS',
+        via:
+          refund.status === 'SUCCESS'
+            ? refund.notifyReceivedAt
+              ? 'WXPAY_NOTIFY'
+              : 'WXPAY_QUERY'
+            : null,
+        wxCallbackArrived: refund.notifyReceivedAt !== null,
+        queriedAt: refund.lastQueriedAt,
+      },
+      events,
+    };
+  }
+
+  /**
+   * 立即向微信查一次退款状态。
+   *
+   * 退款侧原来只有 2 分钟一轮的 cron（改之前是 10 分钟）。业主打电话说
+   * 「钱到了/没到」时，收费员需要当场就能核实，而不是回一句「你再等等」。
+   * 支付侧的对应物是 force-sync。
+   */
+  async forceQuery(orderNo: string, actingTenantId?: string | null) {
+    const refund = await this.prisma.raw.refund.findFirst({
+      where: { paymentOrderNo: orderNo },
+      select: { refundNo: true, tenantId: true, status: true },
+    });
+    /*
+     * 跨租户防护要显式。查单按 refundNo 走 prisma.raw（回调与 cron 都没有租户
+     * 上下文，只能这样），所以这里必须自己比对；用 NOT_FOUND 而非 FORBIDDEN，
+     * 不向调用方确认这个订单号存在。
+     */
+    if (!refund || (actingTenantId && refund.tenantId !== actingTenantId)) {
+      throw new BizException(ErrorCode.NOT_FOUND);
+    }
+    const result = await this.recoverRefund(refund.refundNo);
+    return result ?? { refundNo: refund.refundNo, status: refund.status };
+  }
+
   /** 按订单号查退款。actingTenantId 非空（租户管理员）时强制限定本租户，防跨租户越权读取；
    *  null 表示平台超管，可跨租户查看。 */
   async getRefund(orderNo: string, actingTenantId?: string | null) {

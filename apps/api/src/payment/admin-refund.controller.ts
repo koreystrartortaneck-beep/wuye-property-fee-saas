@@ -46,6 +46,24 @@ export class AdminRefundController {
     });
   }
 
+  /*
+   * 溯源是只读的，不挂 @Roles —— 排查退款问题时不该被迫用超管账号。
+   * 放在 :orderNo 之前：段数不同不会冲突，但显式排在前面更不容易被后人改坏。
+   */
+  @Get('trace/:orderNo')
+  trace(@Current() cur: CurrentAdmin, @Param('orderNo') orderNo: string) {
+    return this.service.trace(orderNo, cur.tenantId);
+  }
+
+  /*
+   * 立即向微信查单。只读、幂等（查得到成功就对齐、查不到就原样返回），
+   * 所以不限定 TENANT_ADMIN —— 收费员接到业主电话时也该能当场核实。
+   */
+  @Post(':orderNo/force-query')
+  forceQuery(@Current() cur: CurrentAdmin, @Param('orderNo') orderNo: string) {
+    return this.service.forceQuery(orderNo, cur.tenantId);
+  }
+
   @Get(':orderNo')
   get(@Current() cur: CurrentAdmin, @Param('orderNo') orderNo: string) {
     return this.service.getRefund(orderNo, cur.tenantId);
