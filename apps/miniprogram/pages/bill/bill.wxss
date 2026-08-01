@@ -240,6 +240,18 @@
   background: rgba(196, 86, 86, 0.12);
 }
 
+/*
+ * 入账中：业主已付款、我们还没销账。
+ * 用金色而不是灰色 —— 这是个好消息（钱收到了），不该看起来像出了问题；
+ * 也不用「已缴」的紫色，避免和真正销账完的账单混在一起。
+ * 放在 .status-paid 之后：settling 的行同时带 paid 与 settling 两个类，
+ * 这里要赢。
+ */
+.status-settling {
+  color: var(--gold-ink, #9b743a);
+  background: rgba(201, 166, 107, 0.18);
+}
+
 .bill-selected {
   border: 2rpx solid var(--gold, #c9a66b);
   box-shadow: 0 18rpx 44rpx rgba(155, 116, 58, 0.22);

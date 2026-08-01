@@ -16,6 +16,8 @@ const test = require('node:test');
  *   ② 查单窗口只有 5 秒（连查 5 次 × 1 秒）。微信入账通知晚几秒就等不到。
  *   ③ 放弃时的文案是「请稍后查看」，没有一个字说「钱已经收到了、别再付一次」。
  *      业主此刻最怕的是钱被吞，最可能做的是再付一次。
+ *      （这一条后来连设计一起改了：支付成功立刻进成功页，不再有等待与弹框；
+ *        「钱已收到 / 别再付」改由账单页的「入账中」状态承担，见文末。）
  *   ④ 后台的自动补救 10 分钟一轮、且只处理创建满 30 分钟的订单 = 最坏 40 分钟。
  *      （④ 由 apps/api 侧的 payment-recovery.service.spec.ts 钉住。）
  *
@@ -131,40 +133,50 @@ test('② 成功后立刻返回，不跑完剩下的间隔', async () => {
   assert.equal(waits.length, 0);
 });
 
-// ───────────────────── ③ 放弃时的文案必须安抚 ─────────────────────
+// ───────────── ③ 「钱已收到、别再付」必须说到，但落点已经变了 ─────────────
 
-test('③ 等不到时的提示要说「钱已收到」和「不要重复支付」', () => {
-  /*
-   * 这一条是纯文案，但它是事故里伤害最大的部分：
-   * 业主看到「请稍后查看」时，合理的推断是钱丢了 —— 于是会再付一次。
-   * 必须明确三件事：已扣款成功 / 正在核对 / 不要重复支付 / 去哪儿查。
-   */
-  const src = fs.readFileSync(path.join(MP, 'pages/pay-confirm/pay-confirm.js'), 'utf8');
+/*
+ * 原来这两条钉的是 pay-confirm 里那个「已收到您的支付…请不要重复支付」的弹框。
+ *
+ * 重新设计之后那个弹框不该存在了：业主付完款就该看到「缴费成功」，
+ * 而不是先被一个解释性弹框拦住 ——「支付成功后要及时反馈」是产品要求，
+ * 而原设计为了等我们自己记账，把这个反馈往后压了几十秒到几十分钟。
+ *
+ * 但那个弹框要传达的两件事一件都不能少，只是换了落点，
+ * 从「支付后弹框」变成「账单页的状态」：
+ *   · 钱已经收到了    → 账单显示「入账中」+「微信已扣款，正在入账」
+ *   · 请不要重复支付  → 详情页收起缴费按钮 + 明写「请勿重复支付」
+ * 落点变了守卫要跟着变，但不能因为「弹框没了」就把守卫删掉。
+ */
 
-  const required = [
-    ['已收到', '没有告知「钱已收到」'],
-    ['不要重复支付', '没有劝阻重复支付——业主最可能做的就是再付一次'],
-    ['缴费记录', '没有指明去哪里自查'],
-  ];
-  for (const [needle, why] of required) {
-    assert.ok(src.includes(needle), why);
-  }
-
-  // 反向：不能再出现「支付未完成 / 支付失败」这类把已扣款说成没成功的措辞
-  for (const bad of ['支付未完成', '支付失败，请重新']) {
-    assert.ok(!src.includes(bad), `文案里仍有误导性措辞：${bad}`);
-  }
+test('③ 账单页要告诉业主钱已收到，而不是显示「待缴」', () => {
+  const js = fs.readFileSync(path.join(MP, 'pages/bill/bill.js'), 'utf8');
+  assert.ok(js.includes('入账中'), '账单列表仍把已付款的账单显示成「待缴」');
+  assert.ok(js.includes('微信已扣款'), '没有告知业主钱已经收到');
 });
 
-test('③ 兜底提示只在真的没等到时出现，不能盖住成功路径', () => {
-  const src = stripComments(fs.readFileSync(path.join(MP, 'pages/pay-confirm/pay-confirm.js'), 'utf8'));
-  const idx = src.indexOf('已收到');
-  assert.ok(idx > 0);
+test('③ 详情页要劝阻重复支付，并且真的不给按钮', () => {
+  const js = fs.readFileSync(path.join(MP, 'pages/bill-detail/bill-detail.js'), 'utf8');
+  const wxml = fs.readFileSync(path.join(MP, 'pages/bill-detail/bill-detail.wxml'), 'utf8');
+  assert.ok(wxml.includes('请勿重复支付'), '没有劝阻重复支付——业主最可能做的就是再付一次');
   /*
-   * 该提示必须在「确认成功」的分支之后 —— 也就是它是走完查单窗口仍未成功时的兜底。
-   * 若它出现在 SUCCESS 判断之前，正常缴费的人也会看到这个弹窗。
+   * 只写一句提示不够：按钮还在，他照样能点。
+   * 「说了别做」和「做不了」必须同时成立。
    */
-  const successIdx = src.indexOf("'SUCCESS'");
-  assert.ok(successIdx > 0, '找不到 SUCCESS 判断');
-  assert.ok(idx > successIdx, '安抚提示出现在 SUCCESS 判断之前，会误伤正常缴费的业主');
+  assert.match(
+    wxml,
+    /wx:if="\{\{bill\.status === 'UNPAID' && !bill\.settling\}\}"/,
+    '入账中仍然给出缴费按钮',
+  );
+  assert.match(js, /b\.status !== 'UNPAID' \|\| b\.settling/, 'goPay 没有二次拦截');
+});
+
+test('③ 支付成功路径上不再有解释性弹框——业主要的只是「缴清了」', () => {
+  const src = stripComments(fs.readFileSync(path.join(MP, 'pages/pay-confirm/pay-confirm.js'), 'utf8'));
+  const start = src.indexOf('wx.requestPayment');
+  const branchEnd = src.indexOf('} else {', start);
+  assert.ok(start > 0 && branchEnd > start, '找不到 requestPayment 分支');
+  const branch = src.slice(start, branchEnd);
+  assert.ok(!branch.includes('showModal'), '支付成功路径上仍有弹框');
+  assert.ok(!branch.includes('showLoading'), '支付成功路径上仍有阻塞式 loading');
 });

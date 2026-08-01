@@ -4,7 +4,13 @@
       <view class="success-check">✓</view>
     </view>
     <view class="success-title">缴费成功</view>
-    <view class="success-desc">您的物业费用已实时入账</view>
+    <!--
+      「已实时入账」在账单还没销账时是不准的。微信扣款成功是既定事实（所以标题
+      照旧是「缴费成功」），但入账要等回调或查单，通常几秒。这里如实说，
+      并且自己会消失 —— 不让业主去猜，也不撒谎。
+    -->
+    <view wx:if="{{settled}}" class="success-desc">您的物业费用已实时入账</view>
+    <view wx:else class="success-desc">微信已扣款成功，账单状态正在同步…</view>
     <view class="success-amount amount">¥ {{amount}}</view>
   </view>
 
@@ -20,7 +26,7 @@
     </view>
     <view class="receipt-row">
       <text>支付时间</text>
-      <text>{{payTime}}</text>
+      <text>{{payTime || '同步中…'}}</text>
     </view>
     <view class="receipt-row">
       <text>支付方式</text>
@@ -31,7 +37,10 @@
   <view wx:if="{{canInvoice}}" class="invoice-tip" bindtap="goInvoice">需要发票？点此申请开票 ›</view>
 
   <view class="action-row">
-    <button class="gold-button ghost-btn" bindtap="viewReceipt">电子收据</button>
+    <!-- 收据由入账时生成，未入账时点开只会是空页，所以先禁用 -->
+    <button class="gold-button ghost-btn" bindtap="viewReceipt" disabled="{{!settled}}">
+      {{settled ? '电子收据' : '收据生成中'}}
+    </button>
     <button class="dark-button action-btn" bindtap="backHome">返回首页</button>
   </view>
 </view>

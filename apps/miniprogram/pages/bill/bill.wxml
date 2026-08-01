@@ -74,7 +74,7 @@
             <view class="bill-row2">
               <view class="bill-meta">
                 <text class="bill-period">{{item.subline}}</text>
-                <view class="status {{item.paid ? 'status-paid' : ''}} {{item.overdue ? 'status-overdue' : ''}}">{{item.status}}</view>
+                <view class="status {{item.paid ? 'status-paid' : ''}} {{item.overdue ? 'status-overdue' : ''}} {{item.settling ? 'status-settling' : ''}}">{{item.status}}</view>
               </view>
               <button wx:if="{{!item.paid}}" class="gold-button bill-pay-btn" data-id="{{item.id}}" catchtap="payBill">缴费</button>
               <view wx:else class="chevron">›</view>

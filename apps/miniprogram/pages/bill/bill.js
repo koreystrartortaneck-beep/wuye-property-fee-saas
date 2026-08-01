@@ -153,9 +153,17 @@ Page({
     if (myToken !== this._reqToken) return;
     const now = new Date();
     const mapped = res.list.map((b, i) => {
-      const overdue = b.status === 'UNPAID' && new Date(b.dueDate) < now;
+      /*
+       * settling：业主已经付过钱、微信也确认了，只是我们还没销账（通常几秒）。
+       * 这一屏是业主付完款最可能回来看的地方 —— 2026-08-01 事故里他看到的是
+       * 「待缴」，而钱明明已经扣了。既不能显示「待缴」（像是没付成功），
+       * 也不能显示「已缴」（我们确实还没收到账），所以给它自己的状态。
+       */
+      const settling = b.status === 'UNPAID' && b.settling;
+      const overdue = !settling && b.status === 'UNPAID' && new Date(b.dueDate) < now;
       let subline = '';
       if (b.status === 'PAID' && b.paidAt) subline = `缴于 ${fmtDate(b.paidAt)}`;
+      else if (settling) subline = '微信已扣款，正在入账';
       else if (b.status === 'UNPAID') subline = `到期 ${fmtDate(b.dueDate)}`;
       else if (b.status === 'REFUNDED') subline = '已退款';
       else if (b.status === 'REFUNDING') subline = '退款处理中';
@@ -166,9 +174,11 @@ Page({
         title: b.title,
         subline,
         amount: Number(b.amount).toFixed(2),
-        status: overdue ? '已逾期' : STATUS_LABEL[b.status] || b.status,
+        status: settling ? '入账中' : overdue ? '已逾期' : STATUS_LABEL[b.status] || b.status,
         overdue,
-        paid: b.status !== 'UNPAID',
+        settling,
+        // 入账中的账单不能再点「缴费」——否则业主会为同一笔账单付第二次
+        paid: b.status !== 'UNPAID' || settling,
         theme: THEMES[i % THEMES.length],
       };
     });

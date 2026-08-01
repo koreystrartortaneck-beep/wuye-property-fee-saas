@@ -37,5 +37,7 @@
     </view>
   </view>
 
-  <button wx:if="{{bill.status === 'UNPAID'}}" class="dark-button pay-now" bindtap="goPay">立即缴纳 ¥{{bill.amount}}</button>
+  <!-- 入账中不给缴费入口：钱已经付过了，再点一次就是重复支付 -->
+  <button wx:if="{{bill.status === 'UNPAID' && !bill.settling}}" class="dark-button pay-now" bindtap="goPay">立即缴纳 ¥{{bill.amount}}</button>
+  <view wx:if="{{bill.settling}}" class="settling-tip">微信已扣款成功，正在入账，请勿重复支付</view>
 </view>

@@ -41,13 +41,37 @@ test('查单的瞬时网络失败不会中断后续确认', async () => {
   assert.equal(attempts, 2);
 });
 
-test('未确认成功时不进入缴费成功页', () => {
-  const source = fs.readFileSync(
+test('入账未完成时不得谎称已缴清（旧规则「不进成功页」已被替换）', () => {
+  /*
+   * 这条守卫原本是「未确认成功就不进缴费成功页」。
+   *
+   * 2026-08-01 事故后重新设计：那条规则把两件事混成了一件 ——
+   * `wx.requestPayment` 成功是微信给的权威结论（钱已经扣了），
+   * 而账单销账要等我们收到回调，通常几秒。为了后者而挡住业主，
+   * 结果他付完款先看到转圈、再看到一个解释性弹框，事故里最长挡了 42 分钟。
+   *
+   * 现在支付成功立刻进成功页。原来那条规则要防的东西没有消失，只是换了落点：
+   * **不许在还没收到钱的时候声称「已入账 / 已缴清」**。
+   * 所以这里改成钉住新的落点，而不是删掉这条守卫。
+   */
+  const wxml = fs
+    .readFileSync(path.join(projectRoot, 'apps/miniprogram/pages/pay-success/pay-success.wxml'), 'utf8')
+    .replace(/<!--[\s\S]*?-->/g, '');
+  // 「已实时入账」必须由 settled 把门
+  const idx = wxml.indexOf('已实时入账');
+  assert.ok(idx > 0, '找不到入账文案');
+  assert.match(wxml.slice(Math.max(0, idx - 200), idx), /wx:if="\{\{settled\}\}"/);
+
+  // 账单侧同样不许把「还没入账」显示成「已缴」
+  const billJs = fs.readFileSync(path.join(projectRoot, 'apps/miniprogram/pages/bill/bill.js'), 'utf8');
+  assert.ok(billJs.includes('入账中'), '账单列表没有区分「入账中」与「已缴」');
+
+  // 入账推进本身仍然要发生，只是不再阻塞
+  const src = fs.readFileSync(
     path.join(projectRoot, 'apps/miniprogram/pages/pay-confirm/pay-confirm.js'),
     'utf8',
   );
-  assert.match(source, /waitForPaymentConfirmation/);
-  assert.match(source, /confirmed\.status !== 'SUCCESS'/);
+  assert.match(src, /waitForPaymentConfirmation/);
 });
 
 test('账单页每张账单独立缴费、去除多选合并', () => {

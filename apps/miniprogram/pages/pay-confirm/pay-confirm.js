@@ -130,36 +130,26 @@ Page({
         // mock 模式：直接确认
         await request(`/owner/payments/${order.orderNo}/mock-confirm`, { method: 'POST' });
       } else if (order.payParams) {
-        // 收银台成功不等于业务入账，必须等待支付回调或主动查单确认。
         wx.hideLoading();
         await new Promise((resolve, reject) =>
           wx.requestPayment({ ...order.payParams, success: resolve, fail: reject }),
         );
-        wx.showLoading({ title: '确认支付结果' });
-        const confirmed = await waitForPaymentConfirmation(order.orderNo);
-        if (confirmed.status !== 'SUCCESS') {
-          /*
-           * 等不到入账时的文案必须把三件事说清：钱已经付出去了、系统会自动补上、
-           * 不要重复付款。
-           *
-           * 原文案只有「请稍后在缴费记录中查看最终结果」——
-           * 真实事故里业主看到的就是这句：钱扣了、账单还是「待缴」，
-           * 界面既没说钱收到了，也没说要等多久，他只能猜是不是白付了，
-           * 甚至可能再付一次。
-           */
-          wx.hideLoading();
-          await new Promise((resolve) => wx.showModal({
-            title: '已收到您的支付',
-            content:
-              '微信已扣款成功，正在与银行/微信核对入账，通常几分钟内完成。\n\n'
-              + '请不要重复支付。稍后在「我的 → 缴费记录」查看，或联系物业协助确认。',
-            showCancel: false,
-            confirmText: '知道了',
-            complete: resolve,
-          }));
-          this.setData({ paying: false });
-          return;
-        }
+        /*
+         * 到这一行，微信已经确认扣款成功 —— 这是权威结论，业主的支付已经完成。
+         *
+         * 原来这里会 showLoading('确认支付结果') 并等我们自己的入账完成，
+         * 等不到就弹一个「已收到您的支付…」的框。那是把两件不同的事混成了一件：
+         *   · 「业主付了吗」—— 微信当场就答了
+         *   · 「我们记上了吗」—— 是我们的内部记账，不该由业主承担这段等待
+         * 结果业主付完款先看到转圈、再看到一个解释性弹框，而他要的只是「缴清了」。
+         * 2026-08-01 事故里这段等待最长拖了 42 分钟。
+         *
+         * 现在立刻进成功页。入账确认改成后台推进：
+         *   · 这里 fire-and-forget 触发一次查单，让入账尽快发生
+         *   · 成功页自己安静地轮询，凭证/发票入口就绪后再点亮
+         *   · 账单列表对这种「已付款未入账」的账单显示「入账中」，不再显示「未缴」
+         */
+        waitForPaymentConfirmation(order.orderNo).catch(() => {});
       } else {
         // 无 payParams（如预下单结果不确定 PREPAY_UNKNOWN）：提示稍后查看
         wx.hideLoading();

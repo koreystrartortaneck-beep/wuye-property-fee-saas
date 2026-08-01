@@ -88,3 +88,18 @@
   margin-top: 40rpx;
   width: 100%;
 }
+
+/*
+ * 入账中的说明条。放在缴费按钮的位置上 —— 那是业主此刻会看的地方，
+ * 而他最需要知道的正是「钱已经收到了，别再付」。
+ */
+.settling-tip {
+  margin-top: 24rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 16rpx;
+  background: rgba(201, 166, 107, 0.14);
+  color: var(--gold-ink, #9b743a);
+  font-size: 25rpx;
+  line-height: 1.6;
+  text-align: center;
+}

@@ -77,7 +77,13 @@ Page({
         ];
         break;
     }
-    const overdue = b.status === 'UNPAID' && new Date(b.dueDate) < new Date();
+    /*
+     * settling：微信已确认扣款、我们还没销账（通常几秒）。
+     * 详情页必须和列表一致：显示「入账中」，并且**收起缴费按钮** ——
+     * 否则业主从列表点进来看到「待缴 + 立即缴纳」，很可能为同一笔账单付第二次。
+     */
+    const settling = b.status === 'UNPAID' && b.settling;
+    const overdue = !settling && b.status === 'UNPAID' && new Date(b.dueDate) < new Date();
     this.setData({
       bill: {
         id: b.id,
@@ -85,19 +91,22 @@ Page({
         period: b.period,
         amount: Number(b.amount).toFixed(2),
         status: b.status,
-        statusLabel: overdue ? '已逾期' : STATUS_LABEL[b.status] || b.status,
+        settling,
+        statusLabel: settling ? '入账中' : overdue ? '已逾期' : STATUS_LABEL[b.status] || b.status,
         houseName: b.house ? b.house.displayName : '',
         dueDate: fmtDate(b.dueDate),
         paidAt: fmtDateTime(b.paidAt),
       },
       calcRows,
       overdue,
+      settling,
     });
   },
 
   goPay() {
     const b = this.data.bill;
-    if (!b || b.status !== 'UNPAID') return;
+    // settling 时按钮已隐藏；这里再拦一道，防止旧数据或竞态下重复支付
+    if (!b || b.status !== 'UNPAID' || b.settling) return;
     // 单账单单支付：由确认页向后端复核金额与收款状态后下单
     wx.navigateTo({ url: `/pages/pay-confirm/pay-confirm?billId=${b.id}` });
   },
