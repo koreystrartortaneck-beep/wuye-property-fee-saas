@@ -30,16 +30,55 @@ export class WxPayNotifyController {
   @RateLimit({ limit: 600, windowMs: 60_000 })
   @Post('notify')
   async notify(@Req() req: RawBodyRequest<Request>, @Res() res: Response): Promise<void> {
+    /*
+     * 验签与业务处理分成两段 try，因为两者的可观测性完全不同：
+     *
+     *   · 验签失败 → 拿不到订单号，只能发告警
+     *   · 验签通过、业务处理失败 → **知道是哪一笔**，必须在这笔订单上留下持久痕迹
+     *
+     * 原来两段合在一起，后者也只发一条按小时去重的全局告警，
+     * 且告警在 WX_PAY_ALLOWED_TENANT_ID 缺失时会静默 return。
+     * 2026-08-01 事故里我因此先误判成「回调从未到达」——
+     * 实际是回调到了、验签过了、入账那步被并发静默跳过，而这件事没有任何记录。
+     *
+     * 另外原来无论哪种失败都回「签名验证失败」，日志与响应互相矛盾，
+     * 排查时会把人往验签方向带。
+     */
+    let transaction;
     try {
       if (!req.rawBody) throw new Error('支付回调缺少原始请求体');
-      const transaction = this.wxPay.parseNotification(req.headers, req.rawBody);
+      transaction = this.wxPay.parseNotification(req.headers, req.rawBody);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`微信支付回调验签失败：${message}`);
+      await emitCallbackRejectedAlert(this.alerts, 'PAYMENT_CALLBACK_REJECTED', '微信支付回调验签失败', message);
+      res.status(401).json({ code: 'FAIL', message: '签名验证失败' });
+      return;
+    }
+
+    try {
       await this.paymentService.handleWxPayNotification(transaction);
       res.status(200).json({ code: 'SUCCESS', message: '成功' });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`微信支付回调拒绝：${message}`);
-      await emitCallbackRejectedAlert(this.alerts, 'PAYMENT_CALLBACK_REJECTED', '微信支付回调验签失败', message);
-      res.status(401).json({ code: 'FAIL', message: '签名验证失败' });
+      this.logger.error(`微信支付回调处理失败 order=${transaction.out_trade_no}：${message}`);
+      // 落到这笔订单上，「入账溯源」的时间线里能直接看到
+      await this.paymentService.recordNotifyFailure(
+        transaction.out_trade_no,
+        transaction.transaction_id ?? null,
+        message,
+      );
+      await emitCallbackRejectedAlert(
+        this.alerts,
+        'PAYMENT_CALLBACK_REJECTED',
+        '微信支付回调处理失败',
+        `order=${transaction.out_trade_no} ${message}`,
+      );
+      /*
+       * 必须回非 2xx：微信只在非 2xx 时按退避重试，而重试是这笔钱能自己回来的
+       * 主要途径。回 200 就等于告诉微信「已受理」，它永不再来。
+       */
+      res.status(500).json({ code: 'FAIL', message: '回调处理失败，请重试' });
     }
   }
 }

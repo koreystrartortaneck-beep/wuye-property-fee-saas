@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { BILL_STATUS_CN, ErrorCode, PAYMENT_STATUS_CN, cn } from '@pf/shared';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
@@ -35,6 +35,8 @@ interface ReceiptPayment {
  */
 @Injectable()
 export class PaymentService {
+  private readonly logger = new Logger(PaymentService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
@@ -436,6 +438,23 @@ export class PaymentService {
     if (Number.isNaN(paidAt.getTime())) throw new Error('支付回调成功时间无效');
     const { receiptNo, snapshot } = this.buildReceipt(payment, paidAt, transaction.transaction_id);
 
+    /*
+     * 条件更新一行都没匹配上时，**绝对不能当成「别人已经做过了」**。
+     *
+     * 2026-08-01 事故的真正根因就在这里。原代码是 `if (updated.count === 0) return;`，
+     * 事务结束后函数照旧 `return { status: 'SUCCESS' }`。于是：
+     *   微信回调 → 这里 count=0 → 静默 return → 控制器回 HTTP 200 {code:'SUCCESS'}
+     *   → 微信认定投递成功、**永不重试**
+     *   → 订单留在 CREATED、账单留在 UNPAID、业主的钱扣了
+     *   → 没有告警、没有失败事件、审计里没有 PAY —— 全链路零痕迹
+     * 生产实测：回调 12:37:45 到达并验签通过（wxpayNotifiedAt 有值、NOTIFIED 事件
+     * 已落库），而入账直到 13:19:34 才由人工查单完成，中间 42 分钟无人知晓。
+     *
+     * count=0 只说明「有人并发把状态挪出了可入账区间」，不等于「有人把它入账了」——
+     * 比如并发的那一方在后续步骤抛错回滚，状态又回到 CREATED，两边就都以为对方做了。
+     * 所以必须事后核实真的到了 SUCCESS；没到就抛错，让微信重试、让告警响。
+     */
+    let skippedByConcurrentUpdate = false;
     await this.prisma.raw.$transaction(async (tx) => {
       const updated = await tx.payment.updateMany({
         where: { id: payment.id, status: { in: [...ACTIVE_PAYMENT_STATUSES] } },
@@ -449,7 +468,10 @@ export class PaymentService {
           receiptSnapshot: snapshot,
         },
       });
-      if (updated.count === 0) return;
+      if (updated.count === 0) {
+        skippedByConcurrentUpdate = true;
+        return;
+      }
 
       const bills = await tx.bill.updateMany({
         where: {
@@ -498,6 +520,28 @@ export class PaymentService {
       );
     });
 
+    if (skippedByConcurrentUpdate) {
+      /*
+       * 在事务之外重读：MySQL 默认 REPEATABLE READ，同一事务内的 SELECT 可能仍看
+       * 旧快照，读出来的结论不可信。
+       */
+      const fresh = await this.prisma.raw.payment.findUnique({
+        where: { id: payment.id },
+        select: { status: true, transactionId: true },
+      });
+      if (fresh?.status === 'SUCCESS' && fresh.transactionId === transaction.transaction_id) {
+        // 并发的那一方确实入账成功了，这次是真正的幂等重复，返回成功
+        return { orderNo: payment.orderNo, status: 'SUCCESS' };
+      }
+      /*
+       * 抛错而不是返回成功：调用方是微信回调时，非 2xx 会让微信按退避重试，
+       * 这是钱能自己回来的关键；同时控制器会写 CRITICAL 告警。
+       */
+      throw new Error(
+        `支付入账被并发跳过且未真正成功：order=${payment.orderNo} 当前状态=${fresh?.status ?? '不存在'}`,
+      );
+    }
+
     return { orderNo: payment.orderNo, status: 'SUCCESS' };
   }
 
@@ -507,6 +551,65 @@ export class PaymentService {
         include: { bill: { include: { house: { include: { community: { select: { name: true } } } } } } },
       },
     };
+  }
+
+  /**
+   * 记录一次「回调到了但处理失败」。
+   *
+   * 为什么必须落库而不是只发告警：告警走 emitCallbackRejectedAlert，
+   * 而它在 WX_PAY_ALLOWED_TENANT_ID 缺失时会静默 return —— 一个依赖环境变量
+   * 才存在的痕迹，不能当作唯一痕迹。而且告警是按小时去重的全局对象，
+   * 定位不到**具体哪一笔**。
+   *
+   * 落成 PaymentEvent 之后，「入账溯源」的时间线上直接能看到
+   * 「收到微信回调 / 处理失败 / 原因」，排查从一小时缩到一眼。
+   * 这次事故我恰恰是因为没有这条记录，先误判成「回调没来过」。
+   *
+   * 按 (orderNo, transactionId) 收敛到一行并累加 attempts：微信会重试多次，
+   * 每次新建一行会把时间线冲满，而「重试了几次仍然失败」本身是有用信息。
+   */
+  async recordNotifyFailure(orderNo: string, transactionId: string | null, message: string): Promise<void> {
+    try {
+      const payment = await this.prisma.raw.payment.findUnique({
+        where: { orderNo },
+        select: { id: true, tenantId: true, communityId: true },
+      });
+      if (!payment) return;
+      const eventKey = `notify-fail:${orderNo}:${transactionId ?? 'unknown'}`;
+      /*
+       * upsert 而不是「先查再更新」：微信的重试可能并发到达，读后写会让两次重试
+       * 都以为自己是第一次、双双 create 后一方撞唯一键失败 —— 那次失败的痕迹就丢了。
+       * 交给数据库的 @@unique([tenantId, eventKey]) 收口，attempts 用原子 increment。
+       */
+      await this.prisma.raw.paymentEvent.upsert({
+        where: { tenantId_eventKey: { tenantId: payment.tenantId, eventKey } },
+        create: {
+          tenantId: payment.tenantId,
+          communityId: payment.communityId,
+          paymentId: payment.id,
+          eventKey,
+          type: 'NOTIFIED',
+          status: 'FAILED',
+          source: 'WXPAY_NOTIFY',
+          attempts: 1,
+          lastError: message.slice(0, 480),
+        },
+        update: {
+          attempts: { increment: 1 },
+          lastError: message.slice(0, 480),
+          status: 'FAILED',
+        },
+      });
+    } catch (error) {
+      /*
+       * 写痕迹本身失败不能影响回调应答：应答必须是非 2xx，微信才会重试。
+       * 但要留一行日志，否则「痕迹机制自己坏了」又成了一个看不见的故障。
+       */
+      this.logger.error(
+        `回调失败痕迹写入失败（该笔故障将只剩告警可查）order=${orderNo}: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /** 主动查单成功入账（查单来源）：供 sync/cancel/reconcile 复用。 */
