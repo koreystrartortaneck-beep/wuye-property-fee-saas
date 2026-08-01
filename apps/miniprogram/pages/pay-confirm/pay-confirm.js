@@ -138,11 +138,23 @@ Page({
         wx.showLoading({ title: '确认支付结果' });
         const confirmed = await waitForPaymentConfirmation(order.orderNo);
         if (confirmed.status !== 'SUCCESS') {
+          /*
+           * 等不到入账时的文案必须把三件事说清：钱已经付出去了、系统会自动补上、
+           * 不要重复付款。
+           *
+           * 原文案只有「请稍后在缴费记录中查看最终结果」——
+           * 真实事故里业主看到的就是这句：钱扣了、账单还是「待缴」，
+           * 界面既没说钱收到了，也没说要等多久，他只能猜是不是白付了，
+           * 甚至可能再付一次。
+           */
           wx.hideLoading();
           await new Promise((resolve) => wx.showModal({
-            title: '支付结果确认中',
-            content: '请稍后在缴费记录中查看最终结果',
+            title: '已收到您的支付',
+            content:
+              '微信已扣款成功，正在与银行/微信核对入账，通常几分钟内完成。\n\n'
+              + '请不要重复支付。稍后在「我的 → 缴费记录」查看，或联系物业协助确认。',
             showCancel: false,
+            confirmText: '知道了',
             complete: resolve,
           }));
           this.setData({ paying: false });

@@ -685,7 +685,23 @@ export class PaymentService {
   }
 
   /** 定时任务处理超过支付窗口的 CREATED / PREPAY_UNKNOWN 订单，避免账单被永久占用。 */
-  async reconcileStaleWxPay(orderNo: string) {
+  /**
+   * 向微信查单并按结果裁决。
+   *
+   * allowClose 把「查」和「关」分开：
+   *   · 查单是只读的，越早做越好 —— 业主付了钱就该尽快入账
+   *   · 关单会终结订单并释放账单，如果业主还在收银台输密码，关掉就是把他的支付作废
+   *
+   * 原实现两件事共用一个 30 分钟门槛，于是「早点让钱到账」被「别误关单」拖住了 ——
+   * 真实事故里业主付款后干等了半小时，就是这个耦合造成的。
+   */
+  async reconcileStaleWxPay(orderNo: string, options: { allowClose?: boolean } = {}) {
+    /*
+     * allowClose = 是否允许写入「未支付终态」（关单 / 判失败）。
+     * 这两种写入都会终结订单并释放账单，对还在收银台输密码的业主是破坏性的，
+     * 所以由调用方按订单年龄决定；查单本身（只读）不受它约束。
+     */
+    const allowClose = options.allowClose !== false;
     const payment = await this.prisma.raw.payment.findUnique({ where: { orderNo } });
     if (
       !payment ||
@@ -701,6 +717,13 @@ export class PaymentService {
       transaction = await this.provider.queryOrder(orderNo);
     } catch (error) {
       if (error instanceof PaymentProviderError && error.code === 'ORDER_NOT_EXIST') {
+        /*
+         * 微信侧查无此单 → 业主不可能付过款，判失败是对的。
+         * 但仍受 allowClose 约束：刚下单的订单在微信侧短时间内可能还查不到，
+         * 而 FAILED 是终态、会释放账单。查单窗口从 30 分钟缩到 2 分钟之后，
+         * 这个分支不加约束就成了新的误判来源。
+         */
+        if (!allowClose) return { orderNo, status: payment.status };
         await this.finishUnpaidPayment(payment.id, 'FAILED');
         return { orderNo, status: 'FAILED' as const };
       }
@@ -709,6 +732,11 @@ export class PaymentService {
     if (transaction.trade_state === 'SUCCESS') return this.handleWxPaySuccess(transaction);
     if (transaction.trade_state === 'REFUND') throw new Error('退款状态需通过退款单核对');
     if (transaction.trade_state === 'NOTPAY') {
+      /*
+       * 未支付时不要急着关单：业主可能正在收银台输密码。
+       * 只有等得足够久（调用方按订单年龄决定）才关，否则原样返回、下一轮再看。
+       */
+      if (!allowClose) return { orderNo, status: payment.status };
       await this.provider.close(orderNo);
       await this.finishUnpaidPayment(payment.id, 'CLOSED');
       return { orderNo, status: 'CLOSED' as const };

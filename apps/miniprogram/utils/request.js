@@ -14,6 +14,17 @@ function clearToken() {
   wx.removeStorageSync(TOKEN_KEY);
 }
 
+/*
+ * 请求超时。
+ *
+ * 原来两个分支都没设 timeout，wx.request/callContainer 的默认是 60 秒 ——
+ * 缴费确认要连查 5 次，一旦挂住就是数分钟的「确认支付结果」干转，
+ * 业主只能看着转圈，不知道钱到底扣没扣。真实事故里就是这个表现。
+ *
+ * 12 秒：够慢网下一次正常往返（生产实测在 1 秒内），又不会让人盯着转圈。
+ */
+const TIMEOUT_MS = 12000;
+
 function rawRequest(path, { method = 'GET', data = {} } = {}) {
   const auth = getToken() ? `Bearer ${getToken()}` : '';
 
@@ -30,6 +41,7 @@ function rawRequest(path, { method = 'GET', data = {} } = {}) {
           Authorization: auth,
         },
         data,
+        timeout: TIMEOUT_MS,
         success: (res) => resolve(res.data),
         fail: (err) => reject(new Error(err.errMsg || '云调用失败')),
       });
@@ -46,6 +58,7 @@ function rawRequest(path, { method = 'GET', data = {} } = {}) {
         'Content-Type': 'application/json',
         Authorization: auth,
       },
+      timeout: TIMEOUT_MS,
       success: (res) => resolve(res.data),
       fail: (err) => reject(new Error(err.errMsg || '网络异常')),
     });

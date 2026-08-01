@@ -559,6 +559,123 @@ describe('PaymentService', () => {
     });
   });
 
+  describe('allowClose：不许写未支付终态时，只查不动', () => {
+    /*
+     * 2026-08-01 事故的修复配套。查单窗口从 30 分钟缩到 2 分钟，
+     * 让「付了钱但回调没到」能几分钟内自动入账；
+     * 代价是这个方法会被很年轻的订单调用 —— 此时业主可能正在收银台输密码，
+     * 任何「未支付终态」的写入都会把他正在进行的支付作废。
+     * 所以 allowClose: false 时必须只读：不 close、不落库、不释放账单。
+     */
+    function makeNotpayHarness(tradeState: 'NOTPAY' | 'ERR') {
+      const payment = { id: 'payment-1', orderNo: 'WY202608010001', channel: 'WXPAY', status: 'CREATED' };
+      const tx = {
+        payment: {
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          findUnique: jest.fn().mockResolvedValue({ userCouponId: null }),
+        },
+        userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      };
+      const prisma = {
+        raw: {
+          payment: { findUnique: jest.fn().mockResolvedValue(payment) },
+          $transaction: jest.fn(async (cb: (c: typeof tx) => unknown) => cb(tx)),
+        },
+      };
+      const close = jest.fn();
+      const queryProvider = {
+        createOrder: jest.fn(),
+        close,
+        queryOrder:
+          tradeState === 'NOTPAY'
+            ? jest.fn().mockResolvedValue(transaction({ trade_state: 'NOTPAY' }))
+            : jest.fn().mockRejectedValue(new PaymentProviderError(404, 'ORDER_NOT_EXIST', 'not found')),
+      } as PaymentProvider;
+      return { payment, tx, close, service: makeService(prisma, queryProvider) };
+    }
+
+    it('NOTPAY + allowClose:false → 保持原状，不关单、不释放账单', async () => {
+      const { payment, tx, close, service } = makeNotpayHarness('NOTPAY');
+      await expect(service.reconcileStaleWxPay(payment.orderNo, { allowClose: false })).resolves.toEqual({
+        orderNo: payment.orderNo,
+        status: 'CREATED',
+      });
+      expect(close).not.toHaveBeenCalled();
+      expect(tx.payment.updateMany).not.toHaveBeenCalled();
+      expect(tx.bill.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('NOTPAY + allowClose:true → 照旧关单', async () => {
+      const { payment, close, service } = makeNotpayHarness('NOTPAY');
+      await expect(service.reconcileStaleWxPay(payment.orderNo, { allowClose: true })).resolves.toEqual({
+        orderNo: payment.orderNo,
+        status: 'CLOSED',
+      });
+      expect(close).toHaveBeenCalledWith(payment.orderNo);
+    });
+
+    it('微信查无此单 + allowClose:false → 也不判失败', async () => {
+      /*
+       * 刚下单的订单在微信侧可能短时间内还查不到，而 FAILED 是终态、会释放账单。
+       * 30 分钟的窗口里这不成问题，2 分钟的窗口里它是新的误判来源。
+       */
+      const { payment, tx, service } = makeNotpayHarness('ERR');
+      await expect(service.reconcileStaleWxPay(payment.orderNo, { allowClose: false })).resolves.toEqual({
+        orderNo: payment.orderNo,
+        status: 'CREATED',
+      });
+      expect(tx.bill.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('不传 options 时默认允许关单——管理端 force-sync 是人工动作，行为不能变', async () => {
+      const { payment, close, service } = makeNotpayHarness('NOTPAY');
+      await service.reconcileStaleWxPay(payment.orderNo);
+      expect(close).toHaveBeenCalledWith(payment.orderNo);
+    });
+
+    it('SUCCESS 不受 allowClose 影响——入账永远要做', async () => {
+      /*
+       * 这条是整个修复的目的所在：allowClose:false 的年轻订单，
+       * 若微信说已支付，必须立刻入账，不能被「不许写终态」误伤。
+       */
+      const payment = {
+        id: 'payment-1',
+        wxUserId: 'owner-1',
+        orderNo: 'WY202608010001',
+        totalAmount: { toString: () => '1.00' },
+        channel: 'WXPAY',
+        status: 'CREATED',
+        transactionId: null,
+        paymentBills: [{ billId: 'bill-1' }],
+      };
+      const tx = {
+        payment: {
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          findUnique: jest.fn().mockResolvedValue({ userCouponId: null }),
+        },
+        userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        receipt: { create: jest.fn().mockResolvedValue({}) },
+      };
+      const prisma = {
+        raw: {
+          payment: { findUnique: jest.fn().mockResolvedValue(payment) },
+          $transaction: jest.fn(async (cb: (c: typeof tx) => unknown) => cb(tx)),
+        },
+      };
+      const queryProvider = {
+        createOrder: jest.fn(),
+        close: jest.fn(),
+        queryOrder: jest.fn().mockResolvedValue(transaction()),
+      } as PaymentProvider;
+      const service = makeService(prisma, queryProvider);
+      await expect(
+        service.reconcileStaleWxPay(payment.orderNo, { allowClose: false }),
+      ).resolves.toEqual({ orderNo: payment.orderNo, status: 'SUCCESS' });
+    });
+  });
+
   describe('回调证据与不可变收据', () => {
     const paidBill = { billId: 'bill-1', bill: { title: '物业费', period: '2026-07', amount: { toString: () => '1.00' }, house: { displayName: 'p101', community: { name: '示例小区' } } } };
 

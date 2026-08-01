@@ -11,7 +11,7 @@ test('真实支付后通过后端查单确认 SUCCESS', async () => {
   const calls = [];
   const result = await paymentUtils.waitForPaymentConfirmation('WY1', {
     attempts: 3,
-    intervalMs: 0,
+    backoffMs: [0],
     requestFn: async (url, options) => {
       calls.push({ url, options });
       return { orderNo: 'WY1', status: statuses.shift() };
@@ -28,7 +28,7 @@ test('查单的瞬时网络失败不会中断后续确认', async () => {
   let attempts = 0;
   const result = await paymentUtils.waitForPaymentConfirmation('WY2', {
     attempts: 2,
-    intervalMs: 0,
+    backoffMs: [0],
     requestFn: async () => {
       attempts += 1;
       if (attempts === 1) throw new Error('temporary network error');

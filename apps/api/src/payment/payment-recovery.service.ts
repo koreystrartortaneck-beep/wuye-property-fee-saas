@@ -14,15 +14,30 @@ export class PaymentRecoveryService {
     @Optional() private readonly alerts: AlertService | null = null,
   ) {}
 
-  /** 单笔认领租约时长：认领后 lastSyncedAt 至此不重复被其他实例拾取。 */
-  private static readonly LEASE_MS = 5 * 60 * 1000;
+  /*
+   * 单笔认领租约：认领后 lastSyncedAt 至此不被其他实例重复拾取。
+   * 90 秒（原 5 分钟）——
+   * 配合 2 分钟一轮的扫描，一笔刚付款的订单最快能在 2 分钟内被查到并入账；
+   * 5 分钟的租约会让它至少等 5 分钟才被复查。
+   * 90 秒仍远大于一次查单的耗时（超时 15 秒），足以防两个实例重复处理。
+   */
+  private static readonly LEASE_MS = 90 * 1000;
+  /** 查单起点：只读操作，越早越好 —— 业主付了钱就该尽快入账 */
+  private static readonly QUERY_AFTER_MS = 2 * 60 * 1000;
+  /** 关单起点：会作废订单并释放账单，业主可能还在收银台，必须等久一点 */
+  private static readonly CLOSE_AFTER_MS = 30 * 60 * 1000;
   /** 恢复耗尽阈值：超过此时长仍未裁决终态视为异常，触发告警。 */
   private static readonly EXHAUST_MS = 2 * 60 * 60 * 1000;
 
-  @Cron('0 */10 * * * *')
+  /*
+   * 2 分钟一轮（原 10 分钟）。
+   * 这是「业主付了钱但回调没到」时钱能自动入账的唯一保底路径 ——
+   * 真实事故里业主等了 40 分钟：10 分钟一轮 × 只处理满 30 分钟的订单。
+   */
+  @Cron('0 */2 * * * *')
   async closeStaleOrders(now: Date = new Date()): Promise<void> {
     if (process.env.PAY_MODE !== 'wxpay') return;
-    const cutoff = new Date(now.getTime() - 30 * 60 * 1000);
+    const cutoff = new Date(now.getTime() - PaymentRecoveryService.QUERY_AFTER_MS);
     const leaseCutoff = new Date(now.getTime() - PaymentRecoveryService.LEASE_MS);
     // 同时扫描 CREATED 与 PREPAY_UNKNOWN，两者都会占用账单、需查单裁决终态。
     const stale = await this.prisma.raw.payment.findMany({
@@ -45,7 +60,9 @@ export class PaymentRecoveryService {
       });
       if (claimed.count !== 1) continue;
       try {
-        await this.payments.reconcileStaleWxPay(payment.orderNo);
+        // 够老才允许关单；年轻订单只查不关（业主可能还在收银台）
+        const allowClose = now.getTime() - payment.createdAt.getTime() > PaymentRecoveryService.CLOSE_AFTER_MS;
+        await this.payments.reconcileStaleWxPay(payment.orderNo, { allowClose });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         this.logger.warn(`微信支付订单对账失败 order=${payment.orderNo}: ${message}`);
