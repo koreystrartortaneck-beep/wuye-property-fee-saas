@@ -70,13 +70,53 @@ describe('资金出账端点必须限制角色', () => {
   });
 });
 
+/**
+ * 从方法头开始做真括号匹配取出方法体。
+ *
+ * 两个坑，都真的踩过：
+ *   · 定长切片（slice(at, at+4000)）会切进下一个方法，或在方法被拆开后扫空。
+ *   · 直接 indexOf('{', at) 会先命中**返回类型里**的花括号 ——
+ *     `): Promise<{ orderNo: string; status: 'SUCCESS' }> {` 的第一个 `{` 属于类型，
+ *     于是取到的「方法体」是 ` orderNo: string; status: 'SUCCESS' `。
+ * 所以：先走完参数列表的括号配对，再找 `{` + 换行（方法体的左括号后面一定换行，
+ * 而类型里的 `{` 后面是空格）。
+ */
+function methodBody(src: string, name: string): string {
+  const at = src.indexOf(`${name}(`);
+  if (at < 0) throw new Error(`找不到方法 ${name}`);
+  let i = src.indexOf('(', at);
+  let paren = 0;
+  for (; i < src.length; i++) {
+    if (src[i] === '(') paren++;
+    else if (src[i] === ')') {
+      paren--;
+      if (paren === 0) break;
+    }
+  }
+  const open = src.indexOf('{\n', i);
+  if (open < 0) throw new Error(`找不到 ${name} 的方法体`);
+  let depth = 0;
+  for (let j = open; j < src.length; j++) {
+    if (src[j] === '{') depth++;
+    else if (src[j] === '}') {
+      depth--;
+      if (depth === 0) return src.slice(open + 1, j);
+    }
+  }
+  throw new Error(`${name} 的括号不配对`);
+}
+
 describe('资金入账必须留痕', () => {
   it('微信支付成功入账写审计，且在同一事务内', () => {
+    /*
+     * 落账主体在 settleWxPayInTenant（由 applyWxPaySuccess 套上租户上下文后调用）。
+     *
+     * 这条断言原来是 `src.slice(indexOf('applyWxPaySuccess'), +4000)` —— 定长窗口。
+     * 落账主体被抽成独立方法之后它就扫空了，报的是「找不到 action: 'PAY'」，
+     * 而真实代码一个字没少。定长窗口这个坑本仓已经踩过三次，这次改成真括号匹配。
+     */
     const src = read('payment/payment.service.ts');
-    const at = src.indexOf('applyWxPaySuccess');
-    expect(at).toBeGreaterThan(-1);
-    // 取该方法之后的一段，确认审计调用在其中
-    const body = src.slice(at, at + 4000);
+    const body = methodBody(src, 'settleWxPayInTenant');
     expect(body).toContain('audit.append');
     expect(body).toContain("actorType: 'SYSTEM'");
     expect(body).toContain("action: 'PAY'");
@@ -87,6 +127,27 @@ describe('资金入账必须留痕', () => {
     expect(body).toMatch(/\bsource\s*[,:]/);
     // 第二个参数传 tx 才是同事务；审计与入账不能一个成一个不成
     expect(body).toMatch(/audit\.append\(\s*\{[\s\S]*?\},\s*tx,\s*\)/);
+  });
+
+  it('这条审计必须在订单所属租户的上下文里写——否则系统路径会整体回滚', () => {
+    /*
+     * 2026-08-01 事故的真正根因。audit.append 的第一句是 assertTenantAccess(tenantId)：
+     * 没有租户上下文就抛 FORBIDDEN。微信回调与定时兜底都没有登录态，
+     * 于是这条「留痕」反过来把整个入账事务打掉了 ——
+     * 业主的钱扣了，订单留在 CREATED、账单留在 UNPAID。
+     *
+     * 所以「写审计」和「有租户上下文」是同一条要求的两半，必须一起钉。
+     * 行为层面由 payment/settle-tenant-context.spec.ts 覆盖，这里钉结构：
+     * 落账主体的唯一入口必须是 runWithTenant(payment.tenantId, ...)。
+     */
+    const src = read('payment/payment.service.ts');
+    const outer = methodBody(src, 'applyWxPaySuccess');
+    expect(outer).toMatch(
+      /runWithTenant\(\s*payment\.tenantId\s*,[\s\S]*?this\.settleWxPayInTenant\(/,
+    );
+    // 落账主体不能被绕过直接调用
+    const callers = (src.match(/this\.settleWxPayInTenant\(/g) || []).length;
+    expect(callers).toBe(1);
   });
 
   it('线下核销与退款终态原有的审计没有被破坏', () => {
