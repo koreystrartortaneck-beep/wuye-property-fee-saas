@@ -185,3 +185,72 @@ describe('立即向微信查单', () => {
     }
   });
 });
+
+describe('时间线必须记录「怎么确认的」，不能只记回调', () => {
+  /*
+   * 生产实测（退款溯源刚上线时）：三笔退款的「退款事件」全是 0 条。
+   * 因为事件只在**回调到达**时写（recordRefundEvidence），而回调从来没到过 ——
+   * 每一笔都是靠查单补回的。支付侧同一个问题：纯查单入账的订单时间线也是空的。
+   *
+   * 空时间线最坏的地方不是少信息，而是**看的人分不清「没发生过」和「没记录」**。
+   * 溯源的全部价值就在于消除这种分不清。
+   */
+  const read = (f: string) =>
+    require('node:fs').readFileSync(require('node:path').join(__dirname, f), 'utf8') as string;
+
+  it('退款：查单确认时写一条事件，且 eventKey 与回调的不冲突', () => {
+    const src = read('refund.service.ts');
+    // recoverRefund 的成功分支必须写痕迹
+    const i = src.indexOf('async recoverRefund');
+    const body = src.slice(i, src.indexOf('\n  }', src.indexOf('runWithTenant', i)));
+    expect(body).toContain('recordQueryEvidence');
+
+    // 两个 eventKey 前缀必须不同，否则回调与查单会互相覆盖/撞唯一键
+    const notifyKey = /const eventKey = `(refund-notify:[^`]*)`/.exec(src)?.[1];
+    const queryKey = /const eventKey = `(refund-query:[^`]*)`/.exec(src)?.[1];
+    expect(notifyKey).toBeTruthy();
+    expect(queryKey).toBeTruthy();
+    expect(queryKey).not.toBe(notifyKey);
+  });
+
+  it('退款：痕迹写失败不能影响「退款已成功」这个事实', () => {
+    /*
+     * 反向保护。痕迹是为了可观测，不该反过来把资金结果打掉 ——
+     * 支付侧已经因为「留痕反过来打掉入账事务」出过一次生产事故
+     * （audit.append 缺租户上下文）。这里必须 try/catch 且留日志。
+     */
+    const src = read('refund.service.ts');
+    const i = src.indexOf('private async recordQueryEvidence');
+    const body = src.slice(i, src.indexOf('\n  private async recordRefundEvidence', i));
+    expect(body).toMatch(/try \{/);
+    expect(body).toMatch(/catch/);
+    expect(body).toMatch(/logger\.error/);
+  });
+
+  it('支付：入账时写 CONFIRMED 事件，且在同一事务内', () => {
+    const src = read('payment.service.ts');
+    const i = src.indexOf('private async settleWxPayInTenant');
+    const body = src.slice(i, src.indexOf('\n  private receiptInclude', i));
+    expect(body).toMatch(/tx\.paymentEvent\.create/);
+    expect(body).toMatch(/type: 'CONFIRMED'/);
+    /*
+     * source 必须**在这个事件的 data 里**。
+     * 第一版写的是 expect(body).toMatch(/source,/) —— 而同一个方法体里的
+     * audit.append 也有一行 `source,`，于是把它从事件里删掉之后断言照样通过。
+     * 子串陷阱在本仓已经犯过第三次，所以这里把范围收到 create 块内。
+     */
+    const ev = body.slice(body.indexOf('tx.paymentEvent.create'));
+    const evBlock = ev.slice(0, ev.indexOf('\n      });'));
+    expect(evBlock).toMatch(/\bsource,/);
+    expect(evBlock).toMatch(/type: 'CONFIRMED'/);
+  });
+
+  it('支付：CONFIRMED 的 eventKey 带交易号，天然幂等', () => {
+    /*
+     * 同一笔支付只会入账一次，但事务可能因为其它原因重试；
+     * eventKey 不带交易号就可能撞唯一键并把整个入账事务打掉。
+     */
+    const src = read('payment.service.ts');
+    expect(src).toMatch(/eventKey: `confirm:\$\{payment\.orderNo\}:\$\{transaction\.transaction_id\}`/);
+  });
+});

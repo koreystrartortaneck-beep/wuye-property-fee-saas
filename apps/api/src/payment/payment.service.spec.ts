@@ -67,6 +67,8 @@ describe('PaymentService', () => {
       },
       userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      // 入账会写一条 CONFIRMED 事件（同事务）——纯查单入账的订单原本时间线是空的
+      paymentEvent: { create: jest.fn().mockResolvedValue({}) },
       paymentBill: { create: jest.fn().mockResolvedValue({}) },
       auditLog: { create: jest.fn() },
       $queryRaw: jest.fn(),
@@ -342,6 +344,8 @@ describe('PaymentService', () => {
         },
         userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
+        // 入账会写一条 CONFIRMED 事件（同事务）——纯查单入账的订单原本时间线是空的
+        paymentEvent: { create: jest.fn().mockResolvedValue({}) },
       };
       const prisma = {
         raw: {
@@ -377,6 +381,8 @@ describe('PaymentService', () => {
         },
         userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        // 入账会写一条 CONFIRMED 事件（同事务）——纯查单入账的订单原本时间线是空的
+        paymentEvent: { create: jest.fn().mockResolvedValue({}) },
       };
       const prisma = {
         raw: {
@@ -434,6 +440,8 @@ describe('PaymentService', () => {
         },
         userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        // 入账会写一条 CONFIRMED 事件（同事务）——纯查单入账的订单原本时间线是空的
+        paymentEvent: { create: jest.fn().mockResolvedValue({}) },
       };
       const prisma = {
         raw: {
@@ -468,6 +476,8 @@ describe('PaymentService', () => {
         },
         userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        // 入账会写一条 CONFIRMED 事件（同事务）——纯查单入账的订单原本时间线是空的
+        paymentEvent: { create: jest.fn().mockResolvedValue({}) },
       };
       const prisma = {
         raw: {
@@ -504,6 +514,8 @@ describe('PaymentService', () => {
         },
         userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        // 入账会写一条 CONFIRMED 事件（同事务）——纯查单入账的订单原本时间线是空的
+        paymentEvent: { create: jest.fn().mockResolvedValue({}) },
       };
       const prisma = {
         raw: {
@@ -538,6 +550,8 @@ describe('PaymentService', () => {
         },
         userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        // 入账会写一条 CONFIRMED 事件（同事务）——纯查单入账的订单原本时间线是空的
+        paymentEvent: { create: jest.fn().mockResolvedValue({}) },
       };
       const prisma = {
         raw: {
@@ -576,6 +590,8 @@ describe('PaymentService', () => {
         },
         userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        // 入账会写一条 CONFIRMED 事件（同事务）——纯查单入账的订单原本时间线是空的
+        paymentEvent: { create: jest.fn().mockResolvedValue({}) },
       };
       const prisma = {
         raw: {
@@ -656,6 +672,8 @@ describe('PaymentService', () => {
         },
         userCoupon: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         bill: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        // 入账会写一条 CONFIRMED 事件（同事务）——纯查单入账的订单原本时间线是空的
+        paymentEvent: { create: jest.fn().mockResolvedValue({}) },
         receipt: { create: jest.fn().mockResolvedValue({}) },
       };
       const prisma = {

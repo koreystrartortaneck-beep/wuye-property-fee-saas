@@ -515,6 +515,37 @@ export class PaymentService {
       if (bills.count !== payment.paymentBills.length) throw new Error('支付订单关联账单状态异常');
 
       /*
+       * 入账本身也要留一条事件。
+       *
+       * 原来只有回调到达时写 NOTIFIED（recordNotifyEvidence），入账这一步不写。
+       * 于是**纯靠查单入账的订单，溯源时间线是空的** —— 而 2026-08-01 之后
+       * 恰恰每一笔都是这样（回调链路没通）。时间线空着，看的人无从判断
+       * 「是没发生过，还是没记录」。
+       * 生产实测：退款溯源上线后三笔退款的事件都是 0 条，暴露了同一个问题。
+       *
+       * eventKey 带 transactionId：同一笔支付只会入账一次，天然幂等；
+       * 放在同一事务内 —— 钱记了而事件没记，就又制造了一次「看不出来」。
+       */
+      await tx.paymentEvent.create({
+        data: {
+          tenantId: payment.tenantId,
+          communityId: payment.communityId,
+          paymentId: payment.id,
+          eventKey: `confirm:${payment.orderNo}:${transaction.transaction_id}`,
+          type: 'CONFIRMED',
+          status: 'PROCESSED',
+          source,
+          summary: {
+            transactionId: transaction.transaction_id,
+            amountTotal: transaction.amount.total,
+            receiptNo,
+          },
+          occurredAt: paidAt,
+          processedAt: new Date(),
+        },
+      });
+
+      /*
        * 微信支付成功入账必须写审计。
        *
        * 这是整条资金链上最核心的一步——钱真正到账、账单销账。而生产审计日志 73 条里

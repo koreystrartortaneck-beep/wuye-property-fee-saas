@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Optional, Logger } from '@nestjs/common';
 import { PaymentChannel, PaymentStatus, Prisma } from '@prisma/client';
 import { ErrorCode } from '@pf/shared';
 import { AuditService } from '../audit/audit.service';
@@ -74,6 +74,8 @@ interface RefundAggregate {
  */
 @Injectable()
 export class RefundService {
+  private readonly logger = new Logger(RefundService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
@@ -442,6 +444,15 @@ export class RefundService {
     return runWithTenant(refund.tenantId, async () => {
       if (result.status === 'SUCCESS') {
         await this.finalizeSuccess(refund, result);
+        /*
+         * 查单确认的也要留一条事件。
+         *
+         * 原来只有回调到达时写（recordRefundEvidence），查单确认不写。
+         * 于是**回调没来、靠查单补回的退款，溯源时间线是空的** ——
+         * 而 2026-08-01 之后每一笔退款都是这样。生产实测三笔退款事件全是 0 条。
+         * 时间线空着，看的人无从判断「是没发生过，还是没记录」。
+         */
+        await this.recordQueryEvidence(refund, result);
         return { refundNo, status: 'SUCCESS' };
       }
       if (result.status === 'CLOSED' || result.status === 'ABNORMAL') {
@@ -450,6 +461,39 @@ export class RefundService {
       }
       return { refundNo, status: 'PROCESSING' };
     });
+  }
+
+  /** 记录「靠查单确认」的退款事件；与回调证据用不同的 eventKey，两者可以并存 */
+  private async recordQueryEvidence(refund: RefundAggregate, result: WxPayRefund): Promise<void> {
+    const eventKey = `refund-query:${refund.refundNo}:${result.refund_id}`;
+    try {
+      await this.prisma.raw.paymentEvent.upsert({
+        where: { tenantId_eventKey: { tenantId: refund.tenantId, eventKey } },
+        create: {
+          tenantId: refund.tenantId,
+          communityId: refund.communityId,
+          paymentId: refund.paymentId,
+          refundId: refund.id,
+          eventKey,
+          type: 'REFUNDED',
+          status: 'PROCESSED',
+          source: 'WXPAY_QUERY',
+          summary: { refundNo: refund.refundNo, refundId: result.refund_id, status: result.status },
+          occurredAt: result.success_time ? new Date(result.success_time) : new Date(),
+          processedAt: new Date(),
+        },
+        update: {},
+      });
+    } catch (error) {
+      /*
+       * 写痕迹失败不能影响退款已经成功这个事实。但要留日志 ——
+       * 否则「痕迹机制自己坏了」又成了一个看不见的故障。
+       */
+      this.logger.error(
+        `退款查单痕迹写入失败 refund=${refund.refundNo}: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   private async recordRefundEvidence(refund: RefundAggregate, result: WxPayRefund): Promise<void> {
