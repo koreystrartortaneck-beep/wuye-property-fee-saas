@@ -8,6 +8,7 @@ import { Roles, RolesGuard } from '../auth/roles.decorator';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { OfflinePaymentService } from './offline-payment.service';
+import { PaymentService } from './payment.service';
 
 class SettleOfflineDto {
   @IsString()
@@ -107,6 +108,7 @@ export class AdminPaymentController {
   constructor(
     private readonly offline: OfflinePaymentService,
     private readonly payments: AdminPaymentsService,
+    private readonly paymentService: PaymentService,
   ) {}
 
   @Get()
@@ -133,6 +135,25 @@ export class AdminPaymentController {
    * 线下现金核销（上面的 /offline）刻意不限制：那是收费员的日常工作，
    * 且它只会把账单从未缴改成已缴、不会把钱退出去，风险方向相反。
    */
+  /**
+   * 强制向微信查单并按结果裁决（不等 30 分钟的自动补救窗口）。
+   *
+   * 为什么需要：业主付了钱、订单卡在 CREATED 时，唯一的自动出路是
+   * PaymentRecoveryService 那个 10 分钟一轮、只处理「创建满 30 分钟」的任务。
+   * 真实事故里业主就是在这半小时里干等 —— 钱已经扣了，账单还是「待缴」，
+   * 界面上什么都不说，而客服除了让他等没有任何手段。
+   *
+   * 这个接口把「问微信」这件事变成一个可以立刻做的动作：
+   * 查到 SUCCESS 就入账（幂等，重复调用无副作用），查到未支付/已关闭就按终态收尾。
+   *
+   * 限 TENANT_ADMIN：它会改变资金状态。
+   */
+  @Roles('TENANT_ADMIN')
+  @Post(':orderNo/force-sync')
+  forceSync(@Param('orderNo') orderNo: string) {
+    return this.paymentService.reconcileStaleWxPay(orderNo);
+  }
+
   @Roles('TENANT_ADMIN')
   @Post(':orderNo/reverse-offline')
   reverseOffline(@Current() cur: CurrentAdmin, @Param('orderNo') orderNo: string, @Body() dto: ReverseOfflineDto) {
