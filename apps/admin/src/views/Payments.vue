@@ -229,7 +229,8 @@
         </template>
       </el-table>
     </template>
-    <el-empty v-else description="该订单暂无退款记录" />
+    <el-alert v-else-if="refundError" type="warning" :closable="false" show-icon :title="refundError" />
+    <el-empty v-else description="正在读取…" />
     <template #footer>
       <!--
         立即查单：退款侧此前只有 2 分钟一轮的 cron（改之前 10 分钟），
@@ -647,13 +648,30 @@ const refundVerdict = computed(() => {
     : '已退款成功，但是靠主动查单补回来的 —— 说明微信退款回调没有到达，若反复出现请联系技术支持';
 });
 
+const refundError = ref('');
+
 async function showRefund(row: Payment) {
   refundDetail.value = null;
+  refundError.value = '';
   refundDialog.value = true;
   currentOrderNo.value = row.orderNo;
   try {
     refundDetail.value = await api<Refund>(`/admin/refunds/trace/${row.orderNo}`, { silent: true });
-  } catch {
+  } catch (e) {
+    /*
+     * 读不到 ≠ 没有退款记录。
+     *
+     * 2026-08-01 踩过：后台静态资源先上线、API 还没上，这个请求 404，
+     * 而原来的 catch 把 refundDetail 置空，界面就显示「该订单暂无退款记录」——
+     * 记录明明是有的。**假消息比报错更糟**：报错会让人来问，假消息会让人相信。
+     * 现在区分「确实没有退款记录」（40400 且订单本就没退过）与「读取失败」。
+     */
+    const code = (e as { code?: number })?.code;
+    const msg = (e as { message?: string })?.message;
+    refundError.value =
+      code === 40400
+        ? '读不到退款记录。若这笔确实退过款，可能是后台版本比接口新（等几分钟重试）'
+        : `读取失败：${msg || '未知原因'}`;
     refundDetail.value = null;
   }
 }
