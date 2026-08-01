@@ -1,7 +1,8 @@
 import { Body, Controller, Get, Injectable, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import { IsDate, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
-import { PAYMENT_CHANNELS, PAYMENT_STATUSES, PaymentChannel, PaymentStatus } from '@pf/shared';
+import { ErrorCode, PAYMENT_CHANNELS, PAYMENT_STATUSES, PaymentChannel, PaymentStatus } from '@pf/shared';
+import { BizException } from '../common/biz.exception';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { Roles, RolesGuard } from '../auth/roles.decorator';
@@ -100,6 +101,69 @@ export class AdminPaymentsService {
     ]);
     return pageResult(list, total, q);
   }
+  /**
+   * 单笔支付的入账溯源。
+   *
+   * 2026-08-01 事故里最费时间的一环：业主说钱扣了，而后台**没有任何地方**
+   * 能看出这笔钱到账了没有、是怎么到账的。
+   *   · wxpayNotifiedAt / confirmedBy / transactionId / lastSyncedAt 四个字段都在库里，
+   *     但零个端点暴露；列表接口也不返回。
+   *   · PaymentEvent 是完整的入账审计链（回调到达、查单裁决），同样零个端点暴露。
+   * 结果是排查只能靠猜，而「回调有没有来过」这个决定性问题一直悬着。
+   *
+   * 这个端点专门回答三个问题：
+   *   ① 这笔钱到账了吗（status / paidAt / receiptNo）
+   *   ② 怎么到账的（confirmedBy：微信回调 / 主动查单 / 线下登记）
+   *   ③ 微信回调到过吗（wxpayNotifiedAt + NOTIFIED 事件）—— 回调链路是否健康看这一项
+   */
+  async trace(orderNo: string) {
+    const payment = await this.prisma.t.payment.findFirst({
+      where: { orderNo },
+      select: {
+        id: true, orderNo: true, channel: true, status: true,
+        totalAmount: true, discountAmount: true,
+        createdAt: true, paidAt: true, receiptNo: true,
+        // 入账路径三件套
+        confirmedBy: true, wxpayNotifiedAt: true, lastSyncedAt: true,
+        transactionId: true,
+        offlineVoucherNo: true,
+        bill: {
+          select: {
+            title: true, period: true, status: true,
+            house: { select: { code: true, displayName: true } },
+          },
+        },
+      },
+    });
+    if (!payment) throw new BizException(ErrorCode.NOT_FOUND);
+
+    const events = await this.prisma.t.paymentEvent.findMany({
+      where: { paymentId: payment.id },
+      orderBy: { occurredAt: 'asc' },
+      select: {
+        type: true, status: true, source: true, occurredAt: true,
+        processedAt: true, attempts: true, lastError: true, summary: true,
+      },
+      take: 50,
+    });
+
+    return {
+      ...payment,
+      /*
+       * 明确给出结论，而不是让人对着四个字段自己推。
+       * 「回调从未到达」是一个需要立刻处理的运维事实（说明微信后台的回调地址、
+       * 或出口网络有问题），不该被埋在一个 null 里。
+       */
+      settlement: {
+        paid: payment.status === 'SUCCESS',
+        via: payment.confirmedBy,
+        wxCallbackArrived: payment.wxpayNotifiedAt !== null,
+        queriedAt: payment.lastSyncedAt,
+      },
+      events,
+    };
+  }
+
 }
 
 @Controller('admin/payments')
@@ -114,6 +178,15 @@ export class AdminPaymentController {
   @Get()
   list(@Query() q: ListPaymentsQuery) {
     return this.payments.list(q);
+  }
+
+  /*
+   * 只读，PLATFORM_READONLY 也该能看 —— 排查支付问题时不该被迫用超管账号。
+   * 故意不挂 @Roles：AdminGuard 已保证是管理员，读一笔自己租户的支付溯源没有额外风险。
+   */
+  @Get('trace/:orderNo')
+  trace(@Param('orderNo') orderNo: string) {
+    return this.payments.trace(orderNo);
   }
 
   @Post('offline')

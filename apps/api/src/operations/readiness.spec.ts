@@ -23,6 +23,17 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     'WX_TMPL_BILL_CREATED',
     'WX_TMPL_DUE_SOON',
     'WX_TMPL_OVERDUE',
+    /*
+     * 这五个原本漏在清单外，而 setReconcileEnv() 会设它们 ——
+     * 于是它们跨用例泄漏，正是上面这段注释警告的那种「单独跑绿、全量跑红」。
+     * 补进来。
+     */
+    'WX_PAY_ALLOWED_TENANT_ID',
+    'WX_PAY_MERCHANT_SERIAL',
+    'WX_PAY_MCH_ID',
+    'WX_PAY_APP_ID',
+    'WX_PAY_NOTIFY_URL',
+    'WX_PAY_REFUND_NOTIFY_URL',
   ] as const;
   const saved: Record<string, string | undefined> = {};
   beforeEach(() => {
@@ -76,6 +87,11 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     return found;
   }
 
+  /** 正确的回调地址（真实路由是 /api/v1/payment/wxpay/notify） */
+  function setCallbackEnv() {
+    process.env.WX_PAY_NOTIFY_URL = 'https://api.example.com/api/v1/payment/wxpay/notify';
+  }
+
   /** 每日对账定时任务真正依赖的环境变量 */
   function setReconcileEnv() {
     process.env.WX_PAY_ALLOWED_TENANT_ID = 't1';
@@ -88,6 +104,7 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     process.env.PAY_MODE = 'wxpay';
     process.env.WX_MODE = 'real';
     setReconcileEnv();
+    setCallbackEnv();
     setAllTemplates();
     const r = (await controller(true).getReadiness(cur)) as never as {
       healthy: boolean;
@@ -96,6 +113,7 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     expect(checkByName(r, 'PAY_MODE').healthy).toBe(true);
     expect(checkByName(r, 'WX_MODE').healthy).toBe(true);
     expect(checkByName(r, 'RECONCILIATION_CHANNEL').healthy).toBe(true);
+    expect(checkByName(r, 'PAYMENT_CALLBACK_URL').healthy).toBe(true);
     expect(r.healthy).toBe(true);
   });
 

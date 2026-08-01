@@ -6,6 +6,7 @@ import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { RolesGuard } from '../auth/roles.decorator';
 import { BizException } from '../common/biz.exception';
 import { PageQuery } from '../common/pagination';
+import { type CallbackUrlIssue, describeCallbackUrl, inspectCallbackUrls } from '../payment/callback-url';
 import { AlertService } from './alert.service';
 import { IncidentService, IncidentStatus } from './incident.service';
 import { PilotMetricsService } from './pilot-metrics.service';
@@ -104,6 +105,16 @@ export class AdminOperationsController {
           .map(([k]) => k)
       : [];
 
+    /*
+     * 回调地址自检。事故复盘的产物：两笔已扣款的支付没入账，最终确认微信回调从未到达，
+     * 而「回调地址配得对不对」在此前没有任何地方能看出来 ——
+     * WX_PAY_NOTIFY_URL 是必需变量所以一定有值，但值可以是错的（最常见是漏 /api/v1）。
+     * 配错的唯一表现就是「钱扣了、账单不变」，最像后端 bug，最难指向配置。
+     */
+    const callbackIssues = isRealPay
+      ? inspectCallbackUrls(process.env.WX_PAY_NOTIFY_URL, process.env.WX_PAY_REFUND_NOTIFY_URL)
+      : [];
+
     // 三类订阅消息模板缺哪个就发不出哪种提醒，逐个列出而不是笼统说「未配置」
     const missingTemplates = (['WX_TMPL_BILL_CREATED', 'WX_TMPL_DUE_SOON', 'WX_TMPL_OVERDUE'] as const).filter(
       (name) => !process.env[name],
@@ -178,6 +189,15 @@ export class AdminOperationsController {
             : '已被 OUTBOX_DISPATCH_ENABLED=false 关闭：通知事件只进不出，业主收不到任何提醒',
       },
       {
+        name: 'PAYMENT_CALLBACK_URL',
+        healthy: callbackIssues.length === 0,
+        detail: !isRealPay
+          ? '非真实支付模式，不涉及微信回调'
+          : callbackIssues.length === 0
+            ? `回调地址 ${describeCallbackUrl(process.env.WX_PAY_NOTIFY_URL)}（形状正确；连通性见 callback-probe）`
+            : callbackIssues.map((i: CallbackUrlIssue) => i.detail).join('；'),
+      },
+      {
         /*
          * 订阅消息模板同样是「静默失效」：模板 ID 没配时账单照发、通知全部
          * FAILED，业主什么也收不到，而唯一线索是通知记录里逐条的失败原因。
@@ -217,6 +237,69 @@ export class AdminOperationsController {
   probeWx(@Current() cur: CurrentAdmin) {
     requireTenant(cur);
     return this.wxProbe.probe();
+  }
+
+  /**
+   * 回调地址连通性实测。
+   *
+   * 就绪检查只判形状（不外呼），这里真的往 WX_PAY_NOTIFY_URL 发一次请求，
+   * 回答「微信的回调能不能打到这个服务上」。
+   *
+   * 判据是**必须返回 401 且是验签失败**：
+   *   · 401 验签失败 → 地址可达、路由是我们的、验签逻辑在跑 —— 这是正确结果
+   *   · 404 → 地址能连上但路由不对（最常见是漏了 /api/v1 前缀）
+   *   · 200 → 更糟：说明这个地址上有个东西无条件接受未验签的回调
+   *   · 连不上 → 微信也连不上
+   *
+   * 为什么用「发一个必然失败的请求」而不是 GET 探活：GET 会返回 404
+   * （路由只注册了 POST），区分不了「路由不存在」和「方法不对」。
+   * 发一个签名一定不对的 POST，才能确认打到的正是验签那段代码。
+   */
+  @Get('callback-probe')
+  async probeCallback(@Current() cur: CurrentAdmin) {
+    requireTenant(cur);
+    const url = process.env.WX_PAY_NOTIFY_URL;
+    const issues = inspectCallbackUrls(url, process.env.WX_PAY_REFUND_NOTIFY_URL);
+    if (!url) return { url: '(未配置)', ok: false, verdict: '未配置 WX_PAY_NOTIFY_URL', issues };
+
+    const started = Date.now();
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // 故意不带任何 Wechatpay-* 签名头：期望被验签拒绝
+        body: JSON.stringify({ id: 'callback-probe', resource: {} }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const text = (await res.text()).slice(0, 300);
+      const rejected = res.status === 401;
+      return {
+        url: describeCallbackUrl(url),
+        ok: rejected && issues.length === 0,
+        httpStatus: res.status,
+        elapsedMs: Date.now() - started,
+        verdict: rejected
+          ? '可达，且未签名的回调被正确拒绝（回调链路正常）'
+          : res.status === 404
+            ? '可达但路由不存在——微信的回调会打到一个 404 上，钱永远不会入账'
+            : `返回了意外的 ${res.status}：这个地址上的服务不是在做验签`,
+        body: text,
+        issues,
+      };
+    } catch (error) {
+      /*
+       * 这一支就是本次事故最可能的形态：微信连不上，于是回调从未到达，
+       * 而系统里除了「钱扣了、账单不变」之外没有任何迹象。
+       */
+      return {
+        url: describeCallbackUrl(url),
+        ok: false,
+        elapsedMs: Date.now() - started,
+        verdict: '请求发不出去或超时：微信同样连不上这个地址，回调不会到达',
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+        issues,
+      };
+    }
   }
 
   /**
