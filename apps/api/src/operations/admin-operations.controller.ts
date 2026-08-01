@@ -258,10 +258,37 @@ export class AdminOperationsController {
   @Get('callback-probe')
   async probeCallback(@Current() cur: CurrentAdmin) {
     requireTenant(cur);
-    const url = process.env.WX_PAY_NOTIFY_URL;
-    const issues = inspectCallbackUrls(url, process.env.WX_PAY_REFUND_NOTIFY_URL);
-    if (!url) return { url: '(未配置)', ok: false, verdict: '未配置 WX_PAY_NOTIFY_URL', issues };
+    const notifyUrl = process.env.WX_PAY_NOTIFY_URL;
+    const issues = inspectCallbackUrls(notifyUrl, process.env.WX_PAY_REFUND_NOTIFY_URL);
+    /*
+     * 两个地址都要探。
+     *
+     * 第一版只探了支付回调 —— 而 2026-08-01 退款那次，卡住的恰恰是**退款回调**
+     * （微信 3 秒就退完了，回调一次没到，我们 10 分钟后才靠查单发现）。
+     * 当时我拿这个探针一看「ok: true」就以为回调链路整体正常，
+     * 而它压根没碰过退款那个地址。探一半的探针比没有探针更危险。
+     *
+     * 退款回调地址若未显式配置，是由支付地址推导出来的
+     * （notifyUrl.replace(/\/notify$/, '/refund-notify')），所以这里用同一套推导，
+     * 才能探到真正发给微信的那个值。
+     */
+    const refundUrl =
+      process.env.WX_PAY_REFUND_NOTIFY_URL || notifyUrl?.replace(/\/notify$/, '/refund-notify');
+    const [payment, refund] = await Promise.all([
+      this.probeOne(notifyUrl, '支付回调'),
+      this.probeOne(refundUrl, '退款回调'),
+    ]);
+    return {
+      ok: payment.ok && refund.ok && issues.length === 0,
+      issues,
+      payment,
+      refund,
+    };
+  }
 
+  /** 往一个回调地址发一个必然验签失败的 POST，判断它是不是真的连到了我们的验签代码 */
+  private async probeOne(url: string | undefined, label: string) {
+    if (!url) return { label, url: '(未配置)', ok: false, verdict: `未配置${label}地址` };
     const started = Date.now();
     try {
       const res = await fetch(url, {
@@ -274,17 +301,17 @@ export class AdminOperationsController {
       const text = (await res.text()).slice(0, 300);
       const rejected = res.status === 401;
       return {
+        label,
         url: describeCallbackUrl(url),
-        ok: rejected && issues.length === 0,
+        ok: rejected,
         httpStatus: res.status,
         elapsedMs: Date.now() - started,
         verdict: rejected
-          ? '可达，且未签名的回调被正确拒绝（回调链路正常）'
+          ? '可达，且未签名的回调被正确拒绝（链路正常）'
           : res.status === 404
-            ? '可达但路由不存在——微信的回调会打到一个 404 上，钱永远不会入账'
+            ? '可达但路由不存在——微信的回调会打到一个 404 上'
             : `返回了意外的 ${res.status}：这个地址上的服务不是在做验签`,
         body: text,
-        issues,
       };
     } catch (error) {
       /*
@@ -292,12 +319,12 @@ export class AdminOperationsController {
        * 而系统里除了「钱扣了、账单不变」之外没有任何迹象。
        */
       return {
+        label,
         url: describeCallbackUrl(url),
         ok: false,
         elapsedMs: Date.now() - started,
         verdict: '请求发不出去或超时：微信同样连不上这个地址，回调不会到达',
         error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
-        issues,
       };
     }
   }

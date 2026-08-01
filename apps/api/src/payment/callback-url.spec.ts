@@ -121,3 +121,48 @@ describe('显示用的摘要', () => {
     expect(describeCallbackUrl('这不是网址')).toBe('这不是网址');
   });
 });
+
+describe('回调探针必须两个地址都探', () => {
+  /*
+   * 2026-08-01 退款那次的教训：微信 3 秒就把钱退了，**退款回调一次没到**，
+   * 我们 10 分钟后才靠查单发现。当时我拿 callback-probe 一看 ok: true
+   * 就以为回调链路整体正常 —— 而它压根没碰过退款那个地址，只探了支付。
+   * 探一半的探针比没有探针更危险：它给出的是「已确认正常」的错觉。
+   */
+  const read = () =>
+    require('node:fs').readFileSync(
+      require('node:path').join(__dirname, '..', 'operations', 'admin-operations.controller.ts'),
+      'utf8',
+    ) as string;
+
+  it('probeCallback 同时探支付与退款两个地址', () => {
+    const src = read();
+    const i = src.indexOf("@Get('callback-probe')");
+    expect(i).toBeGreaterThan(0);
+    const body = src.slice(i, src.indexOf('\n  /** 往一个回调地址', i));
+    expect(body).toMatch(/probeOne\([^)]*notifyUrl/);
+    expect(body).toMatch(/probeOne\([^)]*refundUrl/);
+  });
+
+  it('退款地址用与真实请求一致的推导，不能只读环境变量', () => {
+    /*
+     * WX_PAY_REFUND_NOTIFY_URL 未显式配置时，真正发给微信的是
+     * notifyUrl.replace(/\/notify$/, '/refund-notify')（见 wxpay-direct.provider）。
+     * 探针若只读环境变量，未配置时就会跳过退款那一半 ——
+     * 而「未配置」恰恰是最常见的情形。
+     */
+    const src = read();
+    const i = src.indexOf('const refundUrl');
+    expect(i).toBeGreaterThan(0);
+    const line = src.slice(i, src.indexOf(';', i));
+    expect(line).toContain('WX_PAY_REFUND_NOTIFY_URL');
+    expect(line).toMatch(/replace\(.*refund-notify/);
+  });
+
+  it('总体 ok 必须两个都通才算通', () => {
+    const src = read();
+    const i = src.indexOf("@Get('callback-probe')");
+    const body = src.slice(i, src.indexOf('\n  /** 往一个回调地址', i));
+    expect(body).toMatch(/ok:\s*payment\.ok && refund\.ok/);
+  });
+});

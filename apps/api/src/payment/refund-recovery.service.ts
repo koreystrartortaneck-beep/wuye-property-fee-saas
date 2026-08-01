@@ -11,7 +11,12 @@ import { RefundService } from './refund.service';
 @Injectable()
 export class RefundRecoveryService {
   private readonly logger = new Logger(RefundRecoveryService.name);
-  private static readonly LEASE_MS = 5 * 60 * 1000;
+  /*
+   * 租约 90 秒（原 5 分钟）。配合 2 分钟一轮，一笔刚完成的退款最快 2 分钟内被对齐；
+   * 5 分钟的租约会让它查过一次无果后再等 5 分钟。
+   * 90 秒仍远大于一次查单耗时（超时 15 秒），足以防两个实例重复处理。
+   */
+  private static readonly LEASE_MS = 90 * 1000;
   /** 恢复耗尽阈值：退款超过此时长仍未终态视为异常，触发告警。 */
   private static readonly EXHAUST_MS = 2 * 60 * 60 * 1000;
 
@@ -21,7 +26,18 @@ export class RefundRecoveryService {
     @Optional() private readonly alerts: AlertService | null = null,
   ) {}
 
-  @Cron('30 */10 * * * *')
+  /*
+   * 2 分钟一轮（原 10 分钟）。
+   *
+   * 2026-08-01 实测：退款 15:20:28 发起，微信 15:20:30~33 就退完了（业主微信里已到账），
+   * 而**退款回调一次都没到**，我们直到 15:30:30 的下一轮 cron 才发现 ——
+   * 业主的钱已经回去了，后台却显示「退款中」，整整晚了 10 分钟。
+   * 支付侧刚因为同样的形状改过（10 分钟 → 2 分钟），退款侧当时漏了。
+   *
+   * 查单是只读且幂等的，早查只有好处；退款没有「关单」这种破坏性动作，
+   * 所以不需要像支付那样区分「早查单、晚关单」。
+   */
+  @Cron('0 */2 * * * *')
   async recoverStaleRefunds(now: Date = new Date()): Promise<void> {
     if (process.env.PAY_MODE !== 'wxpay') return;
     const leaseCutoff = new Date(now.getTime() - RefundRecoveryService.LEASE_MS);
