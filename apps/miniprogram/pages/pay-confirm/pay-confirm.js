@@ -1,5 +1,5 @@
 const { request } = require('../../utils/request');
-const { requestSubscribe } = require('../../utils/subscribe');
+const { maybeRequestSubscribe } = require('../../utils/subscribe');
 const { waitForPaymentConfirmation } = require('../../utils/payment');
 
 Page({
@@ -113,8 +113,13 @@ Page({
       return;
     }
     this.setData({ paying: true });
-    // 请求订阅缴费提醒（须在点击手势上下文，故放最前、不阻断支付）
-    await requestSubscribe().catch(() => {});
+    /*
+     * 请求订阅缴费提醒。必须在点击手势上下文里同步发起，所以放在最前面，
+     * 且不阻断支付（拒绝/失败都静默）。
+     * 用 maybeRequestSubscribe：7 天内最多问一次，被微信禁用后不再问 ——
+     * 这是全小程序唯一还会主动弹授权框的地方（另一处是业主自己点的开关）。
+     */
+    await maybeRequestSubscribe().catch(() => {});
     wx.showLoading({ title: '支付中' });
     let order = null;
     try {

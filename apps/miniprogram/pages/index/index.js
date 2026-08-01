@@ -1,7 +1,6 @@
 const { request } = require('../../utils/request');
 const { imageUrl } = require('../../utils/upload');
 const { loadMyHouses } = require('../../utils/auth');
-const { accrueSubscribeQuota } = require('../../utils/subscribe');
 const { WORK_CATEGORY } = require('../../utils/labels');
 
 // 分类文案的单一真源在 utils/labels.js。原先 4 个页面各写一份且互相矛盾：
@@ -205,8 +204,7 @@ Page({
 
   /** 英雄卡主按钮：单账单单支付，统一进入账单列表逐张缴费 */
   heroAction() {
-    // 首页主按钮：业主点它就是要处理账单，顺带累积一次额度（见 utils/subscribe 说明）
-    accrueSubscribeQuota();
+    // 这里曾顺带请求订阅授权。已删——这只是一次跳转，不该弹权限框。
     this.goBill();
   },
 });

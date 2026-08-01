@@ -1,7 +1,6 @@
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
 const labels = require('../../utils/labels');
-const { accrueSubscribeQuota } = require('../../utils/subscribe');
 const { fmtDate } = require('../../utils/datetime');
 const STATUS_LABEL = labels.BILL_STATUS;
 
@@ -262,12 +261,12 @@ Page({
   /** 整卡点击 → 账单详情 */
   goDetailById(e) {
     /*
-     * 顺带累积订阅额度。物业类目拿不到微信「长期订阅」，只能用一次性订阅——
-     * 业主授权一次只能收一条。但授权弹窗有「总是保持以上选择，不再询问」，
-     * 勾过之后后续调用自动通过且不弹窗，所以在业主本来就要点的地方多调一次，
-     * 对勾过的人完全无感，额度却能持续累积。不 await，不影响跳转。
+     * 这里曾经调 accrueSubscribeQuota() 来「顺带累积订阅额度」。已删。
+     * 账单卡片是整个小程序里最高频的点击，而大多数业主没勾过「不再询问」——
+     * 于是点每一张账单都弹一次授权框。反复弹、反复被关掉，只会把人训练成
+     * 条件反射点「取消」，最后落到 reject/ban，比从不打扰更糟。
+     * 订阅授权只在与提醒相关的时刻问：缴费时，以及「我的 → 开启缴费提醒」。
      */
-    accrueSubscribeQuota();
     wx.navigateTo({ url: `/pages/bill-detail/bill-detail?id=${e.currentTarget.dataset.id}` });
   },
 

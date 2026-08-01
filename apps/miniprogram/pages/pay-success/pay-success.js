@@ -1,6 +1,5 @@
 const { request } = require('../../utils/request');
 const { canApplyInvoice } = require('../../utils/invoice');
-const { accrueSubscribeQuota } = require('../../utils/subscribe');
 const { fmtDateTime } = require('../../utils/datetime');
 const { waitForPaymentConfirmation } = require('../../utils/payment');
 
@@ -82,8 +81,10 @@ Page({
   },
 
   backHome() {
-    // 刚缴完费，是业主最愿意接收后续提醒的时刻；顺带累积一次额度（见 utils/subscribe 说明）
-    accrueSubscribeQuota();
+    /*
+     * 这里曾以「刚缴完费是最愿意接收提醒的时刻」为由请求订阅授权。已删：
+     * 几秒前的缴费确认页已经问过一次，同一个流程里问两遍就是纯粹的骚扰。
+     */
     wx.switchTab({ url: '/pages/index/index' });
   },
 
