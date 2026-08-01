@@ -98,7 +98,7 @@
       <el-table-column label="凭证号" min-width="120">
         <template #default="{ row }">{{ row.offlineVoucherNo || '—' }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="220" fixed="right">
+      <el-table-column label="操作" width="300" fixed="right">
         <template #default="{ row }">
           <el-button
             v-if="row.status === 'SUCCESS' && row.channel !== 'OFFLINE'"
@@ -113,6 +113,7 @@
             @click="openReverse(row)"
           >冲正</el-button>
           <el-button size="small" @click="showRefund(row)">退款详情</el-button>
+          <el-button size="small" @click="showTrace(row)">入账溯源</el-button>
         </template>
       </el-table-column>
       <template #empty>
@@ -182,6 +183,81 @@
     </template>
     <el-empty v-else description="该订单暂无退款记录" />
   </el-dialog>
+
+  <!--
+    入账溯源。
+    2026-08-01 事故的产物：业主说钱扣了，而后台没有任何地方能看出这笔钱
+    到账了没有、是怎么到账的。当时只能靠命令行救回来，物业自己做不到任何事。
+    这个弹窗回答三个问题，并把「主动查单」这个补救动作放在同一处。
+  -->
+  <el-dialog v-model="traceDialog" title="入账溯源" width="min(680px, 94vw)">
+    <template v-if="trace">
+      <el-alert
+        :type="trace.settlement.paid ? 'success' : 'warning'"
+        :closable="false"
+        show-icon
+        class="trace-verdict"
+      >
+        <template #title>{{ settlementVerdict }}</template>
+      </el-alert>
+
+      <el-descriptions :column="2" border size="small">
+        <el-descriptions-item label="订单号">{{ trace.orderNo }}</el-descriptions-item>
+        <el-descriptions-item label="状态">
+          <el-tag :type="paymentStatusTag(trace.status)">{{ PAYMENT_STATUS_LABEL[trace.status] || trace.status }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="金额">¥{{ yuan(trace.totalAmount) }}</el-descriptions-item>
+        <el-descriptions-item label="下单时间">{{ dt(trace.createdAt) }}</el-descriptions-item>
+        <el-descriptions-item label="到账方式">{{ CONFIRM_SOURCE_LABEL[trace.settlement.via || ''] || '尚未到账' }}</el-descriptions-item>
+        <el-descriptions-item label="到账时间">{{ dt(trace.paidAt) }}</el-descriptions-item>
+        <el-descriptions-item label="微信回调">
+          <el-tag :type="trace.settlement.wxCallbackArrived ? 'success' : 'danger'" size="small">
+            {{ trace.settlement.wxCallbackArrived ? '已到达' : '从未到达' }}
+          </el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="最近查单">{{ dt(trace.settlement.queriedAt) }}</el-descriptions-item>
+        <el-descriptions-item label="微信交易号" :span="2">{{ trace.transactionId || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="收据号" :span="2">{{ trace.receiptNo || '—' }}</el-descriptions-item>
+      </el-descriptions>
+
+      <div class="json-title">入账事件</div>
+      <el-table :data="trace.events || []" size="small">
+        <el-table-column label="事件" width="120">
+          <template #default="{ row }">{{ PAYMENT_EVENT_LABEL[row.type] || row.type }}</template>
+        </el-table-column>
+        <el-table-column label="处理" width="90">
+          <template #default="{ row }">{{ PAYMENT_EVENT_STATUS_LABEL[row.status] || row.status }}</template>
+        </el-table-column>
+        <el-table-column label="发生时间" min-width="150">
+          <template #default="{ row }">{{ dt(row.occurredAt) }}</template>
+        </el-table-column>
+        <el-table-column label="说明" min-width="160">
+          <template #default="{ row }">{{ row.lastError || row.source || '—' }}</template>
+        </el-table-column>
+        <template #empty>
+          <EmptyState
+            icon="🧾"
+            title="还没有入账事件"
+            desc="微信回调到达、或系统主动向微信查单，都会在这里留下一条；一条都没有说明这笔支付还没被任何一方确认"
+          />
+        </template>
+      </el-table>
+    </template>
+    <el-empty v-else description="正在读取…" />
+    <template #footer>
+      <!--
+        主动查单：这个补救动作此前只有 API、没有按钮，事故里只能用命令行做。
+        对未到账的订单才给出——已到账时点它没有意义。
+      -->
+      <el-button
+        v-if="trace && !trace.settlement.paid"
+        type="primary"
+        :loading="syncing"
+        @click="doForceSync"
+      >立即向微信查单</el-button>
+      <el-button @click="traceDialog = false">关闭</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -193,7 +269,10 @@ import { api, qs, type Page } from '../api';
 import HouseCell from '../components/HouseCell.vue';
 import { useCommunities } from '../composables';
 import {
+  CONFIRM_SOURCE_LABEL,
   PAYMENT_CHANNEL_LABEL,
+  PAYMENT_EVENT_LABEL,
+  PAYMENT_EVENT_STATUS_LABEL,
   PAYMENT_STATUS_LABEL,
   REFUND_ATTEMPT_STATUS_LABEL,
   REFUND_STATUS_LABEL,
@@ -383,6 +462,81 @@ async function submitReason() {
   }
 }
 
+interface PaymentTrace {
+  orderNo: string;
+  status: string;
+  totalAmount: string;
+  createdAt: string | null;
+  paidAt: string | null;
+  receiptNo: string | null;
+  transactionId: string | null;
+  settlement: {
+    paid: boolean;
+    via: string | null;
+    wxCallbackArrived: boolean;
+    queriedAt: string | null;
+  };
+  events: Array<{
+    type: string;
+    status: string;
+    source: string | null;
+    occurredAt: string;
+    lastError: string | null;
+  }>;
+}
+
+const traceDialog = ref(false);
+const trace = ref<PaymentTrace | null>(null);
+const syncing = ref(false);
+
+/**
+ * 一句话结论，而不是让收费员对着一堆字段自己推。
+ * 「回调从未到达」是个需要上报的运维事实，不该藏在一个标签里。
+ */
+const settlementVerdict = computed(() => {
+  const t = trace.value;
+  if (!t) return '';
+  if (!t.settlement.paid) {
+    return t.settlement.wxCallbackArrived
+      ? '微信回调已到达，但这笔款还没确认到账 —— 请点「立即向微信查单」'
+      : '还未到账，且微信回调从未到达。若业主确认已扣款，请点「立即向微信查单」；反复出现请联系技术支持排查回调配置';
+  }
+  return t.settlement.via === 'WXPAY_NOTIFY'
+    ? '已到账，由微信回调确认（链路正常）'
+    : t.settlement.via === 'WXPAY_QUERY'
+      ? '已到账，但是靠主动查单补回来的 —— 说明微信回调没有到达，若反复出现请联系技术支持'
+      : '已到账';
+});
+
+async function showTrace(row: Payment) {
+  trace.value = null;
+  traceDialog.value = true;
+  try {
+    trace.value = await api<PaymentTrace>(`/admin/payments/trace/${row.orderNo}`);
+  } catch {
+    traceDialog.value = false;
+  }
+}
+
+/**
+ * 主动向微信查单。
+ * 事故里这一步只能用命令行做 —— 业主的钱卡了半小时，而后台没有任何按钮。
+ */
+async function doForceSync() {
+  const t = trace.value;
+  if (!t) return;
+  syncing.value = true;
+  try {
+    await api(`/admin/payments/${t.orderNo}/force-sync`, { method: 'POST' });
+    // 重新读溯源而不是只弹个提示：结论必须当场可见
+    trace.value = await api<PaymentTrace>(`/admin/payments/trace/${t.orderNo}`);
+    ElMessage.success(trace.value?.settlement.paid ? '已确认到账' : '微信侧仍未支付成功');
+    load();
+  } finally {
+    syncing.value = false;
+  }
+}
+
 async function showRefund(row: Payment) {
   refundDetail.value = null;
   refundDialog.value = true;
@@ -431,5 +585,10 @@ async function showRefund(row: Payment) {
   margin: 12px 0 6px;
   font-weight: var(--fw-semibold);
   color: var(--text-primary);
+}
+
+/* 入账溯源的结论条：和下面的字段表拉开距离，不要糊成一块 */
+.trace-verdict {
+  margin-bottom: var(--sp-3);
 }
 </style>

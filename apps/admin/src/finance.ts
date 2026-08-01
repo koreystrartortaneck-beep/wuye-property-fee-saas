@@ -52,6 +52,41 @@ export const REFUND_ATTEMPT_STATUS_LABEL: Record<string, string> = {
   UNKNOWN: '结果未知',
 };
 
+/**
+ * 到账方式（Payment.confirmedBy）。
+ *
+ * 这一列是 2026-08-01 事故里最想看到却看不到的东西：钱到账了，但是靠什么到的？
+ * 「微信回调」说明回调链路正常；「主动查单」说明回调没来、是系统补救回来的 ——
+ * 后者持续出现就意味着回调配置或网络有问题，得去查，而不是当成正常。
+ */
+export const CONFIRM_SOURCE_LABEL: Record<string, string> = {
+  WXPAY_NOTIFY: '微信回调（正常）',
+  WXPAY_QUERY: '主动查单补回（回调未到）',
+  OFFLINE: '线下登记',
+  MOCK: '模拟支付',
+};
+
+/** 入账事件类型（PaymentEvent.type） */
+export const PAYMENT_EVENT_LABEL: Record<string, string> = {
+  CREATED: '创建订单',
+  CHANNEL_ORDER_CREATED: '微信下单',
+  NOTIFIED: '收到微信回调',
+  CONFIRMED: '确认到账',
+  CLOSED: '关闭订单',
+  FAILED: '支付失败',
+  REFUNDING: '退款中',
+  REFUNDED: '已退款',
+  RECOVERED: '补救入账',
+};
+
+/** 入账事件处理状态（PaymentEvent.status） */
+export const PAYMENT_EVENT_STATUS_LABEL: Record<string, string> = {
+  PENDING: '待处理',
+  PROCESSING: '处理中',
+  PROCESSED: '已处理',
+  FAILED: '处理失败',
+};
+
 /** 发票交付方式 */
 export const INVOICE_DELIVERY_LABEL: Record<string, string> = {
   EMAIL: '电子邮件',
