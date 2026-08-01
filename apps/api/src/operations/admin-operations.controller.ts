@@ -20,6 +20,13 @@ class MetricsQuery {
   communityId?: string;
 }
 
+class ListAlertsDto extends PageQuery {
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  alertType?: string;
+}
+
 class ListIncidentsDto extends PageQuery {
   @IsOptional()
   @IsIn(INCIDENT_STATUSES as unknown as string[])
@@ -210,6 +217,26 @@ export class AdminOperationsController {
   probeWx(@Current() cur: CurrentAdmin) {
     requireTenant(cur);
     return this.wxProbe.probe();
+  }
+
+  /**
+   * 最近的告警明细。
+   *
+   * 为什么补这个：此前只有「事件（Incident）」列表，而事件只由 CRITICAL 告警派生 ——
+   * WARNING 级的告警根本没有任何界面能看到，CRITICAL 的也只能看到派生出的事件。
+   *
+   * 真实事故里这个缺口让我判断错了：业主付款卡住，我用错签名的回调探了两次，
+   * 查「事件」是 0 条，就据此认为「告警没写进去」。实际上我查的是派生对象，
+   * 不是告警本身 —— 一个看不见的表让我把观察不到当成没发生。
+   */
+  @Get('alerts')
+  listAlerts(@Current() cur: CurrentAdmin, @Query() q: ListAlertsDto) {
+    return this.alerts.list({
+      tenantId: requireTenant(cur),
+      alertType: q.alertType,
+      page: q.page,
+      pageSize: q.pageSize,
+    });
   }
 
   @Get('incidents')

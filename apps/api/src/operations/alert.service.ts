@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { request as httpsRequest } from 'node:https';
 import { redactAndTruncateText, redactSensitive } from '../audit/audit.service';
+import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { IncidentService, IncidentSeverity } from './incident.service';
 
@@ -304,11 +305,54 @@ export class AlertService {
   }
 
   /** 供集成方安全触发：任何异常都不得影响主业务流程。 */
+  /**
+   * 最近的告警明细（只读）。
+   *
+   * 补这个查询是因为此前告警表在界面上完全看不到：只有由 CRITICAL 派生的
+   * 「事件」有列表。真实事故里我据此误判过 —— 查事件是 0 条，就以为告警没写进去。
+   */
+  async list(input: { tenantId: string; alertType?: string; page?: number; pageSize?: number }) {
+    const where = {
+      tenantId: input.tenantId,
+      ...(input.alertType ? { alertType: input.alertType } : {}),
+    };
+    const q = { page: input.page, pageSize: input.pageSize } as PageQuery;
+    const [list, total] = await Promise.all([
+      this.prisma.raw.operationalAlert.findMany({
+        where,
+        ...pageArgs(q),
+        orderBy: { lastSeenAt: 'desc' },
+        select: {
+          id: true,
+          alertType: true,
+          severity: true,
+          status: true,
+          title: true,
+          summary: true,
+          occurrences: true,
+          firstSeenAt: true,
+          lastSeenAt: true,
+          incidentId: true,
+        },
+      }),
+      this.prisma.raw.operationalAlert.count({ where }),
+    ]);
+    return pageResult(list, total, q);
+  }
+
   async safeEmit(input: EmitAlertInput): Promise<void> {
     try {
       await this.emit(input);
     } catch (err) {
-      this.logger.warn(`告警触发失败 ${input.alertType}: ${err instanceof Error ? err.message : err}`);
+      /*
+       * 用 error 级别而不是 warn：这是「报警本身失败」——
+       * 它意味着接下来任何故障都不会有人知道，是比原故障更严重的一层。
+       * 真实事故里支付回调被拒没有留下任何痕迹，我因此多花了半小时才定位。
+       */
+      this.logger.error(
+        `告警写入失败（此后该类故障将无人知晓）type=${input.alertType} dedup=${input.dedupKey}: ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 }
