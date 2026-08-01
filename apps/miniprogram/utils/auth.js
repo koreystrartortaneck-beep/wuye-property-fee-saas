@@ -13,11 +13,22 @@ function mockOpenid() {
   return id;
 }
 
+/*
+ * wx.login 必须有超时。
+ *
+ * 它在启动路径上（ensureLogin）：卡住时小程序停在首屏，没有任何提示、
+ * 也没有重试入口 —— 业主只会以为「这个小程序打不开」。
+ * 10 秒足够：wx.login 只跟微信服务器换一个 code，不传输业务数据。
+ */
+const LOGIN_TIMEOUT_MS = 10000;
+
 function wxLoginCode() {
   return new Promise((resolve, reject) => {
     wx.login({
+      timeout: LOGIN_TIMEOUT_MS,
       success: (res) => resolve(res.code),
-      fail: () => reject(new Error('微信登录失败')),
+      // 把原始 errMsg 带出来：区分「用户拒绝」「网络不通」「超时」对排查很关键
+      fail: (err) => reject(new Error(`微信登录失败：${(err && err.errMsg) || '未知原因'}`)),
     });
   });
 }

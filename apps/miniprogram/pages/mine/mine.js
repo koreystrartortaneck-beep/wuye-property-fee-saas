@@ -207,18 +207,27 @@ Page({
   async confirmDeleteAccount() {
     if (this.data.deleting) return;
 
-    // 先提示未缴清账单，避免业主以为注销就不用交了
+    /*
+     * 先提示未缴清账单，避免业主以为注销就不用交了。
+     *
+     * 两处修正（2026-08-01 全量排查发现）：
+     *
+     * ① 原来只查 globalData.currentHouse ——「当前选中的那一户」。
+     *    绑了两户的业主，若欠费在另一户，注销时**完全看不到警告**，
+     *    而这个警告存在的全部意义就是防这件事。
+     *    /owner/bills/summary 不传 houseId 时汇总名下全部房屋，所以直接不传。
+     *
+     * ② 查询失败时原来静默略过。而「没有警告」在业主眼里等于「我不欠钱」——
+     *    这是一次静默的误导。现在如实说没能确认，让他自己去核对。
+     */
     let unpaidHint = '';
     try {
-      const house = getApp().globalData.currentHouse;
-      if (house) {
-        const sum = await request(`/owner/bills/summary?houseId=${house.houseId}`, { silent: true });
-        if (Number(sum.unpaidTotal) > 0) {
-          unpaidHint = `\n\n注意：名下仍有 ${sum.unpaidCount} 笔待缴费用（¥${sum.unpaidTotal}），注销不会免除欠费。`;
-        }
+      const sum = await request('/owner/bills/summary', { silent: true });
+      if (Number(sum.unpaidTotal) > 0) {
+        unpaidHint = `\n\n注意：名下仍有 ${sum.unpaidCount} 笔待缴费用（¥${sum.unpaidTotal}），注销不会免除欠费。`;
       }
     } catch (e) {
-      /* 查询失败不阻断注销 */
+      unpaidHint = '\n\n提示：未能确认您名下是否还有待缴费用，请先自行核对；注销不会免除欠费。';
     }
 
     const first = await new Promise((resolve) =>
