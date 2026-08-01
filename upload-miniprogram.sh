@@ -1,8 +1,19 @@
 #!/bin/bash
-# 上传小程序到微信平台。
+# 小程序真机验证 / 上传。
 #
-# 上传 ≠ 提审：本脚本只把代码推成一个「开发版本」，之后要在微信公众平台
-# 「版本管理 → 开发版本 → 提交审核」。
+# 两种模式：
+#
+#   bash upload-miniprogram.sh --preview     ← 先用这个
+#       终端里直接出二维码，用你自己的微信扫一下，代码立刻在手机上跑。
+#       **不上传、不提审、不用等审核。** 连的是同一个生产后端，
+#       真实微信支付也能走通，所以测出来的结果和正式版一样。
+#       改一行代码就能重扫一次，这是验证功能的正确循环。
+#
+#   bash upload-miniprogram.sh [版本号]      ← 验证没问题之后再用这个
+#       把代码推成一个「开发版本」。上传 ≠ 提审，之后要去微信公众平台
+#       「版本管理 → 开发版本 → 提交审核」。
+#       （也可以在公众平台把它设为「体验版」+ 加体验成员，
+#         让物业的人也能试，同样不需要审核。）
 #
 # 前置两项：
 #   1) 服务端口。**在你自己的终端里跑本脚本时，工具会提示
@@ -24,14 +35,19 @@ else
 fi
 
 #
-# 用法：bash upload-miniprogram.sh [版本号]
 #   注意要在**交互式终端**里跑，否则上面第 1 步的 y 确认无法输入。
 set -uo pipefail
 
+MODE=upload
+if [ "${1:-}" = "--preview" ] || [ "${1:-}" = "-p" ]; then
+  MODE=preview
+  shift
+fi
+
 CLI="/Applications/wechatwebdevtools.app/Contents/MacOS/cli"
 PROJ="$(cd "$(dirname "$0")" && pwd)/apps/miniprogram"
-VER="${1:-1.1.0}"
-DESC="时区修复（全站早8小时/访客日期早一天）、加载失败不再显示¥0.00、订阅消息模板ID、枚举文案与后台对齐、卡券金额精度、注销匿名化提示"
+VER="${1:-1.2.0}"
+DESC="支付成功立刻反馈（不再卡在「确认支付结果」）、新增「入账中」状态并阻止重复支付、请求超时 12 秒、查单窗口延长至 20 秒"
 
 [ -x "$CLI" ] || { echo "✗ 找不到微信开发者工具 CLI：$CLI"; exit 1; }
 [ -d "$PROJ" ] || { echo "✗ 找不到小程序目录：$PROJ"; exit 1; }
@@ -71,6 +87,25 @@ if ! grep -qiE "true|已登录|logged in" <<<"$OUT"; then
 fi
 
 mkdir -p "$(dirname "$0")/outputs"
+
+if [ "$MODE" = preview ]; then
+  echo "→ 生成预览二维码（不上传、不提审）"
+  # 终端二维码：不落磁盘、不用切窗口，扫完即跑
+  "$CLI" preview \
+    --project "$PROJ" \
+    --qr-format terminal \
+    --info-output "$(dirname "$0")/outputs/preview-result.json"
+  cat <<'NEXT'
+
+✓ 用微信扫上面的二维码，代码立刻在手机上跑（开发版）。
+  连的是生产后端，真实支付可用 —— 请用 ¥1 的「占位费用」账单测，别拿大额的试。
+
+  验证清单见 docs/真机验证清单.md
+  验证通过后再执行：bash upload-miniprogram.sh
+NEXT
+  exit 0
+fi
+
 echo "→ 上传 $PROJ  版本 $VER"
 "$CLI" upload \
   --project "$PROJ" \
@@ -80,3 +115,4 @@ echo "→ 上传 $PROJ  版本 $VER"
 
 echo "✓ 上传完成，版本 $VER"
 echo "  下一步：微信公众平台 → 版本管理 → 开发版本 → 提交审核"
+echo "  （想让物业的人也先试用：同一页把它设为「体验版」并添加体验成员，无需审核）"

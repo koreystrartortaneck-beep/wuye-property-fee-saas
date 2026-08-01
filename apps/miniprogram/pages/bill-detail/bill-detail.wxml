@@ -11,7 +11,8 @@
 
 <view class="page detail-page" wx:elif="{{bill}}">
   <view class="detail-hero card">
-    <view class="detail-status {{bill.status === 'PAID' ? 'ok' : overdue ? 'bad' : ''}}">{{bill.statusLabel}}</view>
+    <!-- settling 必须先判：否则落回默认的金色，而金色表示「还要交钱」 -->
+    <view class="detail-status {{bill.status === 'PAID' ? 'ok' : bill.settling ? 'settling' : overdue ? 'bad' : ''}}">{{bill.statusLabel}}</view>
     <view class="detail-amount amount">¥ {{bill.amount}}</view>
     <view class="detail-title">{{bill.title}}</view>
     <view class="detail-house">{{bill.houseName}}</view>

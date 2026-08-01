@@ -27,6 +27,23 @@
   color: var(--danger, #c45656);
 }
 
+/*
+ * 入账中：业主已付款、我们还没销账。
+ *
+ * 必须**不是金色**。这个徽章的默认样式（不带 ok/bad 时）是金色，
+ * 而金色在本页和账单列表里都表示「还要交钱」—— 让已经付过款的人再看到金色，
+ * 正是这个状态要消除的那个焦虑。第一版漏了这个变体，于是列表显示紫色、
+ * 详情落回金色，同一个状态两种颜色，而详情那一种恰好是最误导的。
+ *
+ * 归到本页「已缴」的绿色系（本页调色板与列表不同：这里已缴是绿、列表是紫，
+ * 各自沿用自己的约定）。「还在走」这层意思由文案「入账中」和下方的
+ * 「微信已扣款成功，正在入账」承担，不靠颜色。
+ */
+.detail-status.settling {
+  background: rgba(63, 125, 93, 0.12);
+  color: var(--success, #3f7d5d);
+}
+
 .detail-amount {
   margin-top: 26rpx;
   font-size: 72rpx;
@@ -97,8 +114,9 @@
   margin-top: 24rpx;
   padding: 20rpx 24rpx;
   border-radius: 16rpx;
-  background: rgba(201, 166, 107, 0.14);
-  color: var(--gold-ink, #9b743a);
+  /* 与徽章同色系：它们说的是同一件事，颜色不该各说各话 */
+  background: rgba(63, 125, 93, 0.1);
+  color: var(--success, #3f7d5d);
   font-size: 25rpx;
   line-height: 1.6;
   text-align: center;

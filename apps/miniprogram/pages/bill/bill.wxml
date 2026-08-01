@@ -62,7 +62,13 @@
         <view class="group-subtotal" wx:else>已加载 {{group.count}} 笔</view>
       </view>
       <block wx:for="{{group.items}}" wx:key="id">
-        <view class="bill-item card {{item.paid ? 'bill-paid' : ''}}"
+        <!--
+          bill-paid 会把整张卡片压到 opacity .72（表示「这条已经办完了」）。
+          入账中的账单 paid 为 true（为了收起缴费按钮），但它不该被压暗 ——
+          那是业主此刻最盯着看的一行，压暗后像是已失效的条目。
+          「不能再付」和「已经办完」是两件事，这里把它们分开。
+        -->
+        <view class="bill-item card {{item.paid && !item.settling ? 'bill-paid' : ''}}"
               data-id="{{item.id}}" bindtap="goDetailById">
           <view class="bill-dot {{item.theme}}"></view>
 

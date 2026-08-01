@@ -147,6 +147,65 @@ test('入账中的样式有定义，且能压过「已缴」的样式', () => {
   );
 });
 
+test('入账中的账单不能被压暗——那是业主此刻最盯着看的一行', () => {
+  /*
+   * .bill-paid { opacity: .72 } 表示「这条已经办完了」。
+   * 而入账中的 paid 为 true（为了收起缴费按钮），若直接套上这个类，
+   * 整张卡片会连同金色徽章一起变灰，看起来像已失效的条目。
+   * 「不能再付」和「已经办完」是两件事，模板里必须分开。
+   */
+  const wxml = read('pages/bill/bill.wxml');
+  const wxss = read('pages/bill/bill.wxss');
+  // 前提：bill-paid 确实是个压暗样式，否则这条守卫没有意义
+  const paidRule = wxss.slice(wxss.indexOf('.bill-paid'), wxss.indexOf('}', wxss.indexOf('.bill-paid')));
+  assert.match(paidRule, /opacity/, '.bill-paid 不再是压暗样式，这条守卫需要重写');
+  assert.match(
+    wxml,
+    /\{\{item\.paid && !item\.settling \? 'bill-paid' : ''\}\}/,
+    '入账中的账单仍会被 bill-paid 压暗',
+  );
+});
+
+test('「入账中」不能用「还要交钱」的金色——两页各自的徽章都要有变体', () => {
+  /*
+   * 这条是截图之后补的，因为两次都栽在同一件事上：
+   *
+   *   ① 列表：第一版用金色（想表达「好消息」），渲染出来和「待缴」的金色徽章
+   *      几乎一样 —— 业主一眼扫过去以为这笔还要交钱，而消除这个焦虑正是
+   *      这个状态存在的全部理由。
+   *   ② 详情：漏了 .detail-status 的 settling 变体，于是静默落回默认样式 ——
+   *      而那个默认样式恰好也是金色。列表紫、详情金，同一个状态两种颜色，
+   *      且详情那一种最误导。
+   *
+   * 两页的调色板本来就不同（列表已缴=紫，详情已缴=绿），所以不强求同色，
+   * 只钉两件事：**必须有专门的变体**（不能落回默认），**且不是金色**。
+   */
+  const listWxss = read('pages/bill/bill.wxss');
+  const detailWxml = read('pages/bill-detail/bill-detail.wxml');
+  const detailWxss = read('pages/bill-detail/bill-detail.wxss');
+
+  // 详情页：模板必须在落回默认之前判 settling
+  assert.match(
+    detailWxml,
+    /bill\.settling \? 'settling'/,
+    '详情页徽章没有 settling 分支，会落回默认的金色',
+  );
+  assert.ok(detailWxss.includes('.detail-status.settling'), '.detail-status.settling 没有定义');
+
+  // 两页的 settling 样式都不许用金色变量
+  const rule = (src, sel) => {
+    const i = src.indexOf(sel);
+    assert.ok(i > 0, `找不到 ${sel}`);
+    return src.slice(i, src.indexOf('}', i));
+  };
+  for (const [name, r] of [
+    ['列表', rule(listWxss, '.status-settling')],
+    ['详情', rule(detailWxss, '.detail-status.settling')],
+  ]) {
+    assert.ok(!/gold/.test(r), `${name}页的「入账中」用了金色——金色表示「还要交钱」`);
+  }
+});
+
 test('账单详情页与列表口径一致，且收起缴费按钮', () => {
   /*
    * 两处口径不一致最危险：列表说「入账中」不给按钮，详情说「待缴」给按钮，
