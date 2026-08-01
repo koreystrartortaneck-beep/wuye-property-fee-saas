@@ -16,8 +16,11 @@ import { BizException } from './biz.exception';
 import { Prisma } from '@prisma/client';
 
 /**
- * 全局异常 → 统一 {code,message} 响应，HTTP 始终 200（spec §7）。
+ * 全局异常 → 统一 {code,message} 响应，HTTP 200（spec §7）。
  * 未知异常记日志并返回 50000，不泄漏堆栈。
+ *
+ * 唯一例外是「路由没匹配上」：那类请求根本没进业务逻辑，报 200 会让微信支付
+ * 回调被永久吞掉（详见下方 NotFoundException 分支）。
  */
 /** 常见字段名 → 中文，避免界面上出现英文字段名 */
 const FIELD_CN: Record<string, string> = {
@@ -132,7 +135,27 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       return;
     }
     if (exception instanceof NotFoundException) {
-      res.status(200).json(ErrorCode.NOT_FOUND);
+      /*
+       * 这个分支**只可能是 Nest 路由没匹配上**：业务代码一律抛
+       * BizException(ErrorCode.NOT_FOUND)（走上面第一支），全库没有一处
+       * 直接 new NotFoundException。也就是说走到这里的请求根本没进业务逻辑。
+       *
+       * 所以这里是 §7「HTTP 始终 200」的唯一例外，代价太大：
+       *
+       * 微信支付回调按 HTTP 状态码判定投递结果 —— 200 表示「已受理，不再重试」。
+       * 若 WX_PAY_NOTIFY_URL 配错一个字符（最常见是漏掉 /api/v1 前缀），
+       * 微信 POST 过来会命中这一支、拿到 HTTP 200，于是认为回调成功投递并
+       * **永久不再重试**。业主的钱扣了，账单永远不变，而系统里没有任何痕迹：
+       * 没进验签代码所以没有告警，微信侧显示投递成功所以也不重试。
+       * 2026-08-01 的事故正是这个形状。
+       *
+       * 同理，任何按 HTTP 状态做健康检查的外部系统，在路由被改坏时也一律看到 200。
+       *
+       * 响应体保持不变：两个前端都只读 body.code、不看 HTTP 状态
+       * （wx.request 的 success 对 404 同样触发，fetch 也不会 reject），
+       * 所以这个改动对它们完全兼容。
+       */
+      res.status(404).json(ErrorCode.NOT_FOUND);
       return;
     }
     if (exception instanceof HttpException) {
