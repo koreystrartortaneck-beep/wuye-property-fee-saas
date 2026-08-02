@@ -260,3 +260,15 @@
 .danger-name {
   color: var(--danger, #c45656);
 }
+
+/*
+ * 代码指纹。刻意做得很轻——它是给我们自己排查用的，
+ * 业主看见也不会误以为是功能，但需要时一眼能找到（永远在页面最底）。
+ */
+.build-stamp {
+  margin: 36rpx 0 12rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: var(--text-3, #7c7288);
+  opacity: 0.55;
+}

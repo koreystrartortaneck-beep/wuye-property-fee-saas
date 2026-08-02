@@ -137,4 +137,7 @@
       <view class="arrow">›</view>
     </view>
   </view>
+
+  <!-- 代码指纹：用来确认屏幕上跑的是哪一版代码，见 tools/stamp-miniprogram.mjs -->
+  <view class="build-stamp">版本 {{build}}</view>
 </view>

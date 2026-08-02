@@ -26,6 +26,10 @@
 # 这些错误平时只有开发者工具会报，而开发者工具要扫码才能开 ——
 # 等能上传时才发现语法错，白扫一次码。预检不通过就别进扫码流程。
 if command -v node >/dev/null 2>&1; then
+  # 先刷新代码指纹，再预检 —— 顺序不能反：
+  # 指纹是源码内容的哈希，写完它 apps/miniprogram 就变了，
+  # 必须让预检看到最终要上传的那份代码。
+  node "$(dirname "$0")/tools/stamp-miniprogram.mjs"
   if ! node "$(dirname "$0")/tools/miniprogram-preflight.mjs"; then
     echo "✗ 预检未通过，已中止（先修上面列出的问题再上传）"
     exit 1

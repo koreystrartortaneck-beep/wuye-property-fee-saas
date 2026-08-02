@@ -3,12 +3,18 @@ const { request } = require('../../utils/request');
 const { bindPhone, loadMyHouses } = require('../../utils/auth');
 const { requestSubscribe, getSubscribeState } = require('../../utils/subscribe');
 const { BINDING_RELATION } = require('../../utils/labels');
+const { BUILD } = require('../../utils/version');
 
 // 与 utils/labels.js 的 BINDING_RELATION 完全重复，收敛到真源
 const RELATION_LABEL = BINDING_RELATION;
 
 Page({
   data: {
+    /*
+     * 代码指纹。回答「我看到的是不是最新代码」——改完点了编译，
+     * 这个值变了才说明真的生效了。与 node tools/stamp-miniprogram.mjs --print 对账。
+     */
+    build: BUILD,
     loadError: false, // 档案加载失败：与「真的没绑房屋」区分开
     nav: { spacerPx: 48, rowPx: 32 },
     /** 订阅授权状态：accept/reject/ban/unknown，决定「缴费提醒」的说明与点击行为 */

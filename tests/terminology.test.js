@@ -29,6 +29,16 @@ const MINI = path.join(ROOT, 'apps', 'miniprogram');
 function walk(dir, exts, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
+    /*
+     * 跳过点开头的文件。它们不是源码，是别的测试临时落下的探针
+     * （如 utils/.upload-timeout-probe.js —— 那个探针必须落在源码目录里，
+     *  因为被测模块 require 的是 '../config'、'./request' 这样的相对路径）。
+     *
+     * node --test 是多进程并发的：本文件遍历出文件名的那一刻探针还在，
+     * 读它的时候另一个进程已经删掉了 → ENOENT，测试红在一个不存在的问题上。
+     * 2026-08-02 真的这么红过一次。
+     */
+    if (e.name.startsWith('.')) continue;
     if (e.isDirectory()) {
       if (e.name === 'node_modules' || e.name === 'dist') continue;
       walk(p, exts, out);
