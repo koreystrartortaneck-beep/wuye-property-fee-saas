@@ -42,7 +42,19 @@
       <view class="hero-title">{{pendingBinding.revoked ? '房屋绑定\n已解除' : '绑定申请\n未通过'}}</view>
       <view class="amount-panel">
         <view class="panel-label">{{pendingBinding.house}}</view>
-        <view class="pending-note">{{pendingBinding.reason || (pendingBinding.revoked ? '物业已解除该房屋的绑定，如有疑问请联系物业' : '物业未说明原因，可联系物业后重新申请')}}</view>
+        <!--
+          原因必须**署名引用**，不能让 App 直接说出管理员打的那句话。
+          2026-08-02 实测：管理员在原因里写了一句内部备注
+          （「业主体验全流程，临时解除，稍后重新申请」），
+          业主端把它当成 App 的正式说明原样摆在首页 —— 读起来像是系统在自言自语。
+          加上「物业填写的原因：」这个前缀之后，即使原因写得潦草，
+          业主也知道那是物业写的、该找谁问，而不是这个 App 在胡说。
+        -->
+        <view class="pending-note">
+          {{pendingBinding.revoked ? '该房屋的绑定已被物业解除。' : '您的绑定申请未通过。'}}
+        </view>
+        <view wx:if="{{pendingBinding.reason}}" class="pending-reason">物业填写的原因：{{pendingBinding.reason}}</view>
+        <view wx:else class="pending-reason">物业未填写原因，可联系物业了解详情。</view>
         <view class="amount-row">
           <view class="hero-amount amount"> </view>
           <button class="gold-button pay-btn" bindtap="goBind">重新申请</button>

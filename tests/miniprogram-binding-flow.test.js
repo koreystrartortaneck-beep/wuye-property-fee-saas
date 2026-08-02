@@ -82,3 +82,67 @@ test('拿到生效房屋后不再显示申请态', () => {
   const wxml = readWxml('pages/index/index.wxml');
   assert.match(wxml, /wx:if="\{\{ready && noHouse\}\}"/, '申请态没有被 noHouse 整体把门');
 });
+
+/*
+ * ── 管理员打的字不能当成 App 自己在说话 ──
+ *
+ * 2026-08-02 实测：管理员（就是我）在解除原因里写了一句内部备注
+ * 「业主体验全流程，临时解除，稍后重新申请」，业主端首页把它当成正式说明原样摆着，
+ * 读起来像是系统在自言自语。物业的人同样会写出「测试」「先解了再说」这种话。
+ *
+ * 两层防护：
+ *   · 业主端：原因必须**署名引用**，让业主知道那是物业写的、该找谁问
+ *   · 后台：改成预置项 + 「其他」，并把业主会看到的原话直接预览出来
+ *     （「业主可见」四个字提醒不了任何人，看到自己写的东西长什么样才会）
+ */
+
+test('业主端把解除原因标成「物业填写的」，不是 App 在说话', () => {
+  const wxml = readWxml('pages/index/index.wxml');
+  assert.match(wxml, /物业填写的原因：/, '原因没有署名，读起来像系统自己在说');
+  // 系统自己的那句话要独立存在，不能被原因取代
+  assert.match(wxml, /该房屋的绑定已被物业解除。/, '缺少系统侧的说明');
+  assert.match(wxml, /物业未填写原因/, '物业没填时没有兜底');
+});
+
+test('重新申请必须清掉上一轮的结论', () => {
+  /*
+   * 只清 rejectReason 不够：revokedAt 决定业主端显示「已解除」还是「申请未通过」。
+   * 留着它的话，这次申请若被驳回，首页会说「房屋绑定已解除」——
+   * 而他这次根本没绑上过。
+   */
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'apps/api/src/owner/owner-houses.controller.ts'),
+    'utf8',
+  );
+  const i = src.indexOf('async applyBinding');
+  const body = src.slice(i, src.indexOf('\n  }', src.indexOf('try {', i)));
+  for (const f of ['rejectReason: null', 'revokedAt: null', 'revokeReason: null']) {
+    assert.ok(body.includes(f), `重新申请没有清掉 ${f}`);
+  }
+});
+
+test('手机号匹配只认在营的物业公司', () => {
+  /*
+   * 实测：授权手机号后提示「已自动绑定 1 处房屋」，而首页什么都没有 ——
+   * 匹配到的那套房属于一个已停用的租户，业主端已经把它过滤掉了。
+   * 系统宣称做了一件事，实际什么也没发生，而且发生在新业主进来的第一步。
+   */
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'apps/api/src/auth/auth.service.ts'),
+    'utf8',
+  );
+  const i = src.indexOf('const houses = await this.prisma.raw.house.findMany');
+  assert.ok(i > 0, '找不到手机号匹配的查询');
+  const q = src.slice(i, src.indexOf('});', i));
+  assert.match(q, /community: \{ tenant: \{ status: 'ACTIVE' \} \}/, '没有排除已停用的物业公司');
+});
+
+test('「我的」页与首页对同一件事说同一句话', () => {
+  /*
+   * 首页说「已解除」而「我的」说「已驳回」，同一件事两种说法，
+   * 比说错更让人糊涂。
+   */
+  const js = read('pages/mine/mine.js');
+  assert.match(js, /b\.revokedAt \? '已解除' : '已驳回'/, '「我的」页没有区分解除与驳回');
+  assert.match(js, /b\.revokedAt \? b\.revokeReason : b\.rejectReason/, '原因取错了字段');
+});

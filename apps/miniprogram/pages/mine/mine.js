@@ -71,9 +71,14 @@ Page({
           id: b.id,
           communityName: b.communityName,
           displayName: b.displayName,
-          statusLabel: b.status === 'PENDING' ? '审核中' : '已驳回',
+          /*
+           * 「申请被驳回」和「已生效的绑定被物业解除」在库里都是 REJECTED，
+           * 但对业主是完全不同的事。首页已经分开说了，这里不能还叫「已驳回」——
+           * 同一件事在两个页面两种说法，比说错更让人糊涂。
+           */
+          statusLabel: b.status === 'PENDING' ? '审核中' : b.revokedAt ? '已解除' : '已驳回',
           rejected: b.status === 'REJECTED',
-          rejectReason: b.rejectReason || '',
+          rejectReason: (b.revokedAt ? b.revokeReason : b.rejectReason) || '',
         }));
       this.setData({
         pendingBindings,

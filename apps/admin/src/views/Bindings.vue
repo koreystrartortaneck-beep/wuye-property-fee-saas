@@ -81,8 +81,37 @@
         </el-form-item>
         <el-form-item label="申请人"><span>{{ revoking?.applicantName || '—' }}</span></el-form-item>
         <el-form-item label="原因">
-          <!-- 业主端首页会原样显示这句话，所以要求填、且提示它可见 -->
-          <el-input v-model="revokeReason" type="textarea" :rows="2" placeholder="必填，业主可见，并记入审计" />
+          <!--
+            改成预置项 + 「其他」。
+            2026-08-02 实测：这里原本是个自由输入框，结果被填进了一句内部备注
+            （「业主体验全流程，临时解除，稍后重新申请」），业主端首页原样显示 ——
+            物业的人同样会写出「测试」「先解了再说」这种话。
+            常见情形就那么几种，选比写既快又稳，也不会写出业主看不懂的内部话。
+          -->
+          <el-select v-model="revokePreset" placeholder="请选择" style="width: 100%">
+            <el-option v-for="r in REVOKE_PRESETS" :key="r" :label="r" :value="r" />
+            <el-option label="其他（自行填写）" value="__other__" />
+          </el-select>
+          <el-input
+            v-if="revokePreset === '__other__'"
+            v-model="revokeCustom"
+            type="textarea"
+            :rows="2"
+            maxlength="60"
+            show-word-limit
+            placeholder="请用业主看得懂的话说明，例如「您已办理退租」"
+            style="margin-top: 8px"
+          />
+        </el-form-item>
+        <el-form-item label="业主将看到">
+          <!--
+            直接把业主端的原话摆出来。
+            「业主可见」四个字提醒不了任何人 —— 看到自己写的东西长什么样才会。
+          -->
+          <div class="revoke-preview">
+            该房屋的绑定已被物业解除。<br />
+            <span class="revoke-preview-quote">物业填写的原因：{{ revokeReason || '（未填写）' }}</span>
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -104,7 +133,7 @@
 <script setup lang="ts">
 import HouseCell from '../components/HouseCell.vue';
 import EmptyState from '../components/EmptyState.vue';
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { BINDING_RELATION_LABEL, BINDING_STATUS_LABEL } from '../composables';
 import { api, qs, type Page } from '../api';
@@ -135,29 +164,45 @@ const rejectDialog = ref(false);
 const rejectReason = ref('');
 const rejecting = ref<Binding | null>(null);
 const revokeDialog = ref(false);
-const revokeReason = ref('');
+/*
+ * 预置解除原因。覆盖真实会发生的几种情形，用业主看得懂的话写。
+ * 「其他」保留自由输入，但默认走预置 —— 默认值决定了大多数人会写出什么。
+ */
+const REVOKE_PRESETS = [
+  '您已办理退租，本房屋绑定同步解除',
+  '房屋已过户，原业主绑定解除',
+  '绑定的房号有误，请重新申请正确房号',
+  '经核实与本房屋无租住或产权关系',
+  '应业主本人要求解除绑定',
+];
+const revokePreset = ref('');
+const revokeCustom = ref('');
+const revokeReason = computed(() =>
+  revokePreset.value === '__other__' ? revokeCustom.value.trim() : revokePreset.value,
+);
 const revoking = ref<Binding | null>(null);
 /** 解除中：连点会重复提交；解除是权限撤销，和审核通过同一个等级 */
 const revoking2 = ref(false);
 
 function openRevoke(row: Binding) {
   revoking.value = row;
-  revokeReason.value = '';
+  revokePreset.value = '';
+  revokeCustom.value = '';
   revokeDialog.value = true;
 }
 
 async function doRevoke() {
   const row = revoking.value;
   if (!row || revoking2.value) return;
-  if (!revokeReason.value.trim()) {
-    ElMessage.warning('请填写解除原因（业主可见）');
+  if (!revokeReason.value) {
+    ElMessage.warning('请选择或填写解除原因（业主可见）');
     return;
   }
   revoking2.value = true;
   try {
     await api(`/admin/bindings/${row.id}/revoke`, {
       method: 'POST',
-      body: JSON.stringify({ reason: revokeReason.value.trim() }),
+      body: JSON.stringify({ reason: revokeReason.value }),
     });
     ElMessage.success('已解除绑定');
     revokeDialog.value = false;
@@ -216,5 +261,20 @@ onMounted(load);
 /* 解除绑定的警告条：动的是权限，必须先看到后果再填原因 */
 .revoke-warn {
   margin-bottom: var(--sp-3);
+}
+
+/* 业主端原话的预览：样式贴近小程序里的观感，让人看清自己写的话会怎么呈现 */
+.revoke-preview {
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--c-gray-50);
+  border: 1px solid var(--border);
+  font-size: var(--fs-13);
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+.revoke-preview-quote {
+  color: var(--text-secondary);
 }
 </style>

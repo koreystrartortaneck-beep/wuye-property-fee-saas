@@ -74,7 +74,23 @@ export class AuthService {
     const now = new Date();
     await this.prisma.raw.wxUser.update({ where: { id: wxUserId }, data: { phone, phoneBoundAt: now } });
 
-    const houses = await this.prisma.raw.house.findMany({ where: { ownerPhone: phone, status: 'ACTIVE' } });
+    /*
+     * 只匹配**在营物业公司**的房屋。
+     *
+     * 2026-08-02 实测：业主授权手机号后提示「已自动绑定 1 处房屋」，
+     * 而首页什么都没有 —— 匹配到的那套房属于一个已停用（DISABLED）的租户，
+     * 业主端已经把停用公司的房屋过滤掉了。于是系统宣称做了一件事，实际什么也没发生。
+     *
+     * 这是「宣称已生效、实际没生效」的又一例，而且发生在最不该发生的地方：
+     * 新业主进来的第一步。
+     */
+    const houses = await this.prisma.raw.house.findMany({
+      where: {
+        ownerPhone: phone,
+        status: 'ACTIVE',
+        community: { tenant: { status: 'ACTIVE' } },
+      },
+    });
     const matchedHouseIds = new Set(houses.map((h) => h.id));
     const existing = await this.prisma.raw.houseBinding.findMany({ where: { wxUserId } });
     const existingByHouse = new Map(existing.map((b) => [b.houseId, b]));

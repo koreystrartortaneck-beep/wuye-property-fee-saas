@@ -103,10 +103,25 @@ export class OwnerHousesService {
       throw new BizException(ErrorCode.BINDING_EXISTS);
     }
     if (exists) {
-      // 被拒后可重新申请
+      /*
+       * 被拒或被解除之后可以重新申请。
+       *
+       * 三个「上一轮的结论」都必须清掉，只清 rejectReason 是不够的：
+       * revokedAt 决定业主端显示「已解除」还是「申请未通过」，
+       * 留着它的话，这次申请若被驳回，首页会错误地说「房屋绑定已解除」——
+       * 而他这次根本没绑上过。
+       */
       return this.prisma.raw.houseBinding.update({
         where: { id: exists.id },
-        data: { status: 'PENDING', relation: dto.relation, applicantName: dto.applicantName, source: 'APPLY', rejectReason: null },
+        data: {
+          status: 'PENDING',
+          relation: dto.relation,
+          applicantName: dto.applicantName,
+          source: 'APPLY',
+          rejectReason: null,
+          revokedAt: null,
+          revokeReason: null,
+        },
       });
     }
     try {

@@ -462,3 +462,14 @@
   font-size: 25rpx;
   line-height: 1.6;
 }
+
+/* 物业填写的原因：视觉上要比上面那句系统说明弱一档，读起来才像「引用」 */
+.pending-reason {
+  margin-top: 10rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 12rpx;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 23rpx;
+  line-height: 1.6;
+}
