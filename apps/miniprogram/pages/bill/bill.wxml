@@ -82,7 +82,8 @@
                 <text class="bill-period">{{item.subline}}</text>
                 <view class="status {{item.paid ? 'status-paid' : ''}} {{item.overdue ? 'status-overdue' : ''}} {{item.settling ? 'status-settling' : ''}}">{{item.status}}</view>
               </view>
-              <button wx:if="{{!item.paid}}" class="gold-button bill-pay-btn" data-id="{{item.id}}" catchtap="payBill">缴费</button>
+              <!-- 用 view 而不是 button：button 自带的默认宽度会把左边的「到期 xx-xx · 待缴」挤到折行 -->
+              <view wx:if="{{!item.paid}}" class="gold-button bill-pay-btn" data-id="{{item.id}}" catchtap="payBill">缴费</view>
               <view wx:else class="chevron">›</view>
             </view>
           </view>

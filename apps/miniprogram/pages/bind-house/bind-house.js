@@ -2,7 +2,16 @@ const config = require('../../config');
 const { request } = require('../../utils/request');
 const { bindPhone, loadMyHouses } = require('../../utils/auth');
 
+/** 输入即搜的防抖间隔。太短等于不防抖，太长会让人以为没反应 */
+const DEBOUNCE_MS = 300;
+
 Page({
+  _kwTimer: null,
+  _houseTimer: null,
+  /** 请求序号：只认最后一次搜索的结果，防止先发后到的响应覆盖新结果 */
+  _kwTicket: 0,
+  _houseTicket: 0,
+
   data: {
     mockAuth: config.mockAuth, // true=输入手机号；false=微信授权按钮
     phone: '',
@@ -18,8 +27,16 @@ Page({
     maskedPhone: '',
     keyword: '',
     communities: [],
+    communityTotal: 0,
+    /** 被截断掉的条数。>0 时界面必须说出来，见 wxml 里的注释 */
+    communityMore: 0,
+    searching: false,
     selectedCommunity: null,
+    houseKeyword: '',
     houses: [],
+    houseTotal: 0,
+    houseMore: 0,
+    houseSearching: false,
     selectedHouse: null,
     applicantName: '',
     relationIndex: 0,
@@ -128,25 +145,98 @@ Page({
     await this.refreshPhoneState();
   },
 
+  /*
+   * 输入即搜。原来是「输入 + 点搜索按钮」，那颗按钮既难看又把输入框挤窄。
+   *
+   * 防抖 300ms 是必须的：不防抖就是每敲一个字发一次请求，
+   * 打「金港城」发三次，返回还可能乱序 —— 后到的那次覆盖先到的，
+   * 结果和最后输入的关键词对不上。ticket 递增就是防这个。
+   */
   onKeywordInput(e) {
-    this.setData({ keyword: e.detail.value });
+    const keyword = e.detail.value;
+    this.setData({ keyword });
+    clearTimeout(this._kwTimer);
+    if (!keyword.trim()) {
+      this.setData({ communities: [], communityTotal: 0, communityMore: 0, searching: false });
+      return;
+    }
+    this._kwTimer = setTimeout(() => this.searchCommunities(), DEBOUNCE_MS);
   },
 
   /** 方式二：搜索小区 → 选房号 → 提交申请 */
   async searchCommunities() {
-    const list = await request(`/owner/communities?keyword=${encodeURIComponent(this.data.keyword)}`);
-    this.setData({ communities: list, selectedCommunity: null, houses: [], selectedHouse: null });
-    if (list.length === 0) wx.showToast({ title: '未找到小区', icon: 'none' });
+    const keyword = this.data.keyword.trim();
+    if (!keyword) return;
+    const ticket = ++this._kwTicket;
+    this.setData({ searching: true });
+    try {
+      const res = await request(`/owner/communities?keyword=${encodeURIComponent(keyword)}`);
+      if (ticket !== this._kwTicket) return; // 已有更新的一次搜索在飞，丢弃这次的结果
+      const items = res.items || [];
+      this.setData({
+        communities: items,
+        communityTotal: res.total || items.length,
+        communityMore: Math.max(0, (res.total || items.length) - items.length),
+      });
+    } finally {
+      if (ticket === this._kwTicket) this.setData({ searching: false });
+    }
   },
 
   async pickCommunity(e) {
     const community = this.data.communities[e.currentTarget.dataset.index];
-    const houses = await request(`/owner/communities/${community.id}/houses`);
-    this.setData({ selectedCommunity: community, houses, selectedHouse: null });
+    this.setData({ selectedCommunity: community, houseKeyword: '', selectedHouse: null });
+    await this.searchHouses();
+  },
+
+  /** 退回小区选择。原来选错了没有任何出路，只能退出页面重进 */
+  resetCommunity() {
+    clearTimeout(this._houseTimer);
+    this.setData({
+      selectedCommunity: null,
+      houseKeyword: '',
+      houses: [],
+      houseTotal: 0,
+      houseMore: 0,
+      selectedHouse: null,
+    });
+  },
+
+  onHouseKeywordInput(e) {
+    this.setData({ houseKeyword: e.detail.value });
+    clearTimeout(this._houseTimer);
+    this._houseTimer = setTimeout(() => this.searchHouses(), DEBOUNCE_MS);
+  },
+
+  async searchHouses() {
+    const { selectedCommunity, houseKeyword } = this.data;
+    if (!selectedCommunity) return;
+    const ticket = ++this._houseTicket;
+    this.setData({ houseSearching: true });
+    try {
+      // 查询串单独拼：路径模板要保持成一条能与后端路由对上的字面路径
+      const query = houseKeyword.trim() ? `?keyword=${encodeURIComponent(houseKeyword.trim())}` : '';
+      const res = await request(`/owner/communities/${selectedCommunity.id}/houses` + query);
+      if (ticket !== this._houseTicket) return;
+      const items = res.items || [];
+      this.setData({
+        houses: items,
+        houseTotal: res.total || items.length,
+        houseMore: Math.max(0, (res.total || items.length) - items.length),
+      });
+    } finally {
+      if (ticket === this._houseTicket) this.setData({ houseSearching: false });
+    }
   },
 
   pickHouse(e) {
     this.setData({ selectedHouse: this.data.houses[e.currentTarget.dataset.index] });
+  },
+
+  onUnload() {
+    // 页面关了定时器还在跑 → setData 打到已销毁的页面上
+    clearTimeout(this._kwTimer);
+    clearTimeout(this._houseTimer);
   },
 
   onNameInput(e) {

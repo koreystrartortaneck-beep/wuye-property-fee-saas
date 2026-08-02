@@ -62,34 +62,58 @@ export class OwnerHousesService {
     }
   }
 
+  /*
+   * 这两个查询都必须回传 total。
+   *
+   * 原来它们只返回一个数组，上限分别写死 50 / 100 —— 是**静默截断**：
+   * 一个 213 户的小区，业主端拿到按 code 排序的前 100 条，
+   * 后一百多户的业主翻遍整个列表都找不到自己家，而界面上没有任何异样，
+   * 他只会得出「我家没登记」的结论。
+   *
+   * 截断本身不可避免（不能把 213 条全推给手机），
+   * 可避免的是**不说**。有了 total，业主端才能说「共 213 套，请输入房号缩小范围」。
+   */
+  private static readonly PAGE_SIZE = 20;
+
   async searchCommunities(keyword?: string) {
-    const list = await this.prisma.raw.community.findMany({
-      where: {
-        status: 'ACTIVE',
-        ...(keyword ? { name: { contains: keyword } } : {}),
-        tenant: { status: 'ACTIVE' },
-      },
-      include: { tenant: { select: { name: true } } },
-      take: 50,
-      orderBy: { createdAt: 'asc' },
-    });
-    return list.map((c) => ({ id: c.id, name: c.name, address: c.address, tenantName: c.tenant.name }));
+    const where = {
+      status: 'ACTIVE' as const,
+      ...(keyword ? { name: { contains: keyword } } : {}),
+      tenant: { status: 'ACTIVE' as const },
+    };
+    const [list, total] = await Promise.all([
+      this.prisma.raw.community.findMany({
+        where,
+        include: { tenant: { select: { name: true } } },
+        take: OwnerHousesService.PAGE_SIZE,
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.raw.community.count({ where }),
+    ]);
+    return {
+      items: list.map((c) => ({ id: c.id, name: c.name, address: c.address, tenantName: c.tenant.name })),
+      total,
+    };
   }
 
   /** 供申请绑定选择房号：只暴露 code/displayName */
   async listHouses(communityId: string, building?: string, keyword?: string) {
-    const list = await this.prisma.raw.house.findMany({
-      where: {
-        communityId,
-        status: 'ACTIVE',
-        ...(building ? { building } : {}),
-        ...(keyword ? { OR: [{ code: { contains: keyword } }, { displayName: { contains: keyword } }] } : {}),
-      },
-      select: { id: true, code: true, displayName: true, type: true, building: true },
-      take: 100,
-      orderBy: { code: 'asc' },
-    });
-    return list;
+    const where = {
+      communityId,
+      status: 'ACTIVE' as const,
+      ...(building ? { building } : {}),
+      ...(keyword ? { OR: [{ code: { contains: keyword } }, { displayName: { contains: keyword } }] } : {}),
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.raw.house.findMany({
+        where,
+        select: { id: true, code: true, displayName: true, type: true, building: true },
+        take: OwnerHousesService.PAGE_SIZE,
+        orderBy: { code: 'asc' },
+      }),
+      this.prisma.raw.house.count({ where }),
+    ]);
+    return { items, total };
   }
 
   async applyBinding(ownerId: string, dto: ApplyBindingDto) {

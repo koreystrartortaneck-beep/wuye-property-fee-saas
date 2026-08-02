@@ -18,50 +18,107 @@
         按钮文案 7 个字：原来的「微信授权手机号，自动匹配房屋」13 个字，
         真机实测折成两行、又粗又挤。「自动匹配房屋」上面的说明行已经讲了，
         按钮只说动作本身。
+
+        必须包一层 flex 行、按钮写 flex: 1 —— 不能靠 width: 100%。
+        原来就是 width: 100%，而真机上这颗按钮只有半屏宽、居中飘着。
+        <button> 自带一套我们控制不了的默认样式（含 margin 左右 auto），
+        它和 width 谁说了算，不同端不一样。flex: 1 是确定的：
+        父容器没有多余空间可分，auto margin 也就无处可去。
       -->
-      <button class="dark-button match-btn-full" open-type="getPhoneNumber" bindgetphonenumber="onGetPhone">
-        {{hasPhone ? '重新匹配名下房屋' : '微信授权手机号'}}
-      </button>
+      <view class="btn-row">
+        <button class="dark-button btn-fill" open-type="getPhoneNumber" bindgetphonenumber="onGetPhone">
+          {{hasPhone ? '重新匹配名下房屋' : '微信授权手机号'}}
+        </button>
+      </view>
     </block>
     <view wx:else class="phone-row">
       <input class="phone-input" type="number" maxlength="11" placeholder="请输入手机号"
              value="{{phone}}" bindinput="onPhoneInput" />
-      <button class="gold-button match-btn" bindtap="matchByPhone">匹配</button>
+      <!-- 不需要 open-type，就不用 <button>：用 view 才能完全控制尺寸 -->
+      <view class="gold-button inline-btn" bindtap="matchByPhone">匹配</view>
     </view>
   </view>
 
   <view class="bind-card card">
     <view class="bind-card-title">自助申请绑定</view>
     <view class="bind-card-desc">选择小区与房号，提交后由物业审核</view>
-    <view class="phone-row">
-      <input class="phone-input" placeholder="搜索小区名称" value="{{keyword}}" bindinput="onKeywordInput" />
-      <button class="gold-button match-btn" bindtap="searchCommunities">搜索</button>
-    </view>
 
-    <view wx:if="{{communities.length > 0 && !selectedCommunity}}" class="option-list">
-      <!--
-        小区行必须看得出可点。
-        原来只有内边距 + 一条底线，看着就是两行说明文字 ——
-        而这是新业主绑定房屋的第一步，认不出可点就卡在这里。
-        用与「我的」页菜单行一致的 › 箭头。
-      -->
-      <view class="option-item" wx:for="{{communities}}" wx:key="id"
-            data-index="{{index}}" bindtap="pickCommunity" hover-class="option-item-hover">
-        <view class="option-text">
-          <view class="option-main">{{item.name}}</view>
-          <view class="option-sub">{{item.tenantName}} {{item.address || ''}}</view>
+    <!--
+      没有「搜索」按钮：输入即搜。
+      原来旁边挂着一颗金色大按钮，一是难看（业主两次指出「不协调」），
+      二是它把输入框挤到放不下一个小区名。
+      而搜索这个动作本来就不需要按钮 —— 边打边出结果更快，也少一次点击。
+    -->
+    <block wx:if="{{!selectedCommunity}}">
+      <input class="search-input" placeholder="输入小区名称搜索" value="{{keyword}}"
+             confirm-type="search" bindinput="onKeywordInput" bindconfirm="searchCommunities" />
+
+      <view wx:if="{{searching}}" class="list-hint">搜索中…</view>
+      <view wx:elif="{{keyword && communities.length === 0}}" class="list-hint">没有找到「{{keyword}}」，换个关键词试试</view>
+      <view wx:elif="{{!keyword}}" class="list-hint">物业管理的小区可能不止一个，先搜到您住的那个</view>
+
+      <view wx:if="{{communities.length > 0}}" class="option-list">
+        <!--
+          小区行必须看得出可点。
+          原来只有内边距 + 一条底线，看着就是两行说明文字 ——
+          而这是新业主绑定房屋的第一步，认不出可点就卡在这里。
+          用与「我的」页菜单行一致的 › 箭头。
+        -->
+        <view class="option-item" wx:for="{{communities}}" wx:key="id"
+              data-index="{{index}}" bindtap="pickCommunity" hover-class="option-item-hover">
+          <view class="option-text">
+            <view class="option-main">{{item.name}}</view>
+            <view class="option-sub">{{item.tenantName}} {{item.address || ''}}</view>
+          </view>
+          <view class="option-arrow">›</view>
         </view>
-        <view class="option-arrow">›</view>
       </view>
-    </view>
+      <!-- 截断必须说出来，否则业主翻不到自己小区却以为「没登记」 -->
+      <view wx:if="{{communityMore > 0}}" class="list-hint">
+        共 {{communityTotal}} 个小区，只显示了前 {{communities.length}} 个，请输入更完整的名称
+      </view>
+    </block>
 
     <block wx:if="{{selectedCommunity}}">
-      <view class="picked-line">已选小区：{{selectedCommunity.name}}</view>
-      <view class="option-list house-grid">
-        <view class="house-option {{selectedHouse && selectedHouse.id === item.id ? 'house-option-active' : ''}}"
-              wx:for="{{houses}}" wx:key="id" data-index="{{index}}" bindtap="pickHouse">
-          {{item.displayName}}
+      <view class="picked-line">
+        <text class="picked-text">已选小区：{{selectedCommunity.name}}</text>
+        <text class="picked-change" bindtap="resetCommunity">更换 ›</text>
+      </view>
+
+      <!--
+        房号原来是把整个小区的房号一次性铺成一片圆角标签。
+        业主问：一两百户、好几个小区之后这怎么用？—— 确实不能用：
+          · 213 户就是 213 个标签，滚动几屏，找自己家靠肉眼扫
+          · 而后端只给前 100 条（按房号排序），后一半的人根本翻不到，
+            界面还什么都不说
+        改成「输入房号即搜 + 列表」，并把总数说出来。
+      -->
+      <input class="search-input" placeholder="输入房号搜索，如 1-101 或 101"
+             value="{{houseKeyword}}" confirm-type="search"
+             bindinput="onHouseKeywordInput" bindconfirm="searchHouses" />
+
+      <view wx:if="{{houseSearching}}" class="list-hint">搜索中…</view>
+      <view wx:elif="{{houses.length === 0}}" class="list-hint">
+        {{houseKeyword ? '没有找到这个房号，请检查后重试，或联系物业确认登记情况' : '该小区暂无可绑定房屋'}}
+      </view>
+
+      <!--
+        列表要限高滚动。20 行铺开有整整两屏，
+        姓名、与房屋关系、提交按钮全被推到看不见的地方 ——
+        业主选完房号会以为「就这样了」，不知道下面还有必填项。
+      -->
+      <scroll-view wx:if="{{houses.length > 0}}" scroll-y class="option-list option-scroll">
+        <view class="option-item {{selectedHouse && selectedHouse.id === item.id ? 'option-item-active' : ''}}"
+              wx:for="{{houses}}" wx:key="id" data-index="{{index}}" bindtap="pickHouse"
+              hover-class="option-item-hover">
+          <view class="option-text">
+            <view class="option-main">{{item.displayName}}</view>
+          </view>
+          <view class="option-arrow">{{selectedHouse && selectedHouse.id === item.id ? '✓' : '›'}}</view>
         </view>
+      </scroll-view>
+      <view wx:if="{{houseMore > 0}}" class="list-hint">
+        共 {{houseTotal}} 套房屋，只显示了前 {{houses.length}} 套，请输入房号缩小范围
       </view>
 
       <block wx:if="{{selectedHouse}}">
@@ -75,7 +132,10 @@
             <view class="form-input picker-value">{{relations[relationIndex].label}} ›</view>
           </picker>
         </view>
-        <button class="dark-button apply-btn" bindtap="submitApply">提交绑定申请</button>
+        <!-- 无 open-type，用 view：宽度完全由我们的 CSS 决定 -->
+        <view class="dark-button apply-btn {{submitting ? 'btn-busy' : ''}}" bindtap="submitApply">
+          {{submitting ? '提交中…' : '提交绑定申请'}}
+        </view>
       </block>
     </block>
   </view>

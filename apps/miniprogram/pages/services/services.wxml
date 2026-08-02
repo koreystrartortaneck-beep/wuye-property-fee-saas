@@ -30,7 +30,8 @@
             <view class="svc-desc">{{item.desc}}</view>
             <view class="svc-bottom">
               <view class="svc-price"><text class="svc-cur">¥</text>{{item.price}}<text class="svc-unit"> {{item.unit}}</text></view>
-              <button class="gold-button svc-btn" data-index="{{index}}" bindtap="book">预约</button>
+              <!-- 用 view 而不是 button：button 会抢走比内容多得多的宽度，把价格挤成两行 -->
+              <view class="gold-button svc-btn" data-index="{{index}}" bindtap="book">预约</view>
             </view>
           </view>
         </view>

@@ -31,16 +31,57 @@
   font-size: 28rpx;
 }
 
-.match-btn {
-  /*
-   * 只占内容宽。原来只写了 flex-shrink: 0 —— 而小程序 button 的基准宽度
-   * 远大于内容，不收缩反而让它把输入框挤掉一半：
-   * 「搜索」两个字占了整行的 45%，输入框反倒放不下小区名。
-   */
+/*
+ * flex 行里的次要按钮。用 <view> 而不是 <button> ——
+ * <button> 自带一套我们控制不了的默认样式，加了 width: auto 依然被撑得很大
+ * （业主两次指出「这个按钮没必要那么大」，两次都没修掉）。
+ * 换成 view 之后宽度就是我们说了算。
+ */
+.inline-btn {
   flex-shrink: 0;
   width: auto;
   height: 88rpx;
-  padding: 0 44rpx;
+  padding: 0 40rpx;
+}
+
+/*
+ * 通栏按钮必须靠父容器的 flex 撑开，不能靠 width: 100%。
+ * <button open-type> 是唯一不能换成 view 的情况（授权能力只有 button 有），
+ * 而它在真机上不听 width: 100%，只有半屏宽、居中飘着。
+ * flex: 1 是确定的：父容器没有多余空间，按钮自身的默认 margin 也就无处可去。
+ */
+.btn-row {
+  margin-top: 20rpx;
+  display: flex;
+}
+
+.btn-fill {
+  flex: 1;
+  min-width: 0;
+  height: 84rpx;
+}
+
+/* 输入即搜的搜索框：整行独占，旁边不再挂按钮 */
+.search-input {
+  margin-top: 26rpx;
+  width: 100%;
+  height: 88rpx;
+  padding: 0 30rpx;
+  border-radius: 999rpx;
+  background: rgba(37, 28, 56, 0.05);
+  font-size: 28rpx;
+  box-sizing: border-box;
+}
+
+/*
+ * 列表的状态说明：搜索中 / 无结果 / 被截断。
+ * 尤其是被截断 —— 不说的话，业主翻不到自己家只会以为物业没登记。
+ */
+.list-hint {
+  margin-top: 20rpx;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: var(--text-4, #8b8199);
 }
 
 .option-list {
@@ -87,27 +128,47 @@
 
 .picked-line {
   margin-top: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
   font-size: 26rpx;
   color: var(--plum-2, #5a4680);
   font-weight: 700;
 }
 
-.house-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18rpx;
+/* 小区名可能很长，省略它而不是把右边的「更换」挤出屏幕 */
+.picked-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.house-option {
-  padding: 18rpx 26rpx;
-  border-radius: 999rpx;
-  background: rgba(37, 28, 56, 0.05);
-  font-size: 24rpx;
+/* 选错小区原来没有任何出路，只能退出页面重进 */
+.picked-change {
+  flex-shrink: 0;
+  color: var(--gold-deep, #b8862f);
+  font-weight: 700;
 }
 
-.house-option-active {
-  background: linear-gradient(145deg, var(--note, #fff1c8), var(--gold, #c9a66b));
+/* 选中的房号：整行标出来，不再用一片圆角标签铺满屏幕 */
+.option-item-active {
+  background: rgba(201, 166, 107, 0.12);
+  border-radius: 20rpx;
+  padding-left: 20rpx;
+  padding-right: 20rpx;
+}
+
+.option-item-active .option-main {
+  color: var(--gold-deep, #b8862f);
   font-weight: 800;
+}
+
+/* 提交中：变灰并让人看出点不动了 */
+.btn-busy {
+  opacity: 0.6;
 }
 
 .form-row {
@@ -148,11 +209,6 @@
   padding-top: 32rpx;
 }
 
-.match-btn-full {
-  width: 100%;
-  height: 84rpx;
-  margin-top: 8rpx;
-}
 
 /*
  * picker 必须自己参与 flex 布局。
@@ -165,4 +221,14 @@
 picker {
   flex: 1;
   min-width: 0;
+}
+
+/*
+ * 房号列表限高滚动。
+ * 20 行铺开有两屏高，会把姓名、与房屋关系、提交按钮整个推出视野 ——
+ * 业主选完房号就以为完事了，根本不知道下面还有必填项。
+ * 约七行的高度：够看出「这是个可滚的列表」，又不至于淹掉表单。
+ */
+.option-scroll {
+  max-height: 620rpx;
 }

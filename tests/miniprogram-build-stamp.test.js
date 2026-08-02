@@ -37,7 +37,12 @@ async function stampOfCopy(t, mutate) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mp-stamp-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const copy = path.join(dir, 'miniprogram');
-  fs.cpSync(MP, copy, { recursive: true });
+  /*
+   * 必须跳过点开头的文件：并发跑测试时，别的用例的探针
+   * （utils/.upload-timeout-probe.js）可能在 cpSync 走到它之前就被删了 → ENOENT。
+   * 它们本来也不参与指纹计算，复制过来没有意义。
+   */
+  fs.cpSync(MP, copy, { recursive: true, filter: (src) => !path.basename(src).startsWith('.') });
   if (mutate) mutate(copy);
   const { computeStamp } = await import(`file://${STAMPER}`);
   return computeStamp(copy);
