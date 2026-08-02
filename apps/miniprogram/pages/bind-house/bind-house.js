@@ -58,14 +58,36 @@ Page({
   },
 
   async afterBind(res) {
-    await loadMyHouses();
+    const houses = await loadMyHouses();
     wx.hideLoading();
     if (res.matchedHouses > 0) {
       wx.showToast({ title: `已自动绑定 ${res.matchedHouses} 处房屋`, icon: 'success' });
       setTimeout(() => wx.switchTab({ url: '/pages/index/index' }), 1200);
-    } else {
-      wx.showToast({ title: '未匹配到登记房屋，请在下方申请绑定', icon: 'none', duration: 2500 });
+      return;
     }
+    /*
+     * 没匹配到房屋 ≠ 授权失败。
+     *
+     * 原文案是「未匹配到登记房屋，请在下方申请绑定」—— 手机号其实已经绑上了
+     * （物业从此能联系到你），这句话却让人以为整件事失败了。
+     * 而对**已经有房屋**的业主更莫名其妙：让他去「申请绑定」他已经绑好的房。
+     * 2026-08-01 实测撞到这一幕。
+     *
+     * 所以先肯定已完成的那件事，再按他有没有房屋给出不同的下一步。
+     */
+    if (houses.length > 0) {
+      wx.showToast({ title: '手机号已绑定，物业可联系到您', icon: 'none', duration: 2500 });
+      setTimeout(() => wx.switchTab({ url: '/pages/index/index' }), 1600);
+      return;
+    }
+    wx.showModal({
+      title: '手机号已绑定',
+      content:
+        '但物业登记的业主手机号里没有这个号码，所以没能自动匹配到房屋。\n\n'
+        + '请在下方「自助申请绑定」选择您的小区与房号，提交后由物业审核。',
+      showCancel: false,
+      confirmText: '知道了',
+    });
   },
 
   onKeywordInput(e) {

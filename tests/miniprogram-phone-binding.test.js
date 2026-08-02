@@ -114,3 +114,55 @@ test('绑定成功后刷新本页——否则那一行还停在「未绑定」',
   // 顺带匹配到房屋是意外之喜，要说出来
   assert.match(body, /matchedHouses/, '没有告知自动匹配到了几处房屋');
 });
+
+/*
+ * ── 手机号绑上了但没匹配到房屋 —— 不能说成失败 ──
+ *
+ * 2026-08-01 实测撞到的：业主授权了手机号，而物业没在房屋档案里登记这个号码，
+ * 于是 matchedHouses = 0，页面弹出「未匹配到登记房屋，请在下方申请绑定」。
+ *
+ * 两处不对：
+ *   · 手机号**已经绑上了**（物业从此能联系到他），这句话让人以为整件事失败了
+ *   · 对已经有房屋的业主，让他去「申请绑定」他已经绑好的房，更莫名其妙
+ *
+ * 同一类问题：动作成功了，提示却让人以为失败。
+ */
+
+function afterBindBody() {
+  const src = read('pages/bind-house/bind-house.js').replace(/\/\*[\s\S]*?\*\//g, '');
+  const m = /\n  (?:async )?afterBind\s*\(/.exec(src);
+  assert.ok(m, '找不到 afterBind');
+  const open = src.indexOf('{', m.index + m[0].length - 1);
+  let d = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') d++;
+    else if (src[i] === '}') {
+      d--;
+      if (d === 0) return src.slice(open + 1, i);
+    }
+  }
+  throw new Error('括号不配对');
+}
+
+test('绑定手机号后先肯定「手机号已绑定」这件已完成的事', () => {
+  const body = afterBindBody();
+  assert.match(body, /手机号已绑定/, '没有肯定已完成的动作');
+  assert.ok(
+    !/未匹配到登记房屋，请在下方申请绑定/.test(body),
+    '仍在用那句把成功说成失败的文案',
+  );
+});
+
+test('已有房屋的业主不该被叫去「申请绑定」他已经绑好的房', () => {
+  assert.match(afterBindBody(), /houses\.length > 0/, '没有按有没有房屋分开处理');
+});
+
+test('没有房屋时才引导去自助申请，并说清为什么没匹配上', () => {
+  /*
+   * 「没匹配上」的真实原因是物业没在房屋档案里登记这个号码 ——
+   * 不说清楚的话，业主会反复去点那个授权按钮。
+   */
+  const body = afterBindBody();
+  assert.match(body, /物业登记的业主手机号里没有这个号码/, '没有解释为什么没匹配上');
+  assert.match(body, /自助申请绑定/, '没有指向下一步');
+});
