@@ -106,6 +106,22 @@ export class CommunitiesService {
     ['serviceOrder', '服务预约'],
     ['invoiceApplication', '发票申请'],
     ['communityCollectionPolicy', '收款策略'],
+    /*
+     * 审计记录必须算进来，而且必须排在最后 —— 它是最常见、也最不好懂的那一条。
+     *
+     * 我先做错过一次：试图在删小区时把审计行的 communityId 摘成 null，
+     * 结果撞上 AuditLog 的 BEFORE UPDATE 触发器
+     * （SIGNAL 45000 'AuditLog is append-only: UPDATE is forbidden'），
+     * 于是删小区从「拒绝并说明原因」变成了「50000 服务器内部错误」—— 更糟。
+     *
+     * 那个触发器不是障碍，是设计：审计不可改、不可删，被审计引用的父记录
+     * 也不可动（迁移里写着 "Parent keys are immutable once referenced by an
+     * audit row"）。也就是说 —— **一个有过历史的小区，本来就不该能被删掉**。
+     *
+     * 所以正确的做法不是绕开它，而是让预检如实说出来：
+     * 原先它不在清单里，预检全绿、界面显示可以删，数据库在最后一步拒绝。
+     */
+    ['auditLog', '审计记录'],
   ];
 
   /**
@@ -132,38 +148,24 @@ export class CommunitiesService {
       if (n > 0) attached.push(`${label} ${n} 条`);
     }
     if (attached.length > 0) {
+      /*
+       * 审计记录要单独交代一句。其余几项物业能自己去清，
+       * 而审计是**永远清不掉的**（按设计），只说「请先清理」等于让人做一件做不到的事。
+       */
+      const hasAudit = attached.some((a) => a.startsWith('审计记录'));
       throw new BizException(
         ErrorCode.VALIDATION,
-        `「${community.name}」下还有 ${attached.join('、')}，不能删除。请先转移或清理这些数据，或改为停用该小区。`,
+        `「${community.name}」下还有 ${attached.join('、')}，不能删除。` +
+          (hasAudit
+            ? '审计记录按规定不可删除，因此这个小区无法再删除——请改为「停用」，停用后业主端不再显示它。'
+            : '请先转移或清理这些数据，或改为停用该小区。'),
       );
     }
 
+    await this.prisma.t.community.delete({ where: { id } });
     /*
-     * 审计行必须先摘钩，否则小区永远删不掉。
-     *
-     * AuditLog 有一条指向 Community 的外键（..._restrict_fkey）。
-     * 而任何一次对该小区的后台操作 —— 包括「删掉它下面的房屋」这个
-     * 删小区的**前置步骤** —— 都会写下一条带 communityId 的审计。
-     * 于是上面那圈挂载清点全部为 0、界面显示可以删，
-     * 数据库却在最后一步拒绝，还回一句「关联的数据不存在或已被删除」——
-     * 正好说反了：不是不存在，是还有人指着它。
-     *
-     * 库里那个「【勿用】审计测试遗留-待删」删不掉，就是这么来的。
-     *
-     * 不能删审计行：那是历史，删除一个小区不该抹掉它发生过什么。
-     * communityId 本来就是可空的，摘成 null 即可 ——
-     * tenantId、动作、资源、摘要全部原样保留，只是不再挂在一个已消失的小区上。
-     */
-    const detached = await this.prisma.raw.$transaction(async (tx) => {
-      const r = await tx.auditLog.updateMany({ where: { tenantId: community.tenantId, communityId: id }, data: { communityId: null } });
-      await tx.community.delete({ where: { id } });
-      return r.count;
-    });
-
-    /*
-     * 删小区原来完全没有审计。
-     * 摘钩之后更需要它：那些历史审计行不再指向任何小区，
-     * 「这个小区去哪了」只剩这一条记录能回答。
+     * 删小区补审计（原来完全没有）。
+     * 能走到这里说明该小区从未产生过任何审计 —— 见上面 auditLog 那条挂载校验。
      */
     await this.audit.append({
       tenantId: community.tenantId,
@@ -174,9 +176,9 @@ export class CommunitiesService {
       resourceType: 'Community',
       resourceId: id,
       beforeSummary: { name: community.name },
-      afterSummary: { event: 'COMMUNITY_DELETE', detachedAuditLogs: detached },
+      afterSummary: { event: 'COMMUNITY_DELETE' },
     });
-    return { deleted: true, name: community.name, detachedAuditLogs: detached };
+    return { deleted: true, name: community.name };
   }
 }
 

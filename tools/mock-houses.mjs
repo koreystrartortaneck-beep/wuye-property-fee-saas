@@ -9,7 +9,8 @@
  *
  *   node tools/mock-houses.mjs create [户数]   默认 200
  *   node tools/mock-houses.mjs list            看现在有多少
- *   node tools/mock-houses.mjs clean           删掉本脚本造的全部房屋与小区
+ *   node tools/mock-houses.mjs clean           删掉本脚本造的房屋；小区能删就删、
+ *                                              删不掉就停用（见 cleanOne 里的说明）
  *
  * 凭据从环境变量读，不写进代码：
  *   ADMIN_USER=xxx ADMIN_PASS=xxx node tools/mock-houses.mjs create
@@ -161,11 +162,29 @@ async function cleanOne(token, c) {
     }
     console.log(`${c.name}：删除 ${removed} 套${blocked.length ? `，${blocked.length} 套有数据挂着未删` : ''}`);
 
-    if (blocked.length === 0) {
+    if (blocked.length > 0) {
+      console.log(`  小区保留（还有房屋）——处理完挂着的数据后再跑一次 clean`);
+      return;
+    }
+    /*
+     * 小区能不能删，取决于它有没有产生过审计。
+     *
+     * 而「删掉它的房屋」本身就会写审计 —— 也就是说，
+     * **一个装过房屋的测试小区，清完房屋之后就再也删不掉了**。
+     * 这不是 bug：AuditLog 是数据库级别的只读追加，
+     * 被审计引用的父记录不可动，拿可删除性换审计完整性。
+     *
+     * 所以这里先试删，删不掉就停用 —— 停用之后业主端搜不到它，
+     * 后台还留着一条壳记录。必须如实说出来：
+     * 一个说「已清理完毕」却留下东西的脚本，比不清理更坏。
+     */
+    try {
       await call(`/admin/communities/${c.id}`, { method: 'DELETE' }, token);
       console.log(`  小区已删除`);
-    } else {
-      console.log(`  小区保留（还有房屋）——处理完挂着的数据后再跑一次 clean`);
+    } catch (e) {
+      await call(`/admin/communities/${c.id}`, { method: 'PATCH', body: { status: 'DISABLED' } }, token);
+      console.log(`  小区无法删除，已改为停用（业主端不再显示）`);
+      console.log(`    原因：${e.message.replace(/^.*→ \d+ /, '')}`);
     }
   }
 }

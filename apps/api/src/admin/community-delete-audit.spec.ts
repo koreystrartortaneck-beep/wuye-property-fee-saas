@@ -1,113 +1,106 @@
 import { CommunitiesService } from './communities.controller';
 
 /**
- * 2026-08-02：造体验数据前先做了一次「造 3 户 → 立刻清理」的演练，
- * 结果清理卡在最后一步 —— **房屋全删光了，小区还是删不掉。**
+ * 「删光房屋之后小区还是删不掉」—— 这条我先做错了一次，记在这里。
  *
- * 原因是一个自锁：
+ * 现象：造 200 户体验数据之前先演练「造 3 户 → 立刻清理」，
+ * 房屋全删光了，删小区仍然失败。
  *
- *   · AuditLog 有一条指向 Community 的外键（..._restrict_fkey）
- *   · 删小区的前置步骤是「先删光它下面的房屋」
- *   · 而每删一套房屋都会写一条带 communityId 的审计
- *   · 于是删完房屋的那一刻，小区反而被刚写下的审计钉死了
+ * 我的第一版判断是「自锁，应该绕开」：
+ *   · AuditLog 有一条指向 Community 的外键
+ *   · 删小区的前置步骤是先删房屋，而每删一套房屋都会写一条带 communityId 的审计
+ *   · 于是删完房屋的那一刻，小区反而被刚写下的审计钉死
+ * 于是我在删小区时先把这些审计行的 communityId 摘成 null。
  *
- * 更糟的是它的表现：挂载清点全部为 0，界面显示可以删，数据库在最后一步拒绝，
- * 返回「关联的数据不存在或已被删除，请刷新后重试」—— 正好说反。
- * 物业照着提示去刷新、再删，再看到同一句话。
+ * **这是错的。** 上线后删小区直接 50000 —— AuditLog 上有一个
+ * BEFORE UPDATE 触发器，无条件 SIGNAL 45000
+ * 'AuditLog is append-only: UPDATE is forbidden'。
  *
- * 库里那个「【勿用】审计测试遗留-待删」删不掉，就是这么来的。
- * 而它不是新问题：任何一次对小区的后台操作都会写审计，
- * 也就是说**只要这个小区被用过，它就永远删不掉**。
+ * 而那个触发器不是障碍，是设计。同一个迁移里还写着
+ * "Parent keys are immutable once referenced by an audit row"：
+ * 审计不可改、不可删，被审计引用的父记录也不可动。
+ * 换句话说 —— **一个产生过历史的小区，本来就不该能被删掉**，
+ * 这是拿「可删除性」换「审计完整性」，换得对。
+ *
+ * 我不但绕错了方向，还把结果变坏了：原来是「拒绝并说明原因」，
+ * 被我改成了「服务器内部错误」。
+ *
+ * 正确的做法是让预检如实说出这件事，并给出真正可行的下一步（停用）。
  */
 
 function makeService(counts: Record<string, number> = {}) {
-  const calls: string[] = [];
-  let detachArgs: unknown = null;
+  const deleted: unknown[] = [];
   const audits: Record<string, unknown>[] = [];
-
-  const tx = {
-    auditLog: {
-      updateMany: (args: unknown) => {
-        detachArgs = args;
-        calls.push('detach');
-        return Promise.resolve({ count: 12 });
-      },
-    },
-    community: {
-      delete: () => {
-        calls.push('delete');
-        return Promise.resolve({});
-      },
-    },
-  };
-
   const model = (name: string) => ({ count: () => Promise.resolve(counts[name] ?? 0) });
   const prisma = {
-    raw: { $transaction: (fn: (t: unknown) => Promise<unknown>) => fn(tx) },
     t: new Proxy(
       {
         community: {
           findFirst: () => Promise.resolve({ id: 'c1', name: '云顶花园', tenantId: 't1' }),
+          delete: (args: unknown) => {
+            deleted.push(args);
+            return Promise.resolve({});
+          },
         },
       } as Record<string, unknown>,
-      {
-        get: (target, prop: string) => target[prop] ?? model(prop),
-      },
+      { get: (target, prop: string) => target[prop] ?? model(prop) },
     ),
   };
   const audit = { append: (e: Record<string, unknown>) => { audits.push(e); return Promise.resolve(); } };
-  return { service: new CommunitiesService(prisma as never, audit as never), calls, audits, detach: () => detachArgs };
+  return { service: new CommunitiesService(prisma as never, audit as never), deleted, audits };
 }
 
 describe('删除小区', () => {
-  it('先把审计行摘钩，再删小区——顺序反了照样删不掉', async () => {
-    const { service, calls } = makeService();
-    await service.remove('c1', 'admin1');
-    expect(calls).toEqual(['detach', 'delete']);
+  it('从未产生过审计的小区可以删', async () => {
+    const { service, deleted } = makeService();
+    const res = await service.remove('c1', 'admin1');
+    expect(res).toMatchObject({ deleted: true, name: '云顶花园' });
+    expect(deleted).toHaveLength(1);
   });
 
-  it('摘钩是置空 communityId，不是删审计行', async () => {
+  it('有审计记录就不许删——而且预检必须先拦住', async () => {
     /*
-     * 这条是红线。审计是历史 ——
-     * 删除一个小区不该抹掉「它存在期间发生过什么」。
-     * tenantId、动作、资源、摘要必须原样留着，只是不再挂在一个已消失的小区上。
+     * 关键在「先」。原先 auditLog 不在挂载清单里：
+     * 预检全绿 → 界面显示可以删 → 数据库在最后一步拒绝。
+     * 用户看到的是一个本可以提前说清的失败。
      */
-    const { service, detach } = makeService();
-    await service.remove('c1', 'admin1');
-    expect(detach()).toEqual({
-      where: { tenantId: 't1', communityId: 'c1' },
-      data: { communityId: null },
-    });
+    const { service, deleted } = makeService({ auditLog: 7 });
+    await expect(service.remove('c1', 'admin1')).rejects.toThrow(/审计记录 7 条/);
+    expect(deleted).toHaveLength(0);
   });
 
-  it('摘钩与删除在同一个事务里', async () => {
+  it('审计那条要说清「永远删不掉」，并给出真正可行的下一步', async () => {
     /*
-     * 分开做的话，摘钩成功而删除失败会留下一堆再也关联不回去的审计行 ——
-     * 小区还在，它的历史却断了。
+     * 其余几项（房屋、账单…）物业能自己去清，说「请先清理」是对的。
+     * 而审计**按设计永远清不掉** —— 对它说同一句话，
+     * 等于让人去做一件做不到的事，他会一直试。
      */
-    let inTx = false;
-    const { service } = makeService();
-    const prismaRaw = (service as unknown as { prisma: { raw: { $transaction: unknown } } }).prisma.raw;
-    const orig = prismaRaw.$transaction as (fn: (t: unknown) => Promise<unknown>) => Promise<unknown>;
-    prismaRaw.$transaction = (fn: (t: unknown) => Promise<unknown>) => {
-      inTx = true;
-      return orig(fn);
-    };
-    await service.remove('c1', 'admin1');
-    expect(inTx).toBe(true);
+    const { service } = makeService({ auditLog: 7 });
+    await expect(service.remove('c1', 'admin1')).rejects.toThrow(/不可删除/);
+    await expect(service.remove('c1', 'admin1')).rejects.toThrow(/停用/);
   });
 
-  it('还有房屋时不摘钩也不删', async () => {
-    const { service, calls } = makeService({ house: 3 });
+  it('不含审计时用原来的说法——那些数据是真的可以清的', async () => {
+    const { service } = makeService({ house: 3 });
     await expect(service.remove('c1', 'admin1')).rejects.toThrow(/房屋 3 条/);
-    expect(calls).toEqual([]);
+    await expect(service.remove('c1', 'admin1')).rejects.toThrow(/请先转移或清理/);
   });
 
-  it('删小区要留痕，并记下摘了多少条审计', async () => {
+  it('绝不尝试修改或删除审计行', async () => {
     /*
-     * 摘钩之后那些历史审计行不再指向任何小区，
-     * 「这个小区去哪了」就只剩这一条记录能回答。原来它压根没有审计。
+     * 这条是这次的教训本身。
+     * 任何对 AuditLog 的 UPDATE/DELETE 都会被数据库触发器打回，
+     * 而在代码里试一下的代价是：把一个清晰的业务拒绝变成 50000。
      */
+    const src = require('node:fs').readFileSync(
+      require('node:path').join(__dirname, 'communities.controller.ts'),
+      'utf8',
+    ) as string;
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(code).not.toMatch(/auditLog\.(update|updateMany|delete|deleteMany)/);
+  });
+
+  it('删小区要留痕', async () => {
     const { service, audits } = makeService();
     await service.remove('c1', 'admin7');
     expect(audits).toHaveLength(1);
@@ -116,9 +109,9 @@ describe('删除小区', () => {
       resourceType: 'Community',
       resourceId: 'c1',
       actorId: 'admin7',
-      communityId: null, // 小区都没了，不能再往这条审计上挂它
+      // 小区都没了，不能再往这条审计上挂它——挂了它自己就会变成下一个钉子
+      communityId: null,
     });
     expect(JSON.stringify(audits[0].beforeSummary)).toContain('云顶花园');
-    expect(JSON.stringify(audits[0].afterSummary)).toContain('12');
   });
 });
