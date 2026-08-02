@@ -27,6 +27,15 @@ export const ErrorCode = {
   NO_BINDING: { code: 41001, message: '未绑定该房屋' },
   BINDING_EXISTS: { code: 41002, message: '已绑定或已申请该房屋' },
   PHONE_REQUIRED: { code: 41003, message: '请先完成手机号授权' },
+  /*
+   * 单独一个码而不是复用 41001。
+   *
+   * 业主的绑定是好的、他什么也没做错，是物业公司被停用了。
+   * 复用「未绑定该房屋」会拼出「未绑定该房屋：该物业公司已停用」这种自相矛盾的话
+   * （BizException 的组合方式是 `${定义}：${补充}`），
+   * 而且会把业主引去重新绑定 —— 但停用公司的小区根本搜不到，他只会白试。
+   */
+  TENANT_DISABLED: { code: 41004, message: '该物业公司已停用，请联系物业' },
 
   // 42xxx 计费配置
   RULE_PARAM_INVALID: { code: 42001, message: '收费规则参数不合法' },

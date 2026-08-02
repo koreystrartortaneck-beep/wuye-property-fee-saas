@@ -37,9 +37,28 @@ export class OwnerHousesService {
     }
     const binding = await this.prisma.raw.houseBinding.findUnique({
       where: { wxUserId_houseId: { wxUserId: ownerId, houseId } },
+      include: { house: { select: { community: { select: { tenant: { select: { status: true } } } } } } },
     });
     if (!binding || binding.status !== 'ACTIVE') {
       throw new BizException(ErrorCode.NO_BINDING);
+    }
+    /*
+     * 物业公司被停用后，它的业主必须立刻失去访问权。
+     *
+     * 2026-08-02 实测发现：一个 status=DISABLED 的租户，它的业主端**完全不受影响**——
+     * 照样看得到账单、照样能缴费，钱照样进那家公司的商户号。停用等于没停。
+     *
+     * 这是这条校验唯一的收口点（账单、支付、工单、访客都经过它），
+     * 而它原来只看绑定状态、不看租户状态。
+     * 同一个判断 searchCommunities 里其实早就有了（tenant: { status: 'ACTIVE' }）——
+     * 有人想到过这件事，但只做了「不能申请绑定到停用公司」那一半，
+     * 漏了「已经绑着的怎么办」。
+     *
+     * 用单独的提示而不是笼统的 NO_BINDING：业主没做错任何事，
+     * 让他知道是物业侧的状态，才不会反复去点绑定。
+     */
+    if (binding.house?.community?.tenant?.status !== 'ACTIVE') {
+      throw new BizException(ErrorCode.TENANT_DISABLED);
     }
   }
 
@@ -142,7 +161,21 @@ export class OwnerHousesService {
 
   async myHouses(ownerId: string) {
     const bindings = await this.prisma.raw.houseBinding.findMany({
-      where: { wxUserId: ownerId, status: 'ACTIVE' },
+      /*
+       * 必须排除已停用的物业公司。
+       * 不排除的话，业主端首页会照常显示那家公司的房屋和待缴金额，
+       * 而他点「立即缴纳」时才会被 assertOwnerHouse 挡下 ——
+       * 先给希望再拒绝，比一开始就不显示更糟。
+       */
+      /*
+       * HouseBinding 只有 tenantId 标量、没有到 Tenant 的关系，
+       * 所以要经 house → community → tenant 走过去。
+       */
+      where: {
+        wxUserId: ownerId,
+        status: 'ACTIVE',
+        house: { community: { tenant: { status: 'ACTIVE' } } },
+      },
       include: {
         house: { include: { community: { select: { name: true, servicePhone: true } } } },
       },
