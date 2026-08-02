@@ -11,6 +11,7 @@
 .bind-card-desc {
   margin-top: 8rpx;
   font-size: 24rpx;
+  line-height: 1.6;
   color: var(--text-4, #8b8199);
 }
 

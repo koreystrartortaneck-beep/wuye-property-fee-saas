@@ -33,6 +33,11 @@ Page({
 
   async onShow() {
     await getApp().loginReady;
+    await this.refreshPhoneState();
+  },
+
+  /** 读手机号绑定状态。onShow 与「刚授权完」都要用 —— 后者原来漏了刷新 */
+  async refreshPhoneState() {
     try {
       const me = await request('/auth/me', { silent: true });
       this.setData({ hasPhone: !!me.hasPhone, maskedPhone: me.phone || '' });
@@ -96,18 +101,31 @@ Page({
      * 所以先肯定已完成的那件事，再按他有没有房屋给出不同的下一步。
      */
     if (houses.length > 0) {
+      await this.refreshPhoneState();
       wx.showToast({ title: '手机号已绑定，物业可联系到您', icon: 'none', duration: 2500 });
       setTimeout(() => wx.switchTab({ url: '/pages/index/index' }), 1600);
       return;
     }
-    wx.showModal({
-      title: '手机号已绑定',
-      content:
-        '但物业登记的业主手机号里没有这个号码，所以没能自动匹配到房屋。\n\n'
-        + '请在下方「自助申请绑定」选择您的小区与房号，提交后由物业审核。',
-      showCancel: false,
-      confirmText: '知道了',
-    });
+    /*
+     * 文案精简：原来 4 行 60 余字，业主指出「太长了」。
+     * 他只需要知道两件事 —— 为什么没匹配上、下一步做什么。
+     * 其余解释（物业登记的是买房时的号码之类）属于背景，删掉。
+     *
+     * 关掉弹窗后必须刷新本页：手机号**已经绑上了**，
+     * 卡片标题该从「手机号快速绑定」变成「按手机号匹配房屋」。
+     * 原来不刷新，业主关掉弹窗看到的还是「微信授权手机号」——
+     * 刚做完的事在界面上没有任何痕迹，会以为白点了。
+     */
+    await new Promise((resolve) =>
+      wx.showModal({
+        title: '手机号已绑定',
+        content: '物业未登记此号码，请在下方申请绑定房屋。',
+        showCancel: false,
+        confirmText: '知道了',
+        complete: resolve,
+      }),
+    );
+    await this.refreshPhoneState();
   },
 
   onKeywordInput(e) {

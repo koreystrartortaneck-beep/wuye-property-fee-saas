@@ -192,3 +192,32 @@ test('绑定页从 /auth/me 读状态，读不到按未绑定展示', () => {
   assert.match(body, /catch/, '读取失败会把页面打挂');
   assert.match(body, /silent: true/, '状态是后台信息，失败不该弹 toast');
 });
+
+test('授权手机号后要刷新本页状态——刚做完的事必须在界面上留下痕迹', () => {
+  /*
+   * 业主实测：关掉「手机号已绑定」的弹窗后，卡片还写着「微信授权手机号」。
+   * 手机号其实已经绑上了，界面却没有任何变化 —— 他会以为白点了。
+   */
+  const js = strip(read('pages/bind-house/bind-house.js'));
+  assert.match(js, /async refreshPhoneState\(\)/, '没有抽出状态刷新');
+  const i = js.indexOf('async afterBind');
+  const body = js.slice(i, js.indexOf('\n  },', i));
+  assert.match(body, /refreshPhoneState\(\)/, 'afterBind 结束后没有刷新页面状态');
+  // 两条分支（匹配到 / 没匹配到）都要刷
+  assert.ok(
+    (body.match(/refreshPhoneState\(\)/g) || []).length >= 2,
+    '只有一条分支刷新了状态',
+  );
+});
+
+test('没匹配到房屋的提示要短——业主只需知道为什么和下一步', () => {
+  /*
+   * 原文案 4 行 60 余字，业主指出「太长了」。
+   * showModal 的正文越长越没人读，尤其它挡住的正是要他去点的那张卡。
+   */
+  const js = strip(read('pages/bind-house/bind-house.js'));
+  const m = /content:\s*'([^']*)'/.exec(js.slice(js.indexOf('手机号已绑定')));
+  assert.ok(m, '找不到弹窗正文');
+  assert.ok(m[1].length <= 30, `弹窗正文 ${m[1].length} 字，太长：${m[1]}`);
+  assert.match(m[1], /申请绑定|下方/, '没有指出下一步');
+});
