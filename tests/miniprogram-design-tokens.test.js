@@ -134,6 +134,73 @@ test('未进入尺度的零散色值有记录，且数量不再增长', () => {
   );
 });
 
+/*
+ * ── flex 行里的 button 必须同时约束宽度 ──
+ *
+ * 业主连续指出两处：生活服务卡片的「¥5.00 元/次」被挤成两行（断在单位中间），
+ * 绑定页的「搜索」按钮占掉整行 45%、输入框反倒放不下小区名。
+ *
+ * 同一个根因：**小程序 button 的基准宽度远大于它的文字内容**。
+ * 只写 flex-shrink: 0（作者显然知道它在 flex 行里）反而更糟 ——
+ * 那等于把一个过宽的基准锁死，旁边的金额/输入框只能被挤到折行。
+ * 必须同时写 width: auto。
+ *
+ * 这条规律可以静态检查：凡是给 button 类写了 flex-shrink: 0 的，
+ * 就必须也写 width。
+ */
+test('给 button 写了 flex-shrink: 0 的，必须同时写 width', () => {
+  const glob = (dir) =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = path.join(dir, e.name);
+      return e.isDirectory() ? glob(p) : p.endsWith('.wxss') ? [p] : [];
+    });
+
+  const offenders = [];
+  for (const wxssPath of glob(path.join(MP, 'pages'))) {
+    const page = path.basename(path.dirname(wxssPath));
+    const wxmlPath = path.join(path.dirname(wxssPath), `${page}.wxml`);
+    if (!fs.existsSync(wxmlPath)) continue;
+    const wxml = fs.readFileSync(wxmlPath, 'utf8');
+    const wxss = fs.readFileSync(wxssPath, 'utf8');
+
+    // 只看真的用在 <button> 上的类
+    const btnClasses = new Set();
+    for (const m of wxml.matchAll(/<button[^>]*class="([^"]+)"/g)) {
+      for (const c of m[1].split(/\s+/)) if (c && !c.includes('{{')) btnClasses.add(c);
+    }
+    for (const c of btnClasses) {
+      const re = new RegExp(`^\\.${c.replace(/[-]/g, '\\-')}\\s*\\{([^}]*)\\}`, 'm');
+      const m = re.exec(wxss);
+      if (!m) continue;
+      /*
+       * 必须先剥掉注释再判。
+       * 我给这些规则写的注释里就有「必须同时写 width: auto」这句话 ——
+       * 不剥的话，把真正的声明删掉之后，断言仍然在注释上命中、守卫形同虚设。
+       * 实测：注入「删掉 bill-pay-btn 的 width」时守卫没红，就是这个原因。
+       * 今天第五次栽在「注释里有同一句话」上，这次把它写进检查器本身。
+       */
+      const rule = m[1].replace(/\/\*[\s\S]*?\*\//g, '');
+      if (!/flex-shrink:\s*0/.test(rule)) continue;
+      if (/width\s*:/.test(rule)) continue;
+      offenders.push(`${page} .${c}`);
+    }
+  }
+  assert.deepStrictEqual(
+    offenders,
+    [],
+    `这些 button 写了 flex-shrink: 0 却没写 width，会挤压同行的金额/输入框：\n  ${offenders.join('\n  ')}`,
+  );
+});
+
+test('价格不许折行——金额被断在单位中间是最不该出的错', () => {
+  const wxss = fs.readFileSync(path.join(MP, 'pages/services/services.wxss'), 'utf8');
+  const i = wxss.indexOf('.svc-price');
+  assert.ok(i > 0);
+  const rule = wxss.slice(i, wxss.indexOf('}', i)).replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(rule, /white-space:\s*nowrap/, '服务价格可能折行');
+  assert.match(rule, /flex-shrink:\s*0/, '服务价格会被按钮挤压');
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log(`  ✓ ${name}`); }

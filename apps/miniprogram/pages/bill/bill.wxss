@@ -290,7 +290,13 @@
 
 /* 卡内缴费按钮（小巧，不喧宾夺主） */
 .bill-pay-btn {
+  /*
+   * flex-shrink: 0 单独用是不够的 —— 小程序 button 的基准宽度远大于内容，
+   * 不收缩反而让它把左边的「到期 xx-xx · 待缴」挤到折行。
+   * 必须同时写 width: auto。
+   */
   flex-shrink: 0;
+  width: auto;
   height: 62rpx;
   padding: 0 40rpx;
   font-size: 26rpx;

@@ -32,7 +32,15 @@
 }
 
 .match-btn {
+  /*
+   * 只占内容宽。原来只写了 flex-shrink: 0 —— 而小程序 button 的基准宽度
+   * 远大于内容，不收缩反而让它把输入框挤掉一半：
+   * 「搜索」两个字占了整行的 45%，输入框反倒放不下小区名。
+   */
   flex-shrink: 0;
+  width: auto;
+  height: 88rpx;
+  padding: 0 44rpx;
 }
 
 .option-list {

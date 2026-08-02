@@ -100,6 +100,15 @@
   font-weight: 900;
   color: var(--gold-ink, #9b743a);
   font-family: DIN Alternate, sans-serif;
+  /*
+   * 价格绝不折行。
+   * 小程序的 button 在 flex 行里会抢走比内容多得多的空间，
+   * 价格没有 flex-shrink: 0 就被挤成「¥5.00 元/」/「次」两行 ——
+   * 金额被断在单位中间，是这一屏最不该出错的地方。
+   */
+  flex-shrink: 0;
+  white-space: nowrap;
+  line-height: 1.1;
 }
 
 .svc-cur {
@@ -114,6 +123,9 @@
 
 .svc-btn {
   height: 64rpx;
+  /* 按内容宽即可：不写 width 时小程序 button 会撑开，把价格挤到折行 */
+  width: auto;
+  flex-shrink: 0;
   padding: 0 34rpx;
   font-size: 25rpx;
 }

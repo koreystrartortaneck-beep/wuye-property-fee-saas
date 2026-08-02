@@ -106,6 +106,8 @@
 }
 
 .pay-btn {
+  /* 同 bill-pay-btn：只写 flex-shrink 会让按钮挤压左边的大金额 */
+  width: auto;
   height: 78rpx;
   padding: 0 30rpx;
   font-size: 26rpx;
