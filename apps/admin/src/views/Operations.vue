@@ -258,6 +258,8 @@ interface Metrics {
   outboxExhausted: number;
   /** 近 30 日发送失败的通知条数 */
   notifyFailedCount: number;
+  notifyUnauthorizedCount: number;
+  notifySystemFailedCount: number;
 }
 interface Readiness {
   healthy: boolean;
@@ -390,11 +392,31 @@ const metricCards = computed(() => {
       desc: '重试 5 次仍失败被放弃的通知；不为 0 意味着有业主没收到本该收到的账单',
     },
     {
-      key: 'notifyFailed',
-      name: '通知发送失败',
-      display: String(m.notifyFailedCount),
-      pass: m.notifyFailedCount === 0,
-      desc: `近 ${m.windowDays} 日失败条数；点「通知记录」可看每条的失败原因`,
+      /*
+       * 拆成两个数，因为它们要人做的事完全不同。
+       *
+       * 微信一次性订阅：业主授权一次只能收一条，额度用完再发就是 43101。
+       * 这不是故障 —— 要做的是引导业主重新授权，不是查系统。
+       * 生产实测 15 条失败里绝大多数是它。
+       *
+       * 混在一起的后果不是「数字难看」，而是真故障被埋掉：
+       * 模板 ID 配错、openid 失效这些必须有人处理的失败，
+       * 夹在十几条 43101 里没人会发现。所以只有「系统故障」那一项判红。
+       */
+      key: 'notifySystemFailed',
+      name: '通知系统故障',
+      display: String(m.notifySystemFailedCount),
+      pass: m.notifySystemFailedCount === 0,
+      desc: `近 ${m.windowDays} 日中排除「业主未授权」后仍失败的条数；不为 0 需要排查模板配置或网络`,
+    },
+    {
+      key: 'notifyUnauthorized',
+      name: '业主未授权提醒',
+      display: String(m.notifyUnauthorizedCount),
+      // 不判红：这不是故障，是微信一次性订阅的固有限制
+      pass: true,
+      desc: `近 ${m.windowDays} 日因业主未授权/额度用尽（微信 43101）发不出去的条数；`
+        + `需引导业主在「我的 → 开启缴费提醒」重新授权，不是系统问题`,
     },
     {
       key: 'loss',
