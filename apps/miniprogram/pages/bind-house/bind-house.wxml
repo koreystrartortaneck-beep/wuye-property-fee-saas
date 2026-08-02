@@ -8,8 +8,13 @@
     <view class="bind-card-desc">物业已登记您的手机号时，可自动匹配名下房屋</view>
     <!-- real 模式：微信授权按钮；mock 模式：手动输入 -->
     <block wx:if="{{!mockAuth}}">
+      <!--
+        按钮文案 7 个字：原来的「微信授权手机号，自动匹配房屋」13 个字，
+        真机实测折成两行、又粗又挤。「自动匹配房屋」上面的说明行已经讲了，
+        按钮只说动作本身。
+      -->
       <button class="dark-button match-btn-full" open-type="getPhoneNumber" bindgetphonenumber="onGetPhone">
-        微信授权手机号，自动匹配房屋
+        微信授权手机号
       </button>
     </block>
     <view wx:else class="phone-row">

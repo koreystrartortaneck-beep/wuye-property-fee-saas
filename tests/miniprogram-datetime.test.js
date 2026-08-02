@@ -144,3 +144,35 @@ test('用到时间格式化的页面都 require 了 datetime', () => {
   walk(path.join(MP, 'pages'));
   assert.deepStrictEqual(offenders, []);
 });
+
+/*
+ * fmtDateShort：同年只给 MM-DD，跨年才带年份。
+ *
+ * 由来：账单列表一行里挤着「到期 2026-08-31 · 待缴 · 缴费按钮」，
+ * 真机实测日期折成「到期 2026-08-」/「31」两行 ——
+ * 断在年月中间的日期比短日期难读得多，而「今年」的年份本来就是噪音。
+ */
+const { fmtDateShort } = require(path.join(MP, 'utils', 'datetime.js'));
+
+test('fmtDateShort：同年省略年份', () => {
+  assert.equal(fmtDateShort('2026-08-31T15:59:59.000Z', '', new Date('2026-08-02T00:00:00Z')), '08-31');
+});
+
+test('fmtDateShort：跨年保留年份——12 月出账、次年 1 月到期时年份才有信息量', () => {
+  assert.equal(fmtDateShort('2027-01-15T00:00:00.000Z', '', new Date('2026-12-20T00:00:00Z')), '2027-01-15');
+});
+
+test('fmtDateShort：同年判断按北京时间，不按 UTC', () => {
+  /*
+   * 12-31 的北京晚上，UTC 还是当年、北京已经跨年 —— parts() 统一转北京时间，
+   * 这里钉住「拿 UTC 年份比对」这种回归（那会让元旦前后短日期抽风）。
+   * 2026-12-31T20:00Z = 北京 2027-01-01 04:00 → now 在北京已是 2027 年，
+   * 2027-01-05 的账单应视为同年 → 省略年份。
+   */
+  assert.equal(fmtDateShort('2027-01-05T00:00:00.000Z', '', new Date('2026-12-31T20:00:00Z')), '01-05');
+});
+
+test('fmtDateShort：非法输入回退 fallback，不产出「NaN-NaN」', () => {
+  assert.equal(fmtDateShort(null, '—'), '—');
+  assert.equal(fmtDateShort('not-a-date', ''), '');
+});

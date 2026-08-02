@@ -1,7 +1,7 @@
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
 const labels = require('../../utils/labels');
-const { fmtDate } = require('../../utils/datetime');
+const { fmtDateShort } = require('../../utils/datetime');
 const STATUS_LABEL = labels.BILL_STATUS;
 
 const THEMES = ['sapphire', 'emerald', 'amber'];
@@ -161,9 +161,9 @@ Page({
       const settling = b.status === 'UNPAID' && b.settling;
       const overdue = !settling && b.status === 'UNPAID' && new Date(b.dueDate) < now;
       let subline = '';
-      if (b.status === 'PAID' && b.paidAt) subline = `缴于 ${fmtDate(b.paidAt)}`;
+      if (b.status === 'PAID' && b.paidAt) subline = `缴于 ${fmtDateShort(b.paidAt)}`;
       else if (settling) subline = '微信已扣款，正在入账';
-      else if (b.status === 'UNPAID') subline = `到期 ${fmtDate(b.dueDate)}`;
+      else if (b.status === 'UNPAID') subline = `到期 ${fmtDateShort(b.dueDate)}`;
       else if (b.status === 'REFUNDED') subline = '已退款';
       else if (b.status === 'REFUNDING') subline = '退款处理中';
       else subline = '已作废';

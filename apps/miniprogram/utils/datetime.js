@@ -57,6 +57,29 @@ function fmtDate(value, fallback = '') {
   return p ? `${p.y}-${p.M}-${p.D}` : fallback;
 }
 
+/**
+ * 紧凑日期：同年只给「MM-DD」，跨年才带年份。
+ *
+ * 为什么：账单列表一行里挤着「到期 2026-08-31 · 待缴徽章 · 缴费按钮」，
+ * 真机实测日期在年份后面被折成两行（「到期 2026-08-」/「31」）——
+ * 一个断在年月中间的日期比短日期难读得多。
+ * 而对「今年到期」的账单，年份本来就是噪音；跨年（12 月出账、次年 1 月到期）
+ * 时年份才有信息量，那时保留。
+ *
+ * now 可注入，测试用；生产不传。
+ */
+function fmtDateShort(value, fallback = '', now = new Date()) {
+  const p = parts(value);
+  if (!p) return fallback;
+  /*
+   * 注意传 Date 本身：parts() 只接受 Date 或 ISO 字符串，
+   * 传 now.getTime()（数字）会被 Date.parse 判成 NaN → 返回 null →
+   * 同年判断永远不成立，短日期静默失效。第一版就是这么写错的，测试抓住了。
+   */
+  const curY = parts(now);
+  return curY && curY.y === p.y ? `${p.M}-${p.D}` : `${p.y}-${p.M}-${p.D}`;
+}
+
 /** 北京时间到分：2026-07-27 16:08 */
 function fmtDateTime(value, fallback = '') {
   const p = parts(value);
@@ -69,4 +92,4 @@ function fmtDateTimeSec(value, fallback = '') {
   return p ? `${p.y}-${p.M}-${p.D} ${p.h}:${p.m}:${p.s}` : fallback;
 }
 
-module.exports = { fmtDate, fmtDateTime, fmtDateTimeSec };
+module.exports = { fmtDate, fmtDateShort, fmtDateTime, fmtDateTimeSec };

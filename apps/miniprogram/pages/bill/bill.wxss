@@ -217,6 +217,8 @@
 .bill-period {
   color: var(--text-4, #8b8199);
   font-size: 23rpx;
+  /* 日期绝不折行：断在年月中间的日期（「2026-08-」/「31」）比省略难读得多 */
+  white-space: nowrap;
 }
 
 .status {
