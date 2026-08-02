@@ -119,3 +119,16 @@
   font-size: 22rpx;
   color: var(--danger, #c45656);
 }
+
+/*
+ * picker 必须自己参与 flex 布局。
+ *
+ * <picker> 包着一个 flex: 1 的子元素时，那个 flex 是失效的 ——
+ * 真正的 flex 子项是外层的 picker，它按内容宽收缩。
+ * 结果同一列里，input 通栏、picker 缩成一颗小胶囊，看着参差不齐。
+ * 三个页面（绑定房屋 / 预约 / 访客）都是这个形状，一并统一。
+ */
+picker {
+  flex: 1;
+  min-width: 0;
+}

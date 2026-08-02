@@ -154,7 +154,18 @@ function render(node, scope) {
    * 不传的话 [disabled] 这类属性选择器在渲染里永远匹配不到 ——
    * 我据此会以为「禁用态没生效」，而真机上是生效的（第一版就这么误判过一次）。
    */
-  let extraAttr = '';
+  /*
+   * 带上原始的 WXML 元素名。
+   *
+   * 元素选择器（`picker { flex: 1 }`）此前是靠把选择器里的元素名改写成 HTML 标签
+   * 来支持的，而 view / picker / button / scroll-view 全都映射成 div ——
+   * 于是 `picker {}` 被改写成 `div {}`，命中页面上**每一个 div**。
+   * 2026-08-02 实测：给 picker 加 flex:1，整页布局塌了，而我一度以为是自己 CSS 写错。
+   *
+   * 改成用 data-wx 标记原始元素名，选择器改写成属性选择器，各元素就互不干扰了。
+   * 这是这类问题的第 4 次（前三次记在文件头），这次从根上解决。
+   */
+  let extraAttr = ` data-wx="${node.tag}"`;
   if (a.disabled !== undefined) {
     const raw = a.disabled;
     const val = /^\{\{[\s\S]*\}\}$/.test(raw) ? evalExpr(raw.replace(/^\{\{|\}\}$/g, ''), scope) : raw !== 'false';
@@ -169,7 +180,7 @@ function render(node, scope) {
      * 这是工具第 3 次骗我，改成自定义元素后选择器照常生效。
      */
     const st = `${style};background:#e6ded2;display:block`;
-    return `<image class="${cls}" style="${st}"></image>`;
+    return `<image class="${cls}" style="${st}" data-wx="image"></image>`;
   }
   if (node.tag === 'input' || node.tag === 'textarea') {
     const ph = a.placeholder ? interpolate(a.placeholder, scope) : '';
@@ -224,14 +235,31 @@ function rpx(css) { return css.replace(/([\d.]+)rpx/g, (_, n) => `${(parseFloat(
  *
  * 只在「{ 之前的选择器部分」替换，避免动到 text-align 这类属性名。
  */
-const ELEMENT_MAP = { image: 'img', text: 'span', view: 'div', 'scroll-view': 'div', 'rich-text': 'div' };
+/*
+ * 必须覆盖 TAG 里**所有**会被改名的元素，否则 `picker { flex: 1 }` 这类
+ * 元素选择器在预览里静默失配 —— 规则明明写了、渲染上看不出任何变化，
+ * 于是人会以为是自己的 CSS 没写对（2026-08-02 实测：为此改了三遍 picker 的样式）。
+ *
+ * 这是本工具第 4 次栽在「元素名没映射进 CSS 选择器」上，前三次记在文件头。
+ * 所以这里不再逐个手写，直接从 TAG 派生 —— 以后 TAG 加了新元素，这里自动跟上。
+ * 只排除 block（它渲染成 template-block，本来就不该被 CSS 选中）。
+ */
+const WX_ELEMENTS = Object.keys(TAG).filter((t) => t !== 'block');
 function mapSelectors(css) {
   return css.replace(/([^{}]+)(\{)/g, (all, sel, brace) => {
     // @media 等 at-rule 的前导部分不动
     if (/@\w/.test(sel)) return all;
     let out = sel;
-    for (const [wx, html] of Object.entries(ELEMENT_MAP)) {
-      out = out.replace(new RegExp(`(^|[\\s,>+~(])${wx}(?=$|[\\s,>+~:.\\[)])`, 'g'), `$1${html}`);
+    /*
+     * 改写成属性选择器而不是 HTML 标签名。
+     * 换成标签名会让 view / picker / button / scroll-view 全都变成 div，
+     * 于是 `picker {}` 命中每一个 div —— 见 render() 里 data-wx 那段注释。
+     */
+    for (const wx of WX_ELEMENTS) {
+      out = out.replace(
+        new RegExp(`(^|[\\s,>+~(])${wx}(?=$|[\\s,>+~:.\\[)])`, 'g'),
+        `$1[data-wx="${wx}"]`,
+      );
     }
     return out + brace;
   });
