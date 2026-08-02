@@ -1,7 +1,9 @@
 import { Body, Controller, Delete, Get, Injectable, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { AdminGuard } from '../auth/admin.guard';
+import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { Roles, RolesGuard } from '../auth/roles.decorator';
+import { AuditService } from '../audit/audit.service';
 import { ErrorCode } from '@pf/shared';
 import { BizException } from '../common/biz.exception';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
@@ -48,7 +50,10 @@ class UpdateCommunityDto {
 
 @Injectable()
 export class CommunitiesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   create(dto: CreateCommunityDto) {
     /*
@@ -113,8 +118,11 @@ export class CommunitiesService {
    * 停用（status=DISABLED）不够：停用后它不再参与出账、业主端也看不到，
    * 但仍留在那张表里。
    */
-  async remove(id: string) {
-    const community = await this.prisma.t.community.findFirst({ where: { id }, select: { id: true, name: true } });
+  async remove(id: string, adminId: string) {
+    const community = await this.prisma.t.community.findFirst({
+      where: { id },
+      select: { id: true, name: true, tenantId: true },
+    });
     if (!community) throw new BizException(ErrorCode.NOT_FOUND, '小区不存在或不属于当前物业公司');
 
     const client = this.prisma.t as unknown as Record<string, { count(args: unknown): Promise<number> }>;
@@ -130,8 +138,45 @@ export class CommunitiesService {
       );
     }
 
-    await this.prisma.t.community.delete({ where: { id } });
-    return { deleted: true, name: community.name };
+    /*
+     * 审计行必须先摘钩，否则小区永远删不掉。
+     *
+     * AuditLog 有一条指向 Community 的外键（..._restrict_fkey）。
+     * 而任何一次对该小区的后台操作 —— 包括「删掉它下面的房屋」这个
+     * 删小区的**前置步骤** —— 都会写下一条带 communityId 的审计。
+     * 于是上面那圈挂载清点全部为 0、界面显示可以删，
+     * 数据库却在最后一步拒绝，还回一句「关联的数据不存在或已被删除」——
+     * 正好说反了：不是不存在，是还有人指着它。
+     *
+     * 库里那个「【勿用】审计测试遗留-待删」删不掉，就是这么来的。
+     *
+     * 不能删审计行：那是历史，删除一个小区不该抹掉它发生过什么。
+     * communityId 本来就是可空的，摘成 null 即可 ——
+     * tenantId、动作、资源、摘要全部原样保留，只是不再挂在一个已消失的小区上。
+     */
+    const detached = await this.prisma.raw.$transaction(async (tx) => {
+      const r = await tx.auditLog.updateMany({ where: { tenantId: community.tenantId, communityId: id }, data: { communityId: null } });
+      await tx.community.delete({ where: { id } });
+      return r.count;
+    });
+
+    /*
+     * 删小区原来完全没有审计。
+     * 摘钩之后更需要它：那些历史审计行不再指向任何小区，
+     * 「这个小区去哪了」只剩这一条记录能回答。
+     */
+    await this.audit.append({
+      tenantId: community.tenantId,
+      communityId: null,
+      actorType: 'ADMIN',
+      actorId: adminId,
+      action: 'DELETE',
+      resourceType: 'Community',
+      resourceId: id,
+      beforeSummary: { name: community.name },
+      afterSummary: { event: 'COMMUNITY_DELETE', detachedAuditLogs: detached },
+    });
+    return { deleted: true, name: community.name, detachedAuditLogs: detached };
   }
 }
 
@@ -161,7 +206,7 @@ export class CommunitiesController {
    */
   @Roles('TENANT_ADMIN')
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Current() cur: CurrentAdmin, @Param('id') id: string) {
+    return this.service.remove(id, cur.adminId);
   }
 }

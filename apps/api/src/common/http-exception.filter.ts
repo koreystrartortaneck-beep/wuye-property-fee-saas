@@ -9,7 +9,7 @@ import {
   UnauthorizedException,
   ForbiddenException,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { ErrorCode } from '@pf/shared';
 import { redactAndTruncateText } from '../audit/audit.service';
 import { BizException } from './biz.exception';
@@ -92,6 +92,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const res = host.switchToHttp().getResponse<Response>();
+    // 请求方法用来区分 P2003 的两种相反方向，见下面那段注释
+    const req = host.switchToHttp().getRequest<Request>();
 
     if (exception instanceof BizException) {
       res.status(200).json({ code: exception.code, message: exception.message });
@@ -202,10 +204,27 @@ export class GlobalExceptionFilter implements ExceptionFilter {
             message: field ? `「${field}」已存在，不能重复` : '该记录已存在，不能重复',
           });
           return;
-        case 'P2003': // 外键约束失败
+        case 'P2003':
+          /*
+           * P2003 覆盖两种**方向相反**的外键失败，原来只给了其中一种的说法：
+           *
+           *   · 写入时，外键指向的记录不存在  → 「关联的数据不存在」，对
+           *   · 删除时，还有别的记录指着它    → 「关联的数据不存在」，完全说反了。
+           *     真实情况是它存在得好好的，正因为存在才删不掉。
+           *
+           * 2026-08-02 实测：删一个已经清空房屋的小区，界面告诉物业
+           * 「关联的数据不存在或已被删除，请刷新后重试」——
+           * 于是他去刷新，再删，再看到同一句话。这句话把人指向了完全错误的方向。
+           *
+           * Prisma 的错误里没有可靠字段区分这两种方向，但请求方法可以：
+           * DELETE 必然是「还被引用」那一种。
+           */
           res.status(200).json({
             code: ErrorCode.VALIDATION.code,
-            message: '关联的数据不存在或已被删除，请刷新后重试',
+            message:
+              req.method === 'DELETE'
+                ? '还有其他数据关联着它，不能删除。请先处理这些关联数据。'
+                : '关联的数据不存在或已被删除，请刷新后重试',
           });
           return;
         case 'P2025': // 目标记录不存在

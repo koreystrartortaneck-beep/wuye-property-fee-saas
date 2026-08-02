@@ -19,7 +19,8 @@ describe('GlobalExceptionFilter 校验错误汉化', () => {
       },
     } as never;
     filter.catch(new BadRequestException({ message }), {
-      switchToHttp: () => ({ getResponse: () => res }),
+      // getRequest 必须给：过滤器要靠请求方法区分 P2003 的两种相反方向
+      switchToHttp: () => ({ getResponse: () => res, getRequest: () => ({ method: 'POST' }) }),
     } as never);
     return payload;
   }
@@ -84,7 +85,9 @@ describe('未匹配路由必须回 HTTP 404', () => {
         return res;
       },
     } as never;
-    filter.catch(exception, { switchToHttp: () => ({ getResponse: () => res }) } as never);
+    filter.catch(exception, {
+      switchToHttp: () => ({ getResponse: () => res, getRequest: () => ({ method: 'GET' }) }),
+    } as never);
     return { status, body };
   }
 
