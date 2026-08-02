@@ -49,6 +49,8 @@ Page({
      */
     error: false,
     noHouse: false,
+    /** 无生效房屋时的申请状态：null=从没申请过 / {rejected,house,reason} */
+    pendingBinding: null,
     currentHouse: null,
     houses: [],
     unpaidTotal: '0.00',
@@ -70,7 +72,38 @@ Page({
     try {
       const houses = await loadMyHouses();
       if (houses.length === 0) {
-        this.setData({ ready: true, noHouse: true, unpaidTotal: '0.00', unpaidCount: 0, feed: [] });
+        /*
+         * 没有生效的房屋，不代表「什么都没做过」。
+         *
+         * myHouses 只返回 ACTIVE 绑定，所以提交了申请、正在等审核的业主
+         * 落到的是同一个分支 —— 首页原来对他说「首次使用请先绑定您的房屋」，
+         * 并给一个「立即绑定」按钮。他看不到任何申请痕迹，会合理地以为申请丢了，
+         * 于是再申请一次，然后撞上后端的唯一约束报「已存在绑定」。
+         * 而审核通过也没有任何通知（通知只有出账/到期/逾期三种），
+         * 他只能反复打开小程序碰运气 —— 申请之后就进了黑洞。
+         *
+         * 所以这里要把「从没申请过」「审核中」「被驳回」分开。
+         * 驳回尤其要说明原因，否则业主既不知道为什么，也不知道能不能再来一次。
+         */
+        let pending = null;
+        try {
+          const bindings = await request('/owner/my/bindings', { silent: true });
+          const latest = (bindings || []).find((b) => b.status === 'PENDING')
+            || (bindings || []).find((b) => b.status === 'REJECTED');
+          if (latest) {
+            pending = {
+              rejected: latest.status === 'REJECTED',
+              house: `${latest.communityName} ${latest.displayName}`,
+              reason: latest.rejectReason || '',
+            };
+          }
+        } catch (e) {
+          // 读不到申请状态时退回原来的引导，总比什么都不显示强
+        }
+        this.setData({
+          ready: true, noHouse: true, pendingBinding: pending,
+          unpaidTotal: '0.00', unpaidCount: 0, feed: [],
+        });
         return;
       }
       const nextHouse = app.globalData.currentHouse;

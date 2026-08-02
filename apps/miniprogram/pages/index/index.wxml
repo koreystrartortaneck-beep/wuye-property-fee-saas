@@ -14,17 +14,48 @@
     </view>
   </view>
 
-  <!-- 未绑定房屋引导 -->
+  <!--
+    未绑定房屋的三种情形，必须分开。
+    myHouses 只返回 ACTIVE 绑定，所以「从没申请过」「审核中」「被驳回」
+    原本落到同一个分支，首页一律说「首次使用请先绑定您的房屋」——
+    对已经申请过的人说这句话，他会以为申请丢了，然后再申请一次。
+  -->
   <view wx:if="{{ready && noHouse}}" class="hero-card">
     <view class="hero-kicker">PROPERTY SERVICE</view>
-    <view class="hero-title">{{'绑定房屋\n开启从容缴费'}}</view>
-    <view class="amount-panel">
-      <view class="panel-label">首次使用请先绑定您的房屋</view>
-      <view class="amount-row">
-        <view class="hero-amount amount"> </view>
-        <button class="gold-button pay-btn" bindtap="goBind">立即绑定</button>
+
+    <!-- ① 审核中：不给「立即绑定」，避免他重复申请撞唯一约束 -->
+    <block wx:if="{{pendingBinding && !pendingBinding.rejected}}">
+      <view class="hero-title">{{'绑定申请\n审核中'}}</view>
+      <view class="amount-panel">
+        <view class="panel-label">{{pendingBinding.house}}</view>
+        <view class="pending-note">物业审核通过后，这里会显示您的待缴账单。可在「我的」查看进度。</view>
       </view>
-    </view>
+    </block>
+
+    <!-- ② 被驳回：必须说明原因，并允许重新申请 -->
+    <block wx:elif="{{pendingBinding && pendingBinding.rejected}}">
+      <view class="hero-title">{{'绑定申请\n未通过'}}</view>
+      <view class="amount-panel">
+        <view class="panel-label">{{pendingBinding.house}}</view>
+        <view class="pending-note">{{pendingBinding.reason || '物业未说明原因，可联系物业后重新申请'}}</view>
+        <view class="amount-row">
+          <view class="hero-amount amount"> </view>
+          <button class="gold-button pay-btn" bindtap="goBind">重新申请</button>
+        </view>
+      </view>
+    </block>
+
+    <!-- ③ 从没申请过 -->
+    <block wx:else>
+      <view class="hero-title">{{'绑定房屋\n开启从容缴费'}}</view>
+      <view class="amount-panel">
+        <view class="panel-label">首次使用请先绑定您的房屋</view>
+        <view class="amount-row">
+          <view class="hero-amount amount"> </view>
+          <button class="gold-button pay-btn" bindtap="goBind">立即绑定</button>
+        </view>
+      </view>
+    </block>
   </view>
 
   <!-- 正常态 -->

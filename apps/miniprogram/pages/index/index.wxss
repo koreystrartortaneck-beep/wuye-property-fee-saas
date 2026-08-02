@@ -454,3 +454,11 @@
   font-size: 22rpx;
   line-height: 1.5;
 }
+
+/* 绑定申请状态说明：审核中/被驳回时替代金额区，语气要平静、信息要够 */
+.pending-note {
+  margin-top: 14rpx;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 25rpx;
+  line-height: 1.6;
+}
