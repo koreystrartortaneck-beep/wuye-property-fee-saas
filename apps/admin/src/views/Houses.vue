@@ -43,10 +43,16 @@
         </template>
       </el-table-column>
       <!-- 行已可点，操作列只留「编辑」；必须 .stop，否则点编辑会同时跳去档案页 -->
-      <el-table-column label="操作" width="150" fixed="right">
+      <el-table-column label="操作" width="220" fixed="right">
         <template #default="{ row }">
           <el-button size="small" type="primary" plain @click.stop="$router.push(`/houses/${row.id}`)">查档案</el-button>
           <el-button size="small" @click.stop="openEdit(row)">编辑</el-button>
+          <!--
+            导错一批房屋之后原本没有退路：只能停用，而停用的语义是
+            「这套房还在，只是暂时不收费」—— 错误数据于是永久留在库里，
+            还会挡住删小区（删小区要求下面没有房屋）。
+          -->
+          <el-button size="small" type="danger" plain @click.stop="remove(row)">删除</el-button>
         </template>
       </el-table-column>
       <!-- 原文案让用户自己去找「设置 → 小区信息」，现在按是否已有小区给出可点的下一步 -->
@@ -124,7 +130,7 @@
 import EmptyState from '../components/EmptyState.vue';
 import { ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs, type Page } from '../api';
 import { HOUSE_TYPE_LABEL, useCommunities } from '../composables';
 
@@ -271,6 +277,25 @@ async function doImport() {
     method: 'POST',
     body: { communityId: filter.value.communityId, rows: rowsCsv },
   });
+  await load();
+}
+async function remove(row: House) {
+  try {
+    await ElMessageBox.confirm(
+      `将永久删除「${row.displayName}」（${row.code}）。仅当这套房屋下没有账单、业主绑定、` +
+        '工单等数据时才能删除；若有，系统会拒绝并告知具体是什么。',
+      '删除房屋',
+      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
+    );
+  } catch {
+    return;
+  }
+  /*
+   * 后端拒绝时的 message 已经写清了「还有账单 3 条、业主绑定 1 条」，
+   * api() 会把它 toast 出来 —— 这里不要再包一层「删除失败」盖掉它。
+   */
+  await api(`/admin/houses/${row.id}`, { method: 'DELETE' });
+  ElMessage.success('已删除');
   await load();
 }
 </script>

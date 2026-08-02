@@ -146,6 +146,7 @@ enum AuditActorType {
 enum AuditAction {
   CREATE
   UPDATE
+  DELETE
   PUBLISH
   CANCEL
   PAY

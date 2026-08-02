@@ -1,10 +1,13 @@
-import { Body, Controller, Get, Injectable, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Injectable, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
-import { HOUSE_TYPES, HouseType } from '@pf/shared';
+import { ErrorCode, HOUSE_TYPES, HouseType } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
-import { RolesGuard } from '../auth/roles.decorator';
+import { Current, CurrentAdmin } from '../auth/current.decorator';
+import { Roles, RolesGuard } from '../auth/roles.decorator';
+import { BizException } from '../common/biz.exception';
+import { AuditService } from '../audit/audit.service';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { assertCommunityInTenant } from './community-scope';
 import { PrismaService } from '../prisma/prisma.service';
@@ -113,7 +116,10 @@ class UpdateHouseDto {
 
 @Injectable()
 export class HousesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /** 单行业务校验：住宅必须有面积 */
   private validateRow(row: HouseRowDto): string | null {
@@ -211,6 +217,69 @@ export class HousesService {
   update(id: string, dto: UpdateHouseDto) {
     return this.prisma.t.house.update({ where: { id }, data: dto });
   }
+
+  /*
+   * 房屋原来只能导入和停用，**删不掉**。
+   *
+   * 导错一批（房号规则搞错、导到了错的小区、试用期造的测试数据）之后，
+   * 唯一的补救是把它们停用 —— 于是错误数据永久留在库里：
+   * 后台房屋列表里躺着，导入时和正确的房号撞唯一键，删小区也被它们挡住
+   * （删小区要求下面没有房屋，而房屋删不掉 → 小区也永远删不掉）。
+   *
+   * 停用不是删除。停用的语义是「这套房还在，只是暂时不收费」，
+   * 而导错的那行根本不该存在。
+   *
+   * 与删小区同样的思路：有任何业务数据挂着就拒绝，并说清挂着什么。
+   * 这里不做级联 —— 一个删除动作顺手删掉账单和缴费记录是不可接受的。
+   */
+  private static readonly BLOCKING: Array<[string, string]> = [
+    ['bill', '账单'],
+    ['houseBinding', '业主绑定'],
+    ['ticket', '工单'],
+    ['visitorPass', '访客通行码'],
+    ['serviceOrder', '服务预约'],
+  ];
+
+  async remove(id: string, adminId: string) {
+    const house = await this.prisma.t.house.findFirst({
+      where: { id },
+      select: { id: true, code: true, displayName: true, communityId: true, tenantId: true },
+    });
+    if (!house) throw new BizException(ErrorCode.NOT_FOUND, '房屋不存在或不属于当前物业公司');
+
+    const client = this.prisma.t as unknown as Record<string, { count(args: unknown): Promise<number> }>;
+    const attached: string[] = [];
+    for (const [model, label] of HousesService.BLOCKING) {
+      const n = await client[model].count({ where: { houseId: id } });
+      if (n > 0) attached.push(`${label} ${n} 条`);
+    }
+    if (attached.length > 0) {
+      throw new BizException(
+        ErrorCode.VALIDATION,
+        `「${house.displayName}」下还有 ${attached.join('、')}，不能删除。` +
+          `请先处理这些数据，或把该房屋改为停用。`,
+      );
+    }
+
+    await this.prisma.t.house.delete({ where: { id } });
+    /*
+     * 删除必须留痕。房屋是计费的根，删掉之后再想追「这户去哪了」，
+     * 除了审计没有任何地方查得到。
+     */
+    await this.audit.append({
+      tenantId: house.tenantId,
+      communityId: house.communityId,
+      actorType: 'ADMIN',
+      actorId: adminId,
+      action: 'DELETE',
+      resourceType: 'House',
+      resourceId: id,
+      // 房号比 cuid 有用：查审计的人认得房号
+      beforeSummary: { code: house.code, displayName: house.displayName },
+      afterSummary: { event: 'HOUSE_DELETE' },
+    });
+    return { deleted: true, code: house.code };
+  }
 }
 
 @Controller('admin/houses')
@@ -231,5 +300,15 @@ export class HousesController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateHouseDto) {
     return this.service.update(id, dto);
+  }
+
+  /*
+   * 与删小区同级：只有 TENANT_ADMIN 能删。
+   * 误删的代价（哪怕有挂载校验兜着）不该由一个日常操作角色承担。
+   */
+  @Roles('TENANT_ADMIN')
+  @Delete(':id')
+  remove(@Current() cur: CurrentAdmin, @Param('id') id: string) {
+    return this.service.remove(id, cur.adminId);
   }
 }

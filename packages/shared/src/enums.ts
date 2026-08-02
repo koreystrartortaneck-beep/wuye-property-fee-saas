@@ -74,6 +74,8 @@ export type AuditActorType = (typeof AUDIT_ACTOR_TYPES)[number];
 export const AUDIT_ACTIONS = [
   'CREATE',
   'UPDATE',
+  // 删除必须是独立动作：记成 UPDATE 等于在审计日志里撒谎
+  'DELETE',
   'PUBLISH',
   'CANCEL',
   'PAY',

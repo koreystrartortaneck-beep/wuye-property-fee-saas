@@ -108,7 +108,8 @@ const enumContracts: Record<string, { shared: string; values: string[] }> = {
   },
   AuditAction: {
     shared: 'AUDIT_ACTIONS',
-    values: ['CREATE', 'UPDATE', 'PUBLISH', 'CANCEL', 'PAY', 'REFUND', 'RECONCILE', 'INVOICE', 'RECOVER'],
+    // DELETE 于 2026-08-02 随「删除房屋」加入：把删除记成 UPDATE 等于在审计日志里撒谎
+    values: ['CREATE', 'UPDATE', 'DELETE', 'PUBLISH', 'CANCEL', 'PAY', 'REFUND', 'RECONCILE', 'INVOICE', 'RECOVER'],
   },
   PaymentEventType: {
     shared: 'PAYMENT_EVENT_TYPES',
