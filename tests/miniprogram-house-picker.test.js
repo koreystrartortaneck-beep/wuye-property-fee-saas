@@ -187,3 +187,19 @@ test('换小区时「已展开」要归位', () => {
     assert.match(methodBody(js, name), /houseListOpen: false/, `${name} 没有把展开状态归位`);
   }
 });
+
+test('房号输入框的例子必须是真能搜到的写法', () => {
+  /*
+   * 占位符是唯一告诉业主「该怎么写」的地方。
+   * 举一个搜不出来的例子，比不举更糟 —— 他会照着抄，然后得到 0 条，
+   * 而在这个界面上 0 条的含义是「物业没登记我家」。
+   *
+   * 后端现在的行为：先整串匹配，不中再按分隔符/量词拆词 AND。
+   * 下面这三种写法都在 house-picker-scale.spec.ts 里逐条验过。
+   */
+  const ph = /placeholder="([^"]*房号[^"]*)"/.exec(wxml)?.[1] ?? '';
+  assert.ok(ph, '房号输入框没有占位提示');
+  for (const form of ['1栋101', '1-101', '101']) {
+    assert.ok(ph.includes(form), `占位符没给出「${form}」这种写法`);
+  }
+});

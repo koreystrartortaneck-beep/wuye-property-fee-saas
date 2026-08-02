@@ -21,6 +21,36 @@ class ApplyBindingDto {
 }
 
 /**
+ * 房号分词。
+ *
+ * 业主打房号时，分隔符用不用、用哪个、量词写不写，全是随意的：
+ * 「1栋101」「1-101」「1 101」「101室」指的都是同一套房，
+ * 而库里存的是 code=「1-1-101」、displayName=「1栋1单元101」。
+ * 想让整串匹配同时容纳这些写法是不可能的 —— 拆成词逐个 AND 才行。
+ *
+ * 量词的先后顺序无关：正则从左往右按位置扫，在「单」那一位上「元」匹配不上，
+ * 所以 单元 一定先于 元 被命中。（这一点我一开始想错了，还为它写了条守卫，
+ * 交换顺序后测试纹丝不动 —— 才发现前提是假的。）
+ * 真正要紧的是**别漏**：少一个量词，含它的写法就整串切不开，
+ * 只剩一段 → 不触发回退 → 0 条。下面的分词用例逐条钉住这件事。
+ */
+const HOUSE_SPLIT = /[\s\-–—_/／#,，.。、]+|单元|号楼|栋|幢|座|室|号|楼|层/g;
+
+/** 最多取 5 段：再多是 AND 越加越窄，且多半是误输入 */
+export function tokenize(keyword: string): string[] {
+  return keyword
+    .split(HOUSE_SPLIT)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
+/** 整串子串匹配：精确输入应当得到精确结果 */
+function matchWhole(keyword: string) {
+  return { OR: [{ code: { contains: keyword } }, { displayName: { contains: keyword } }] };
+}
+
+/**
  * 业主端房屋服务。业主天然跨租户 → 使用 raw client，
  * 一切访问经 ACTIVE 绑定校验（spec §6.2）。
  */
@@ -98,21 +128,57 @@ export class OwnerHousesService {
 
   /** 供申请绑定选择房号：只暴露 code/displayName */
   async listHouses(communityId: string, building?: string, keyword?: string) {
-    const where = {
+    const base = {
       communityId,
       status: 'ACTIVE' as const,
       ...(building ? { building } : {}),
-      ...(keyword ? { OR: [{ code: { contains: keyword } }, { displayName: { contains: keyword } }] } : {}),
     };
-    const [items, total] = await Promise.all([
-      this.prisma.raw.house.findMany({
-        where,
-        select: { id: true, code: true, displayName: true, type: true, building: true },
-        take: OwnerHousesService.PAGE_SIZE,
-        orderBy: { code: 'asc' },
-      }),
-      this.prisma.raw.house.count({ where }),
-    ]);
+    const kw = keyword?.trim();
+    const run = (extra: object) => {
+      const where = { ...base, ...extra };
+      return Promise.all([
+        this.prisma.raw.house.findMany({
+          where,
+          select: { id: true, code: true, displayName: true, type: true, building: true },
+          take: OwnerHousesService.PAGE_SIZE,
+          orderBy: { code: 'asc' },
+        }),
+        this.prisma.raw.house.count({ where }),
+      ]);
+    };
+
+    if (!kw) {
+      const [items, total] = await run({});
+      return { items, total };
+    }
+
+    // 先按原样整串匹配。精确输入（1-101、8-2）应当得到精确结果，不该被拆词冲淡
+    let [items, total] = await run(matchWhole(kw));
+    if (total === 0) {
+      /*
+       * 整串匹配不中时才拆词。
+       *
+       * 起因：业主打「1栋101」得到 0 条 —— 而那套房就在库里，
+       * 只是存成「1栋1单元101」，中间隔着「1单元」。
+       * 实测三种最自然的输入全部返回 0：「1栋101」「1 101」「101室」。
+       *
+       * 而在这个界面上，0 条的含义是「物业没登记我家」。
+       * 业主不会想到是自己的写法和库里的格式对不上 ——
+       * 他会去找物业，物业在后台一搜就有。又是一次把
+       * 「我没找到」显示成「没有」。
+       *
+       * 拆词放在**后面**而不是一开始：拆完是 AND 匹配，
+       * 「8-2」拆成 8 和 2 会把 2 单元的房子也捞进来，
+       * 而整串「8-2」本来就能精确命中 8 栋 2 单元。
+       * 先精确、不中再放宽，两种输入都照顾到。
+       */
+      const tokens = tokenize(kw);
+      if (tokens.length > 1) {
+        [items, total] = await run({
+          AND: tokens.map((t) => ({ OR: [{ code: { contains: t } }, { displayName: { contains: t } }] })),
+        });
+      }
+    }
     return { items, total };
   }
 

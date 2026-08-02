@@ -1,4 +1,4 @@
-import { OwnerHousesService } from './owner-houses.controller';
+import { OwnerHousesService, tokenize } from './owner-houses.controller';
 
 /**
  * 2026-08-02 业主问：「如果有一两百户、好几个小区之后，这个怎么提交绑定？」
@@ -120,5 +120,70 @@ describe('房号选择必须扛得住一两百户', () => {
     expect(res.total).toBe(60);
     expect(res.items.length).toBeLessThan(60);
     expect(res.items[0]).toHaveProperty('tenantName', '港城物业');
+  });
+});
+
+describe('房号模糊匹配', () => {
+  it('分词能把业主的各种写法切成一样的东西', () => {
+    /*
+     * 实测这三种最自然的输入原来全部返回 0 条 ——
+     * 而在那个界面上，0 条的含义是「物业没登记我家」。
+     */
+    expect(tokenize('1栋101')).toEqual(['1', '101']);
+    expect(tokenize('1 101')).toEqual(['1', '101']);
+    expect(tokenize('101室')).toEqual(['101']);
+    expect(tokenize('1-1-101')).toEqual(['1', '1', '101']);
+    // 「住户」不是分隔符，所以 13住户 保持成一段 —— 它本来就能整段匹配上 displayName
+    expect(tokenize('3栋9楼13住户')).toEqual(['3', '9', '13住户']);
+  });
+
+  it('每个分隔符与量词都要真的能切开——漏一个，含它的写法就搜不到', () => {
+    /*
+     * 漏掉的后果是静默的：整串切不开 → 只剩一段 → 不触发回退查询 → 0 条，
+     * 而业主看到 0 条只会理解成「物业没登记我家」。
+     *
+     * （原本这里写的是「长量词要排在短的前面」，还配了一条守卫。
+     *   交换顺序后测试纹丝不动 —— 前提是假的：正则从左往右按位置扫，
+     *   在「单」那一位上「元」匹配不上，单元 必然先被命中。已删。）
+     */
+    for (const sep of [' ', '-', '/', '#', '，', '、', '栋', '幢', '座', '单元', '室', '号', '楼', '层', '号楼']) {
+      expect(tokenize(`1${sep}101`)).toEqual(['1', '101']);
+    }
+  });
+
+  it('只有一段时不拆——单个词交给整串匹配就够了', () => {
+    expect(tokenize('101')).toEqual(['101']);
+    expect(tokenize('501')).toHaveLength(1);
+  });
+
+  it('段数封顶，避免 AND 越加越窄', () => {
+    expect(tokenize('1-2-3-4-5-6-7-8').length).toBeLessThanOrEqual(5);
+  });
+
+  it('先整串精确匹配，命中就不拆词', async () => {
+    /*
+     * 顺序要紧。拆词是 AND 匹配，「8-2」拆成 8 和 2 会把 2 单元的房子也捞进来，
+     * 而整串「8-2」本来就能精确命中 8 栋 2 单元 —— 精确输入不该被拆词冲淡。
+     */
+    const { service, calls } = makeService(houses(10), 10);
+    await service.listHouses('c1', undefined, '8-2');
+    expect(calls.houses).toHaveLength(1); // 只查了一次，没有回退
+    expect(JSON.stringify(calls.houses[0].where)).toContain('8-2');
+  });
+
+  it('整串 0 条才回退拆词', async () => {
+    const { service, calls } = makeService([], 0);
+    await service.listHouses('c1', undefined, '1栋101');
+    expect(calls.houses).toHaveLength(2); // 整串一次 + 拆词一次
+    const second = JSON.stringify(calls.houses[1].where);
+    expect(second).toContain('"AND"');
+    expect(second).toContain('101');
+  });
+
+  it('单个词匹配不中时不做无谓的第二次查询', async () => {
+    // 拆不出多段，回退查询的结果必然与第一次相同——白花一次数据库往返
+    const { service, calls } = makeService([], 0);
+    await service.listHouses('c1', undefined, '999');
+    expect(calls.houses).toHaveLength(1);
   });
 });

@@ -102,7 +102,7 @@
             界面还什么都不说
         改成「输入房号即搜 + 列表」，并把总数说出来。
       -->
-      <input class="search-input" placeholder="输入房号搜索，如 1-101 或 101"
+      <input class="search-input" placeholder="输入房号，如 1栋101 / 1-101 / 101"
              value="{{houseKeyword}}" confirm-type="search"
              bindinput="onHouseKeywordInput" bindconfirm="searchHouses" />
 
