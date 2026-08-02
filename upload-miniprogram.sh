@@ -50,8 +50,8 @@ fi
 
 CLI="/Applications/wechatwebdevtools.app/Contents/MacOS/cli"
 PROJ="$(cd "$(dirname "$0")" && pwd)/apps/miniprogram"
-VER="${1:-1.2.0}"
-DESC="支付成功立刻反馈（不再卡在「确认支付结果」）、新增「入账中」状态并阻止重复支付、请求超时 12 秒、查单窗口延长至 20 秒"
+VER="${1:-1.3.0}"
+DESC="首个提审版本：支付成功立刻反馈、绑定房屋全流程重做（输入即搜、房号模糊匹配、支持数百户小区）、「我的」页只留个人相关项、账号注销"
 
 [ -x "$CLI" ] || { echo "✗ 找不到微信开发者工具 CLI：$CLI"; exit 1; }
 [ -d "$PROJ" ] || { echo "✗ 找不到小程序目录：$PROJ"; exit 1; }
