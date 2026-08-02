@@ -110,8 +110,29 @@
       <view wx:elif="{{houseError}}" class="list-hint list-hint-error" bindtap="searchHouses">
         加载失败，请检查网络后点此重试
       </view>
+
+      <!--
+        没输入就不铺列表。
+        200 套的小区里，先给出的那 20 套几乎必然不是他家 ——
+        它唯一的作用是把姓名、与房屋关系、提交按钮顶出屏幕。
+
+        但户数少的小区不能反过来逼人盲打：一共 3 套的小区，
+        新业主未必记得该写「1-101」还是「101」还是「1栋101」，
+        看一眼列表比猜格式快得多。所以给一个「查看全部」——
+        列表仍然只在业主主动动作之后才出现，规则是一致的。
+      -->
+      <block wx:elif="{{!houseKeyword && !houseListOpen}}">
+        <view wx:if="{{houseTotal === 0}}" class="list-hint">该小区暂无可绑定房屋</view>
+        <view wx:elif="{{houseMore > 0}}" class="list-hint">
+          共 {{houseTotal}} 套房屋，请输入房号查找
+        </view>
+        <view wx:else class="list-hint list-hint-action" bindtap="openHouseList">
+          共 {{houseTotal}} 套房屋，查看全部 ›
+        </view>
+      </block>
+
       <view wx:elif="{{houses.length === 0}}" class="list-hint">
-        {{houseKeyword ? '没有找到这个房号，请检查后重试，或联系物业确认登记情况' : '该小区暂无可绑定房屋'}}
+        没有找到这个房号，请检查后重试，或联系物业确认登记情况
       </view>
 
       <!--
@@ -119,7 +140,7 @@
         姓名、与房屋关系、提交按钮全被推到看不见的地方 ——
         业主选完房号会以为「就这样了」，不知道下面还有必填项。
       -->
-      <scroll-view wx:if="{{houses.length > 0}}" scroll-y class="option-list option-scroll">
+      <scroll-view wx:if="{{houses.length > 0 && (houseKeyword || houseListOpen)}}" scroll-y class="option-list option-scroll">
         <view class="option-item {{selectedHouse && selectedHouse.id === item.id ? 'option-item-active' : ''}}"
               wx:for="{{houses}}" wx:key="id" data-index="{{index}}" bindtap="pickHouse"
               hover-class="option-item-hover">
@@ -129,7 +150,7 @@
           <view class="option-arrow">{{selectedHouse && selectedHouse.id === item.id ? '✓' : '›'}}</view>
         </view>
       </scroll-view>
-      <view wx:if="{{houseMore > 0}}" class="list-hint">
+      <view wx:if="{{houseMore > 0 && (houseKeyword || houseListOpen)}}" class="list-hint">
         共 {{houseTotal}} 套房屋，只显示了前 {{houses.length}} 套，请输入房号缩小范围
       </view>
 

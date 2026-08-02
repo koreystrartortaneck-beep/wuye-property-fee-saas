@@ -241,3 +241,9 @@ picker {
   color: var(--danger, #c45656);
   font-weight: 600;
 }
+
+/* 可点的提示行（如「查看全部」）：不点就看不出可点，等于没有 */
+.list-hint-action {
+  color: var(--gold-deep, #b8862f);
+  font-weight: 600;
+}

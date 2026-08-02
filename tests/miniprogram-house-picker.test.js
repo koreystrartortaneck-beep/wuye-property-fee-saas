@@ -152,3 +152,38 @@ test('请求失败与「没搜到」必须是两句话', () => {
   // 光说失败不给出口，业主唯一能做的就是反复改关键词
   assert.match(wxml, /list-hint-error" bindtap="search/, '失败态不可点重试');
 });
+
+test('没输入就不铺列表——200 套里的前 20 套几乎必然不是他家', () => {
+  /*
+   * 业主实测指出的：选完小区直接铺 20 行，
+   * 而这 20 行唯一的作用是把姓名、与房屋关系、提交按钮顶出屏幕。
+   */
+  assert.match(
+    wxml,
+    /scroll-view[^>]*wx:if="\{\{houses\.length > 0 && \(houseKeyword \|\| houseListOpen\)\}\}"/,
+    '列表在没有输入、也没点「查看全部」时仍然会铺出来',
+  );
+  // 截断提示同理：列表都没显示，说「只显示了前 20 套」是自相矛盾的
+  assert.match(wxml, /houseMore > 0 && \(houseKeyword \|\| houseListOpen\)/, '截断提示没跟着列表一起隐藏');
+});
+
+test('户数少的小区给「查看全部」，不逼人盲打房号', () => {
+  /*
+   * 一共 3 套的小区，新业主未必记得该写「1-101」还是「101」还是「1栋101」。
+   * 看一眼列表比猜格式快得多 —— 但仍然要他主动点一下，规则才一致。
+   */
+  assert.match(wxml, /bindtap="openHouseList"/, '没有「查看全部」入口');
+  assert.match(wxml, /houseMore > 0[\s\S]{0,120}请输入房号查找/, '大小区没有引导去搜索');
+  const body = methodBody(js, 'openHouseList');
+  assert.match(body, /houseListOpen: true/, 'openHouseList 没有打开列表');
+});
+
+test('换小区时「已展开」要归位', () => {
+  /*
+   * 否则在 12 套的小区点开过之后，换到 200 套的小区会直接又铺一屏 ——
+   * 而这正是要避免的那一幕。
+   */
+  for (const name of ['pickCommunity', 'resetCommunity']) {
+    assert.match(methodBody(js, name), /houseListOpen: false/, `${name} 没有把展开状态归位`);
+  }
+});

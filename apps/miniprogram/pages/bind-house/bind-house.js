@@ -64,6 +64,12 @@ Page({
     houseMore: 0,
     houseSearching: false,
     houseError: false,
+    /*
+     * 列表只在业主主动动作之后出现：输入房号，或点「查看全部」。
+     * 换小区时必须归位 —— 否则在 12 套的小区点开过，
+     * 换到 200 套的小区会直接又铺一屏。
+     */
+    houseListOpen: false,
     selectedHouse: null,
     applicantName: '',
     relationIndex: 0,
@@ -221,7 +227,7 @@ Page({
 
   async pickCommunity(e) {
     const community = this.data.communities[e.currentTarget.dataset.index];
-    this.setData({ selectedCommunity: community, houseKeyword: '', selectedHouse: null });
+    this.setData({ selectedCommunity: community, houseKeyword: '', houseListOpen: false, selectedHouse: null });
     await this.searchHouses();
   },
 
@@ -235,8 +241,14 @@ Page({
       houseTotal: 0,
       houseMore: 0,
       houseError: false,
+      houseListOpen: false,
       selectedHouse: null,
     });
+  },
+
+  /** 户数少的小区：一眼看完比猜房号格式快 */
+  openHouseList() {
+    this.setData({ houseListOpen: true });
   },
 
   onHouseKeywordInput(e) {
