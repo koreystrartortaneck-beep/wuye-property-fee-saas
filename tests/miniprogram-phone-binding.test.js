@@ -163,9 +163,14 @@ test('没有房屋时才引导去自助申请，并说清为什么没匹配上',
    * 「没匹配上」的真实原因是物业没在房屋档案里登记这个号码 ——
    * 不说清楚的话，业主会反复去点那个授权按钮。
    */
+  /*
+   * 断言的是「说到了这两件事」，不是「一字不差是这句话」。
+   * 原来写死了长文案里的整句，文案一精简守卫就红 —— 而关切并没有变：
+   * 必须说清**为什么没匹配上**（物业没登记这个号）和**下一步做什么**（去申请）。
+   */
   const body = afterBindBody();
-  assert.match(body, /物业登记的业主手机号里没有这个号码/, '没有解释为什么没匹配上');
-  assert.match(body, /自助申请绑定/, '没有指向下一步');
+  assert.match(body, /物业未登记|物业登记的业主手机号里没有/, '没有解释为什么没匹配上');
+  assert.match(body, /申请绑定/, '没有指向下一步');
 });
 
 /*
@@ -185,10 +190,16 @@ test('绑定页按手机号状态区分文案', () => {
 });
 
 test('绑定页从 /auth/me 读状态，读不到按未绑定展示', () => {
+  /*
+   * 锚定 refreshPhoneState 而不是 onShow：读取逻辑抽出去复用之后
+   * （afterBind 也要刷新），在 onShow 里已经找不到它了。
+   * 断言该跟着实现走，但保护的东西不变：失败不能把页面打挂、不能弹 toast。
+   */
   const js = strip(read('pages/bind-house/bind-house.js'));
-  assert.match(js, /request\('\/auth\/me'/, '没有读手机号状态');
-  const i = js.indexOf('onShow');
+  const i = js.indexOf('async refreshPhoneState');
+  assert.ok(i > 0, '找不到 refreshPhoneState');
   const body = js.slice(i, js.indexOf('\n  },', i));
+  assert.match(body, /request\('\/auth\/me'/, '没有读手机号状态');
   assert.match(body, /catch/, '读取失败会把页面打挂');
   assert.match(body, /silent: true/, '状态是后台信息，失败不该弹 toast');
 });
