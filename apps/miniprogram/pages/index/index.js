@@ -91,10 +91,18 @@ Page({
           const latest = (bindings || []).find((b) => b.status === 'PENDING')
             || (bindings || []).find((b) => b.status === 'REJECTED');
           if (latest) {
+            /*
+             * 「申请被驳回」和「已生效的绑定被物业解除」在库里都是 REJECTED，
+             * 但对业主是完全不同的两件事：前者是「你还没进来」，
+             * 后者是「你本来在，被请出去了」。用 revokedAt 区分，文案分开写 ——
+             * 对一个原本能看到账单的人说「申请未通过」，他会一头雾水。
+             */
+            const revoked = !!latest.revokedAt;
             pending = {
               rejected: latest.status === 'REJECTED',
+              revoked,
               house: `${latest.communityName} ${latest.displayName}`,
-              reason: latest.rejectReason || '',
+              reason: (revoked ? latest.revokeReason : latest.rejectReason) || '',
             };
           }
         } catch (e) {

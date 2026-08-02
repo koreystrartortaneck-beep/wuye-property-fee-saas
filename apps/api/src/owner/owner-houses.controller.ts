@@ -127,6 +127,12 @@ export class OwnerHousesService {
       status: b.status,
       relation: b.relation,
       rejectReason: b.rejectReason,
+      /*
+       * 带出 revokedAt：「申请被驳回」和「已生效的绑定被物业解除」在库里都是
+       * REJECTED，但对业主意味着完全不同的事，界面必须分开说。
+       */
+      revokedAt: b.revokedAt,
+      revokeReason: b.revokeReason,
       houseId: b.houseId,
       displayName: b.house.displayName,
       communityName: b.house.community.name,

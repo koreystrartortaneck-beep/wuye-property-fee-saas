@@ -31,12 +31,24 @@
         </template>
       </el-table-column>
       <el-table-column prop="rejectReason" label="驳回原因" min-width="120" />
-      <el-table-column label="操作" width="160">
+      <el-table-column label="操作" width="200">
         <template #default="{ row }">
           <template v-if="row.status === 'PENDING'">
             <el-button size="small" type="success" :loading="reviewing" @click="review(row, true)">通过</el-button>
             <el-button size="small" type="danger" @click="openReject(row)">驳回</el-button>
           </template>
+          <!--
+            解除绑定。此前管理端只能审核 PENDING 申请，**没有任何办法解除已生效的绑定** ——
+            而租客到期、业主卖房、当初绑错房号都必然会发生，那个人会一直看得到这户的账单。
+            唯一的替代是让业主自己「注销账号」，但那会连身份数据一起匿名化且不可逆。
+          -->
+          <el-button
+            v-else-if="row.status === 'ACTIVE'"
+            size="small"
+            type="danger"
+            plain
+            @click="openRevoke(row)"
+          >解除绑定</el-button>
         </template>
       </el-table-column>
       <template #empty>
@@ -56,6 +68,28 @@
       :current-page="page"
       @current-change="(p: number) => { page = p; load(); }"
     />
+
+    <el-dialog v-model="revokeDialog" title="解除绑定" width="min(460px, 92vw)">
+      <el-alert type="warning" :closable="false" show-icon class="revoke-warn">
+        <template #title>
+          解除后该业主将立刻看不到这户的账单，也无法再为这户缴费。已产生的缴费记录不受影响。
+        </template>
+      </el-alert>
+      <el-form label-width="var(--form-label-w)">
+        <el-form-item label="房屋">
+          <span>{{ revoking?.house?.code }} {{ revoking?.house?.displayName }}</span>
+        </el-form-item>
+        <el-form-item label="申请人"><span>{{ revoking?.applicantName || '—' }}</span></el-form-item>
+        <el-form-item label="原因">
+          <!-- 业主端首页会原样显示这句话，所以要求填、且提示它可见 -->
+          <el-input v-model="revokeReason" type="textarea" :rows="2" placeholder="必填，业主可见，并记入审计" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="revokeDialog = false">取消</el-button>
+        <el-button type="danger" :loading="revoking2" @click="doRevoke">确认解除</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="rejectDialog" title="驳回申请" width="min(420px, 92vw)">
       <el-input v-model="rejectReason" placeholder="驳回原因（业主可见）" />
@@ -100,6 +134,39 @@ const loading = ref(false);
 const rejectDialog = ref(false);
 const rejectReason = ref('');
 const rejecting = ref<Binding | null>(null);
+const revokeDialog = ref(false);
+const revokeReason = ref('');
+const revoking = ref<Binding | null>(null);
+/** 解除中：连点会重复提交；解除是权限撤销，和审核通过同一个等级 */
+const revoking2 = ref(false);
+
+function openRevoke(row: Binding) {
+  revoking.value = row;
+  revokeReason.value = '';
+  revokeDialog.value = true;
+}
+
+async function doRevoke() {
+  const row = revoking.value;
+  if (!row || revoking2.value) return;
+  if (!revokeReason.value.trim()) {
+    ElMessage.warning('请填写解除原因（业主可见）');
+    return;
+  }
+  revoking2.value = true;
+  try {
+    await api(`/admin/bindings/${row.id}/revoke`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: revokeReason.value.trim() }),
+    });
+    ElMessage.success('已解除绑定');
+    revokeDialog.value = false;
+    load();
+    refreshBadges();
+  } finally {
+    revoking2.value = false;
+  }
+}
 
 function reload() {
   page.value = 1;
@@ -145,4 +212,9 @@ onMounted(load);
 </script>
 
 <style scoped>
+
+/* 解除绑定的警告条：动的是权限，必须先看到后果再填原因 */
+.revoke-warn {
+  margin-bottom: var(--sp-3);
+}
 </style>

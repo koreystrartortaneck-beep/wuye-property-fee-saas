@@ -32,12 +32,17 @@
       </view>
     </block>
 
-    <!-- ② 被驳回：必须说明原因，并允许重新申请 -->
+    <!--
+      ② 被驳回 / 被解除：都要说明原因，并允许重新申请。
+      两者库里都是 REJECTED，但对业主是完全不同的事 ——
+      「申请未通过」是你还没进来，「绑定已解除」是你本来在、被请出去了。
+      对一个原本能看到账单的人说「申请未通过」，他会一头雾水。
+    -->
     <block wx:elif="{{pendingBinding && pendingBinding.rejected}}">
-      <view class="hero-title">{{'绑定申请\n未通过'}}</view>
+      <view class="hero-title">{{pendingBinding.revoked ? '房屋绑定\n已解除' : '绑定申请\n未通过'}}</view>
       <view class="amount-panel">
         <view class="panel-label">{{pendingBinding.house}}</view>
-        <view class="pending-note">{{pendingBinding.reason || '物业未说明原因，可联系物业后重新申请'}}</view>
+        <view class="pending-note">{{pendingBinding.reason || (pendingBinding.revoked ? '物业已解除该房屋的绑定，如有疑问请联系物业' : '物业未说明原因，可联系物业后重新申请')}}</view>
         <view class="amount-row">
           <view class="hero-amount amount"> </view>
           <button class="gold-button pay-btn" bindtap="goBind">重新申请</button>
