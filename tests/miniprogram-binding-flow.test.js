@@ -146,3 +146,90 @@ test('「我的」页与首页对同一件事说同一句话', () => {
   assert.match(js, /b\.revokedAt \? '已解除' : '已驳回'/, '「我的」页没有区分解除与驳回');
   assert.match(js, /b\.revokedAt \? b\.revokeReason : b\.rejectReason/, '原因取错了字段');
 });
+
+/*
+ * ── 一屏只说一件事 ──
+ *
+ * 2026-08-02 实测，业主的「我的」页同时摆着三样东西：
+ *   卡片：「尚未绑定房屋 / 点击绑定您的房屋 / 去绑定 ›」
+ *   一行：「金港城 1 栋 1 单元 101 · 已解除（手机号变更，自动…」← 废弃租户的历史
+ *   一行：「金港城 1栋1单元101 · 审核中」                    ← 真正在走的申请
+ *
+ * 三个入口指向同一件事，两条记录长得一模一样，业主的原话是
+ * 「我根本搞不懂作为一个新用户是怎么使用这个小程序」。
+ */
+
+test('有在途申请时，「我的房屋」卡不再叫人去绑定', () => {
+  const wxml = readWxml('pages/mine/mine.wxml');
+  assert.match(wxml, /wx:elif="\{\{!currentHouse && hasPendingApply\}\}"/, '缺少「审核中」这一态');
+  const i = wxml.indexOf('绑定申请审核中');
+  assert.ok(i > 0);
+  const branch = wxml.slice(i, wxml.indexOf('</view>\n\n', i));
+  assert.ok(!/bindtap="goBind"/.test(branch), '审核中的卡片仍然可点去绑定');
+  // 「去绑定」那一态必须排在它后面，否则永远轮不到审核中
+  assert.ok(
+    wxml.indexOf('hasPendingApply') < wxml.indexOf('点击绑定您的房屋'),
+    '「审核中」分支必须排在「去绑定」之前',
+  );
+});
+
+test('有在途申请时不再列出已结束的历史记录', () => {
+  /*
+   * 他已经在走流程了，上一轮的结论跟他没关系 ——
+   * 而且两条记录房号一模一样，摆在一起只会让人分不清该点哪个。
+   */
+  const js = read('pages/mine/mine.js');
+  assert.match(js, /pending\.length > 0 \? pending : finished\.slice\(0, 1\)/, '没有「有在途就只显示在途」的规则');
+});
+
+test('原因单独一行、允许换行——截断之后一个有用的字都不剩', () => {
+  /*
+   * 原来把原因塞进「房号 · 状态（原因）」同一行再 ellipsis，
+   * 实测显示成「已解除（手机号变更，自动…」。
+   * 读不出信息的截断等于没有这段文字，还占着地方。
+   */
+  const wxml = readWxml('pages/mine/mine.wxml');
+  assert.match(wxml, /class="pending-why"/, '原因没有独立成行');
+  const wxss = read('pages/mine/mine.wxss');
+  const i = wxss.indexOf('.pending-why');
+  assert.ok(i > 0, '缺少 .pending-why 样式');
+  const rule = wxss.slice(i, wxss.indexOf('}', i));
+  assert.ok(!/white-space:\s*nowrap/.test(rule), '原因仍被限制成不换行');
+});
+
+test('业主端不返回已停用物业公司的绑定记录', () => {
+  /*
+   * 那些记录对业主毫无价值 —— 他连那个小区都搜不到，「重新申请」点了也没用。
+   */
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'apps/api/src/owner/owner-houses.controller.ts'),
+    'utf8',
+  );
+  const i = src.indexOf('async myBindings');
+  const body = src.slice(i, src.indexOf('\n  }', i));
+  assert.match(body, /community: \{ tenant: \{ status: 'ACTIVE' \} \}/, 'myBindings 没有排除停用公司');
+});
+
+test('系统自动解除的原因要说人话、且说准', () => {
+  /*
+   * 原文案「手机号变更，自动解除仅手机匹配绑定」两处不对：
+   *   · 不一定是手机号变了（实测那次是物业公司被停用）
+   *   · 「仅手机匹配绑定」是内部说法，业主看不懂
+   * 而且业主端会把它标成「物业填写的原因」，但这是系统做的 ——
+   * 所以文案自己要说清是自动解除。
+   */
+  /*
+   * 只看**真正发给业主的那个字符串**，不看整份源码。
+   * 第一版在整份文件上匹配，命中了注释里引用的旧文案 ——
+   * 而那段引用正是在解释「旧文案为什么不对」，是有价值的，不该被判成缺陷。
+   * 这是今天第四次踩「注释里有同一句话」这个坑了。
+   */
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'apps/api/src/auth/auth.service.ts'),
+    'utf8',
+  ).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const m = /revokeReason:\s*'([^']*)'/.exec(src);
+  assert.ok(m, '找不到自动解除的原因文案');
+  assert.ok(!m[1].includes('仅手机匹配绑定'), `仍在用内部说法：${m[1]}`);
+  assert.match(m[1], /系统自动解除/, '没有说清是系统自动做的');
+});

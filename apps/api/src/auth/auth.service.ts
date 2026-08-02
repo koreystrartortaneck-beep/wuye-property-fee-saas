@@ -137,7 +137,21 @@ export class AuthService {
         if (b.source === 'PHONE_MATCH' && b.status === 'ACTIVE' && !matchedHouseIds.has(b.houseId)) {
           const upd = await tx.houseBinding.updateMany({
             where: { id: b.id, status: 'ACTIVE', source: 'PHONE_MATCH' },
-            data: { status: 'REJECTED', revokedAt: now, revokeReason: '手机号变更，自动解除仅手机匹配绑定' },
+            /*
+             * 原因要说人话，而且要说准。
+             *
+             * 原文案「手机号变更，自动解除仅手机匹配绑定」有两处不对：
+             *   · 不一定是手机号变了 —— 也可能是那套房不再登记这个号码、
+             *     或者那家物业公司被停用了（2026-08-02 实测就是后者）
+             *   · 「仅手机匹配绑定」是内部说法，业主看不懂
+             * 而且业主端会把 revokeReason 标成「物业填写的原因」，
+             * 但这条是系统自动做的，不是物业写的 —— 所以文案里要自己说清是自动解除。
+             */
+            data: {
+              status: 'REJECTED',
+              revokedAt: now,
+              revokeReason: '系统自动解除：该房屋已不在您手机号的登记范围内',
+            },
           });
           if (upd.count === 1) {
             await this.appendBindingAudit(tx, b.tenantId, b.id, wxUserId, 'CANCEL', {

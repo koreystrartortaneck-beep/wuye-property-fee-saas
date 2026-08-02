@@ -179,12 +179,28 @@
   color: var(--danger, #c45656);
 }
 
+.pending-body {
+  flex: 1;
+  min-width: 0;
+}
+
 .pending-text {
+  display: block;
   font-size: 23rpx;
   color: var(--text-4, #8b8199);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 原因：允许换行。读不出信息的截断等于没有这段文字 */
+.pending-why {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 21rpx;
+  line-height: 1.5;
+  color: var(--text-4, #8b8199);
+  opacity: 0.85;
 }
 
 .menu-title {

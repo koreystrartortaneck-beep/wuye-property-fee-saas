@@ -152,7 +152,14 @@ export class OwnerHousesService {
   /** 本人全部绑定（含审核中/已驳回，供「我的」页展示进度） */
   async myBindings(ownerId: string) {
     const bindings = await this.prisma.raw.houseBinding.findMany({
-      where: { wxUserId: ownerId },
+      /*
+       * 同样要排除已停用的物业公司。
+       *
+       * 那些记录对业主毫无价值 —— 他连那个小区都搜不到，「重新申请」点了也没用。
+       * 2026-08-02 实测：业主的「我的」页上并排摆着两条「金港城 1栋1单元101」，
+       * 一条是废弃租户的历史、一条是真正在走的申请，他完全分不清。
+       */
+      where: { wxUserId: ownerId, house: { community: { tenant: { status: 'ACTIVE' } } } },
       include: { house: { include: { community: { select: { name: true } } } } },
       orderBy: { createdAt: 'desc' },
     });

@@ -64,6 +64,19 @@
     <view class="ch-right"><view class="ch-switch">重试 ›</view></view>
   </view>
 
+  <!--
+    有在途申请时，这张卡不能再叫人「去绑定」。
+    2026-08-02 实测：卡片写着「尚未绑定房屋 / 点击绑定您的房屋 / 去绑定 ›」，
+    紧挨着下面一行写着「审核中」—— 同一屏在说两件矛盾的事，
+    业主不知道该点哪个，最可能的动作是再申请一次（然后撞唯一约束报错）。
+  -->
+  <view class="current-house card" wx:elif="{{!currentHouse && hasPendingApply}}">
+    <view class="ch-left">
+      <view class="house-community">绑定申请审核中</view>
+      <view class="ch-title-row"><text class="ch-name">物业通过后即可查看账单</text></view>
+    </view>
+  </view>
+
   <view class="current-house card" bindtap="goBind" wx:elif="{{!currentHouse}}">
     <view class="ch-left">
       <view class="house-community">尚未绑定房屋</view>
@@ -86,7 +99,16 @@
       bindtap="{{item.rejected ? 'goBind' : ''}}"
     >
       <text class="pending-dot {{item.rejected ? 'dot-rejected' : ''}}"></text>
-      <text class="pending-text">{{item.communityName}} {{item.displayName}} · {{item.statusLabel}}{{item.rejectReason ? '（' + item.rejectReason + '）' : ''}}</text>
+      <!--
+        房号+状态一行，原因单独一行。
+        原来把原因塞进同一行、再用 ellipsis 截断 ——
+        实测显示成「已解除（手机号变更，自动…」，截断之后一个有用的字都没剩下。
+        读不出信息的截断等于没有这段文字，还占着地方。
+      -->
+      <view class="pending-body">
+        <text class="pending-text">{{item.communityName}} {{item.displayName}} · {{item.statusLabel}}</text>
+        <text wx:if="{{item.rejectReason}}" class="pending-why">{{item.rejectReason}}</text>
+      </view>
       <text wx:if="{{item.rejected}}" class="pending-action">重新申请 ›</text>
     </view>
   </view>

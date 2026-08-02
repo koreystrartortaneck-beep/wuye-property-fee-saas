@@ -28,6 +28,8 @@ Page({
     currentHouse: null, // {communityName, displayName, tag}
     houseCount: 0,
     pendingBindings: [],
+    /** 有在途绑定申请：决定「我的房屋」卡显示「审核中」还是「去绑定」 */
+    hasPendingApply: false,
     deleting: false,
     menus: [
       { key: 'tickets', title: '我的工单', desc: '报修与投诉建议进度' },
@@ -65,8 +67,23 @@ Page({
         request('/owner/my/bindings'),
       ]);
       const current = app.globalData.currentHouse;
-      const pendingBindings = bindings
-        .filter((b) => b.status !== 'ACTIVE')
+      /*
+       * 只显示「需要业主关心的那一条」，不是把所有历史都摊开。
+       *
+       * 2026-08-02 实测：业主的「我的」页上并排摆着
+       *   ● 金港城 1 栋 1 单元 101 · 已解除（手机号变更，自动…
+       *   ● 金港城 1栋1单元101 · 审核中
+       * 两条看起来一模一样，而上面那条是废弃租户的历史 —— 他完全分不清，
+       * 也不知道该点哪个「重新申请」。
+       *
+       * 规则：**只要有在途申请（PENDING），就不显示任何已结束的记录**。
+       * 他已经在走流程了，上一轮的结论跟他没关系。
+       * 没有在途申请时，才显示最近一条被驳回/解除的，让他知道为什么、能重新来。
+       */
+      const notActive = bindings.filter((b) => b.status !== 'ACTIVE');
+      const pending = notActive.filter((b) => b.status === 'PENDING');
+      const finished = notActive.filter((b) => b.status === 'REJECTED');
+      const pendingBindings = (pending.length > 0 ? pending : finished.slice(0, 1))
         .map((b) => ({
           id: b.id,
           communityName: b.communityName,
@@ -82,6 +99,8 @@ Page({
         }));
       this.setData({
         pendingBindings,
+        // 有在途申请时，「我的房屋」那张卡不能再叫人「去绑定」
+        hasPendingApply: pending.length > 0,
         phone: me.phone ? me.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : '未绑定手机号',
         hasPhone: !!me.phone,
         userName: current ? `${current.communityName}业主` : houses.length > 0 ? `${houses[0].communityName}业主` : '业主',
