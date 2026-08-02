@@ -6,6 +6,16 @@ Page({
   data: {
     mockAuth: config.mockAuth, // true=输入手机号；false=微信授权按钮
     phone: '',
+    /*
+     * 手机号是否已绑定。这个页面必须知道这件事：
+     * 业主实测指出「我已经绑定了手机号，还是有这个按钮」——
+     * 对已绑定的人显示「微信授权手机号」，读起来像上次没绑上，
+     * 他会疑惑要不要再点一次。
+     * 已绑定时按钮的真实用途只剩一个：物业**补录**了他的号码之后重新匹配 ——
+     * 文案就该说这个。
+     */
+    hasPhone: false,
+    maskedPhone: '',
     keyword: '',
     communities: [],
     selectedCommunity: null,
@@ -19,6 +29,16 @@ Page({
       { value: 'TENANT', label: '租客' },
     ],
     submitting: false,
+  },
+
+  async onShow() {
+    await getApp().loginReady;
+    try {
+      const me = await request('/auth/me', { silent: true });
+      this.setData({ hasPhone: !!me.hasPhone, maskedPhone: me.phone || '' });
+    } catch (e) {
+      // 读不到就按未绑定展示，按钮功能不受影响
+    }
   },
 
   onPhoneInput(e) {

@@ -4,8 +4,14 @@
   <view class="nav-subtitle">绑定后即可查询与缴纳物业费用</view>
 
   <view class="bind-card card">
-    <view class="bind-card-title">手机号快速绑定</view>
-    <view class="bind-card-desc">物业已登记您的手机号时，可自动匹配名下房屋</view>
+    <!--
+      标题与说明按「是否已绑手机号」区分。
+      对已绑定的人显示「微信授权手机号」读起来像上次没绑上；
+      此时这个按钮的真实用途只剩「物业补录号码后重新匹配」，文案就说这个。
+    -->
+    <view class="bind-card-title">{{hasPhone ? '按手机号匹配房屋' : '手机号快速绑定'}}</view>
+    <view wx:if="{{hasPhone}}" class="bind-card-desc">已绑定 {{maskedPhone}}。物业将此号码登记到房屋后，点击可自动匹配</view>
+    <view wx:else class="bind-card-desc">物业已登记您的手机号时，可自动匹配名下房屋</view>
     <!-- real 模式：微信授权按钮；mock 模式：手动输入 -->
     <block wx:if="{{!mockAuth}}">
       <!--
@@ -14,7 +20,7 @@
         按钮只说动作本身。
       -->
       <button class="dark-button match-btn-full" open-type="getPhoneNumber" bindgetphonenumber="onGetPhone">
-        微信授权手机号
+        {{hasPhone ? '重新匹配名下房屋' : '微信授权手机号'}}
       </button>
     </block>
     <view wx:else class="phone-row">

@@ -36,6 +36,7 @@ const read = (p) => fs.readFileSync(path.join(MP, p), 'utf8');
  * 它的坏处不是测试失败，而是**测试可能因此通过** —— 注释里有那句话就够了。
  */
 const readWxml = (p) => read(p).replace(/<!--[\s\S]*?-->/g, '');
+const strip = (x) => x.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
 test('未绑定时那一行是可点的，不是一句干巴巴的状态', () => {
   const wxml = readWxml('pages/mine/mine.wxml');
@@ -165,4 +166,29 @@ test('没有房屋时才引导去自助申请，并说清为什么没匹配上',
   const body = afterBindBody();
   assert.match(body, /物业登记的业主手机号里没有这个号码/, '没有解释为什么没匹配上');
   assert.match(body, /自助申请绑定/, '没有指向下一步');
+});
+
+/*
+ * ── 绑定页必须知道手机号已经绑过 ──
+ *
+ * 业主实测指出：「我已经绑定了手机号，还是有这个按钮。」
+ * 对已绑定的人显示「微信授权手机号」，读起来像上次没绑上，他会疑惑要不要再点。
+ * 已绑定时这个按钮的真实用途只剩一个 —— 物业**补录**了他的号码之后重新匹配，
+ * 文案就该说这个。
+ */
+
+test('绑定页按手机号状态区分文案', () => {
+  const wxml = readWxml('pages/bind-house/bind-house.wxml');
+  assert.match(wxml, /hasPhone \? '按手机号匹配房屋' : '手机号快速绑定'/, '标题没有分状态');
+  assert.match(wxml, /已绑定 \{\{maskedPhone\}\}/, '已绑定时没有回显号码');
+  assert.match(wxml, /重新匹配名下房屋/, '已绑定时按钮没有换成「重新匹配」');
+});
+
+test('绑定页从 /auth/me 读状态，读不到按未绑定展示', () => {
+  const js = strip(read('pages/bind-house/bind-house.js'));
+  assert.match(js, /request\('\/auth\/me'/, '没有读手机号状态');
+  const i = js.indexOf('onShow');
+  const body = js.slice(i, js.indexOf('\n  },', i));
+  assert.match(body, /catch/, '读取失败会把页面打挂');
+  assert.match(body, /silent: true/, '状态是后台信息，失败不该弹 toast');
 });
