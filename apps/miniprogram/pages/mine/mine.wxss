@@ -36,6 +36,36 @@
   font-size: 25rpx;
 }
 
+/*
+ * 未绑定手机号时那一行是个按钮。
+ * 必须清掉小程序 button 的默认外观（白底、圆角、1px 边框、最小宽度、
+ * 以及 ::after 那圈边框），否则深色档案卡上会突兀地出现一个白方块。
+ * 视觉上要与 .profile-phone 一致，只是多一个 › 表示可点。
+ */
+.phone-bind-btn {
+  margin: 10rpx 0 0;
+  padding: 0;
+  background: transparent;
+  color: var(--gold, #c9a66b);
+  font-size: 25rpx;
+  line-height: 1.4;
+  text-align: left;
+  border: none;
+  min-height: 0;
+  width: auto;
+  display: inline-block;
+}
+.phone-bind-btn::after {
+  border: none;
+}
+
+.profile-phone-hint {
+  margin-top: 6rpx;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 21rpx;
+  line-height: 1.4;
+}
+
 .section-title {
   margin: 36rpx 4rpx 20rpx;
   font-size: 38rpx;

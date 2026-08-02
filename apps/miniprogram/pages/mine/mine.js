@@ -1,5 +1,6 @@
+const config = require('../../config');
 const { request } = require('../../utils/request');
-const { loadMyHouses } = require('../../utils/auth');
+const { bindPhone, loadMyHouses } = require('../../utils/auth');
 const { requestSubscribe, getSubscribeState } = require('../../utils/subscribe');
 const { BINDING_RELATION } = require('../../utils/labels');
 
@@ -14,6 +15,15 @@ Page({
     notifyState: 'unknown',
     userName: '业主',
     phone: '',
+    /*
+     * 手机号是**可选**的：身份由微信 openid 决定，权限由房屋绑定决定，
+     * 手机号只用来自动匹配房屋、以及让物业能联系到你。
+     * 所以未绑定时不能摆一句「未绑定手机号」就完事 —— 那看起来像个待办，
+     * 却既没解释也没出口（这一行原来是个不可点的 view，
+     * 而唯一的绑定入口在「绑定房屋」页，已经绑好房屋的人不会再进去）。
+     */
+    hasPhone: false,
+    mockAuth: config.mockAuth,
     avatarText: '宅',
     currentHouse: null, // {communityName, displayName, tag}
     houseCount: 0,
@@ -68,6 +78,7 @@ Page({
       this.setData({
         pendingBindings,
         phone: me.phone ? me.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : '未绑定手机号',
+        hasPhone: !!me.phone,
         userName: current ? `${current.communityName}业主` : houses.length > 0 ? `${houses[0].communityName}业主` : '业主',
         houseCount: houses.length,
         currentHouse: current
@@ -154,6 +165,43 @@ Page({
    * 必须在用户点击的手势上下文中同步调用 wx.requestSubscribeMessage，
    * 所以这里不 await 任何网络请求再调，直接走 requestSubscribe。
    */
+  /**
+   * 微信手机号授权回调（真机路径）。
+   *
+   * 必须由 <button open-type="getPhoneNumber"> 触发 —— 普通 bindtap 拿不到 code，
+   * 这也是为什么未绑定时那一行要渲染成 button 而不是 view。
+   */
+  async onGetPhone(e) {
+    const code = e.detail && e.detail.code;
+    if (!code) {
+      // 用户点了取消。不报错，但要说清放弃的是什么
+      wx.showToast({ title: '未授权，物业将无法电话联系您', icon: 'none', duration: 2500 });
+      return;
+    }
+    wx.showLoading({ title: '绑定中' });
+    try {
+      const res = await bindPhone(code);
+      await loadMyHouses();
+      wx.hideLoading();
+      // 顺带匹配到房屋是意外之喜，要说出来；没匹配到也不是失败
+      wx.showToast({
+        title: res.matchedHouses > 0 ? `已绑定，并自动匹配 ${res.matchedHouses} 处房屋` : '手机号已绑定',
+        icon: 'none',
+        duration: 2200,
+      });
+      // 本页的加载逻辑在 onShow 里（没有单独的 load 方法），直接重跑一次
+      await this.onShow();
+    } catch (err) {
+      wx.hideLoading();
+    }
+  },
+
+  /** mock 模式（开发用）没有微信授权按钮，引导到绑定房屋页手动输入 */
+  goBindPhone() {
+    if (this.data.hasPhone) return;
+    wx.navigateTo({ url: '/pages/bind-house/bind-house' });
+  },
+
   /**
    * 按真实授权状态改写菜单说明。
    *

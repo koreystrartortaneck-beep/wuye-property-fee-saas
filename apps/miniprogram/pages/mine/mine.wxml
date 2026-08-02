@@ -9,7 +9,25 @@
     <view class="avatar">{{avatarText}}</view>
     <view>
       <view class="profile-name">{{userName}}</view>
-      <view class="profile-phone">{{phone}}</view>
+      <!--
+        已绑定：只显示掩码手机号。
+        未绑定：渲染成可点的按钮，并说清「绑了有什么用」——
+        原来这里是一句不可点的「未绑定手机号」，看起来像个待办却没有出口，
+        而唯一的绑定入口在「绑定房屋」页，已经绑好房屋的人不会再进去。
+        真机走 open-type="getPhoneNumber"（普通 bindtap 拿不到 code）；
+        mock 模式没有这个能力，退回到绑定房屋页手动输入。
+      -->
+      <view wx:if="{{hasPhone}}" class="profile-phone">{{phone}}</view>
+      <block wx:else>
+        <button
+          wx:if="{{!mockAuth}}"
+          class="phone-bind-btn"
+          open-type="getPhoneNumber"
+          bindgetphonenumber="onGetPhone"
+        >未绑定手机号 · 点此绑定 ›</button>
+        <view wx:else class="phone-bind-btn" bindtap="goBindPhone">未绑定手机号 · 点此绑定 ›</view>
+        <view class="profile-phone-hint">绑定后物业可电话联系您，并自动匹配名下房屋</view>
+      </block>
     </view>
   </view>
 
