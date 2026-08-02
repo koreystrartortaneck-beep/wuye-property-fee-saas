@@ -53,7 +53,16 @@
       <input class="search-input" placeholder="输入小区名称搜索" value="{{keyword}}"
              confirm-type="search" bindinput="onKeywordInput" bindconfirm="searchCommunities" />
 
+      <!--
+        「加载失败」必须和「没有找到」分开。
+        2026-08-02 实测：后端返回的结构小程序读不懂（新旧版本错开上线），
+        界面却说「没有找到「金港城」，换个关键词试试」—— 那个小区就在库里。
+        业主会去改一个本来正确的关键词，越改越错。
+      -->
       <view wx:if="{{searching}}" class="list-hint">搜索中…</view>
+      <view wx:elif="{{communityError}}" class="list-hint list-hint-error" bindtap="searchCommunities">
+        加载失败，请检查网络后点此重试
+      </view>
       <view wx:elif="{{keyword && communities.length === 0}}" class="list-hint">没有找到「{{keyword}}」，换个关键词试试</view>
       <view wx:elif="{{!keyword}}" class="list-hint">物业管理的小区可能不止一个，先搜到您住的那个</view>
 
@@ -98,6 +107,9 @@
              bindinput="onHouseKeywordInput" bindconfirm="searchHouses" />
 
       <view wx:if="{{houseSearching}}" class="list-hint">搜索中…</view>
+      <view wx:elif="{{houseError}}" class="list-hint list-hint-error" bindtap="searchHouses">
+        加载失败，请检查网络后点此重试
+      </view>
       <view wx:elif="{{houses.length === 0}}" class="list-hint">
         {{houseKeyword ? '没有找到这个房号，请检查后重试，或联系物业确认登记情况' : '该小区暂无可绑定房屋'}}
       </view>

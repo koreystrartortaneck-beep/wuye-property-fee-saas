@@ -107,3 +107,48 @@ test('页面卸载时清掉定时器', () => {
   const body = methodBody(js, 'onUnload');
   assert.match(body, /clearTimeout/, 'onUnload 没有清定时器');
 });
+
+test('后端返回旧结构（数组）也能用——小程序和 API 不同时上线', () => {
+  /*
+   * 2026-08-02 实测撞上的空窗：
+   * 开发者工具点一下编译是立刻生效的，而 API 走云托管要 6–10 分钟。
+   * 那段时间里新小程序连的是旧 API。
+   *
+   * 原来写的是 `res.items || []`：旧 API 返回数组，res.items 是 undefined，
+   * 被悄悄变成空数组 —— 界面于是斩钉截铁地说「没有找到「金港城」」，
+   * 而那个小区就在库里。
+   */
+  const src = fs.readFileSync(path.join(MP, 'pages/bind-house/bind-house.js'), 'utf8');
+  const fn = /function normalizeList[\s\S]*?\n}/.exec(src);
+  assert.ok(fn, '没有归一化函数，两种结构不可能都认');
+  // eslint-disable-next-line no-new-func
+  const normalizeList = new Function(`${fn[0]}; return normalizeList;`)();
+
+  assert.deepEqual(normalizeList([{ id: 'a' }]), { items: [{ id: 'a' }], total: 1 }, '不认旧的数组结构');
+  assert.deepEqual(
+    normalizeList({ items: [{ id: 'a' }], total: 213 }),
+    { items: [{ id: 'a' }], total: 213 },
+    '不认新的 { items, total } 结构',
+  );
+  assert.equal(normalizeList({ oops: 1 }), null, '认不出的结构必须返回 null，不能当成空列表');
+  assert.equal(normalizeList(null), null);
+  assert.equal(normalizeList(undefined), null);
+});
+
+test('请求失败与「没搜到」必须是两句话', () => {
+  /*
+   * 这是这个项目里反复出现的同一类错误：把「我不知道」显示成「没有」。
+   * 假消息比报错难查得多 —— 报错会让人来问，假消息会让人相信。
+   */
+  const src = fs.readFileSync(path.join(MP, 'pages/bind-house/bind-house.js'), 'utf8');
+  for (const [name, flag] of [['searchCommunities', 'communityError'], ['searchHouses', 'houseError']]) {
+    const body = methodBody(src, name);
+    assert.match(body, new RegExp(`${flag}: true`), `${name} 失败时没有置错误态`);
+    assert.match(body, /if \(!list\) throw/, `${name} 对读不懂的返回没有当成失败`);
+  }
+  assert.match(wxml, /communityError/, '小区列表没有失败态文案');
+  assert.match(wxml, /houseError/, '房号列表没有失败态文案');
+  assert.ok(/加载失败/.test(wxml), '失败文案没有说「失败」');
+  // 光说失败不给出口，业主唯一能做的就是反复改关键词
+  assert.match(wxml, /list-hint-error" bindtap="search/, '失败态不可点重试');
+});

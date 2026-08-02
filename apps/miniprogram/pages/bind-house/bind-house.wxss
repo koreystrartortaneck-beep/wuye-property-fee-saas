@@ -232,3 +232,12 @@ picker {
 .option-scroll {
   max-height: 620rpx;
 }
+
+/*
+ * 失败态要看得出可点。
+ * 只写一句「加载失败」而不给出口，业主唯一能做的就是反复改关键词。
+ */
+.list-hint-error {
+  color: var(--danger, #c45656);
+  font-weight: 600;
+}

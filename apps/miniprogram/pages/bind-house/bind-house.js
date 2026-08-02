@@ -5,6 +5,30 @@ const { bindPhone, loadMyHouses } = require('../../utils/auth');
 /** 输入即搜的防抖间隔。太短等于不防抖，太长会让人以为没反应 */
 const DEBOUNCE_MS = 300;
 
+/**
+ * 把列表响应归一化。认识两种形状：
+ *   · 旧：直接一个数组
+ *   · 新：{ items, total } —— 为了能说出「共 213 套，只显示了前 20 套」
+ *
+ * 两种都认，是因为小程序和 API 不是同时上线的：
+ * API 走云托管要 6–10 分钟，而开发者工具点一下编译是立刻生效的。
+ * 2026-08-02 就撞上了这个空窗：新小程序连旧 API，`res.items` 是 undefined，
+ * 被 `|| []` 悄悄变成空数组，界面于是斩钉截铁地说
+ * **「没有找到「金港城」，换个关键词试试」** —— 而那个小区就在库里。
+ *
+ * 认不出的形状返回 null，调用方按**失败**处理。
+ * 这一条是关键：读不懂后端 ≠ 没有数据。
+ * 把前者显示成后者，业主会去改一个本来正确的关键词，
+ * 越改越错，最后认定「物业没登记我家」。假消息比报错难查得多。
+ */
+function normalizeList(res) {
+  if (Array.isArray(res)) return { items: res, total: res.length };
+  if (res && Array.isArray(res.items)) {
+    return { items: res.items, total: Number(res.total) >= 0 ? Number(res.total) : res.items.length };
+  }
+  return null;
+}
+
 Page({
   _kwTimer: null,
   _houseTimer: null,
@@ -31,12 +55,15 @@ Page({
     /** 被截断掉的条数。>0 时界面必须说出来，见 wxml 里的注释 */
     communityMore: 0,
     searching: false,
+    /** 请求失败 ≠ 没搜到。合成一句「没有找到」会让业主去改一个本来正确的关键词 */
+    communityError: false,
     selectedCommunity: null,
     houseKeyword: '',
     houses: [],
     houseTotal: 0,
     houseMore: 0,
     houseSearching: false,
+    houseError: false,
     selectedHouse: null,
     applicantName: '',
     relationIndex: 0,
@@ -157,7 +184,9 @@ Page({
     this.setData({ keyword });
     clearTimeout(this._kwTimer);
     if (!keyword.trim()) {
-      this.setData({ communities: [], communityTotal: 0, communityMore: 0, searching: false });
+      this.setData({
+        communities: [], communityTotal: 0, communityMore: 0, searching: false, communityError: false,
+      });
       return;
     }
     this._kwTimer = setTimeout(() => this.searchCommunities(), DEBOUNCE_MS);
@@ -168,16 +197,23 @@ Page({
     const keyword = this.data.keyword.trim();
     if (!keyword) return;
     const ticket = ++this._kwTicket;
-    this.setData({ searching: true });
+    this.setData({ searching: true, communityError: false });
     try {
-      const res = await request(`/owner/communities?keyword=${encodeURIComponent(keyword)}`);
+      const res = await request(`/owner/communities?keyword=${encodeURIComponent(keyword)}`, { silent: true });
       if (ticket !== this._kwTicket) return; // 已有更新的一次搜索在飞，丢弃这次的结果
-      const items = res.items || [];
+      const list = normalizeList(res);
+      if (!list) throw new Error('返回结构无法识别');
       this.setData({
-        communities: items,
-        communityTotal: res.total || items.length,
-        communityMore: Math.max(0, (res.total || items.length) - items.length),
+        communities: list.items,
+        communityTotal: list.total,
+        communityMore: Math.max(0, list.total - list.items.length),
       });
+    } catch (e) {
+      /*
+       * 失败必须和「没搜到」分开显示。
+       * 合成一句「没有找到」，业主会去改一个本来正确的关键词。
+       */
+      if (ticket === this._kwTicket) this.setData({ communityError: true, communities: [] });
     } finally {
       if (ticket === this._kwTicket) this.setData({ searching: false });
     }
@@ -198,6 +234,7 @@ Page({
       houses: [],
       houseTotal: 0,
       houseMore: 0,
+      houseError: false,
       selectedHouse: null,
     });
   },
@@ -212,18 +249,21 @@ Page({
     const { selectedCommunity, houseKeyword } = this.data;
     if (!selectedCommunity) return;
     const ticket = ++this._houseTicket;
-    this.setData({ houseSearching: true });
+    this.setData({ houseSearching: true, houseError: false });
     try {
       // 查询串单独拼：路径模板要保持成一条能与后端路由对上的字面路径
       const query = houseKeyword.trim() ? `?keyword=${encodeURIComponent(houseKeyword.trim())}` : '';
-      const res = await request(`/owner/communities/${selectedCommunity.id}/houses` + query);
+      const res = await request(`/owner/communities/${selectedCommunity.id}/houses` + query, { silent: true });
       if (ticket !== this._houseTicket) return;
-      const items = res.items || [];
+      const list = normalizeList(res);
+      if (!list) throw new Error('返回结构无法识别');
       this.setData({
-        houses: items,
-        houseTotal: res.total || items.length,
-        houseMore: Math.max(0, (res.total || items.length) - items.length),
+        houses: list.items,
+        houseTotal: list.total,
+        houseMore: Math.max(0, list.total - list.items.length),
       });
+    } catch (e) {
+      if (ticket === this._houseTicket) this.setData({ houseError: true, houses: [] });
     } finally {
       if (ticket === this._houseTicket) this.setData({ houseSearching: false });
     }
