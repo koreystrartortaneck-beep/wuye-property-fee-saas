@@ -15,6 +15,8 @@ export type RowIssueCode =
   | 'HOUSE_NOT_FOUND'
   | 'INVALID_AMOUNT'
   | 'PAID_CONFLICT'
+  | 'REFUNDED_EXISTS'
+  | 'DRAFT_EXISTS'
   | 'UNPAID_EXISTS';
 
 /**
@@ -78,7 +80,24 @@ export interface ImportInput {
   requestId?: string;
 }
 
-const PAID_LIKE_STATUSES: BillStatus[] = ['PAID', 'REFUNDING', 'REFUNDED'];
+/*
+ * 阻断级：钱还在我们这儿（已缴），或正在退的路上。
+ * 这两种情况下再导一张同期账单，业主会被收两次。
+ */
+const BLOCKING_PAID_STATUSES: BillStatus[] = ['PAID', 'REFUNDING'];
+
+/*
+ * REFUNDED 不阻断。
+ *
+ * 2026-08-02 实测撞到：一张 ¥0.01 的账单缴过又退了，之后这户这个账期
+ * **再也导不进任何账单** —— 提示「该房屋本期已存在已缴账单」。
+ * 而退款的意义恰恰是撤销那笔收款：钱已经回到业主手里，这笔费用在实质上没缴，
+ * 重新出账是完全正常的需求（收错了金额、退款重开，都会走到这里）。
+ *
+ * 但也不能一声不响：同期存在退款记录时，物业应当看一眼是不是重复出账，
+ * 所以降为 warn。
+ */
+const REFUNDED_STATUSES: BillStatus[] = ['REFUNDED'];
 
 function normalizeHeader(raw: string): 'houseCode' | 'amount' | 'title' | null {
   const key = raw.trim().toLowerCase();
@@ -203,14 +222,26 @@ export class BillImportService {
         })
       : [];
     const paidHouseIds = new Set(
-      sameperiodBills.filter((b) => PAID_LIKE_STATUSES.includes(b.status)).map((b) => b.houseId),
+      sameperiodBills.filter((b) => BLOCKING_PAID_STATUSES.includes(b.status)).map((b) => b.houseId),
     );
+    const refundedHouseIds = new Set(
+      sameperiodBills.filter((b) => REFUNDED_STATUSES.includes(b.status)).map((b) => b.houseId),
+    );
+    /*
+     * 草稿与已发布的待缴必须分开说。
+     *
+     * 原来两者混在一起，提示一律是「导入后业主会看到两张、可能重复缴费」——
+     * 而**草稿账单业主根本看不到**，这句话对草稿是错的。
+     * 草稿的风险在别处：等它被发布时才会变成两张，那时没人会想起这次导入。
+     */
     const unpaidByHouse = new Map<string, Array<{ title: string; amount: string }>>();
+    const draftByHouse = new Map<string, Array<{ title: string; amount: string }>>();
     for (const b of sameperiodBills) {
-      if (b.status !== 'DRAFT' && b.status !== 'UNPAID') continue;
-      const list = unpaidByHouse.get(b.houseId) ?? [];
+      const target = b.status === 'UNPAID' ? unpaidByHouse : b.status === 'DRAFT' ? draftByHouse : null;
+      if (!target) continue;
+      const list = target.get(b.houseId) ?? [];
       list.push({ title: b.title, amount: String(b.amount) });
-      unpaidByHouse.set(b.houseId, list);
+      target.set(b.houseId, list);
     }
 
     const seen = new Map<string, number>();
@@ -233,6 +264,13 @@ export class BillImportService {
       if (houseId && paidHouseIds.has(houseId)) {
         issues.push({ code: 'PAID_CONFLICT', message: '该房屋本期已存在已缴账单', severity: 'error' });
       }
+      if (houseId && refundedHouseIds.has(houseId)) {
+        issues.push({
+          code: 'REFUNDED_EXISTS',
+          severity: 'warn',
+          message: '该房屋本期有已退款的账单。退款已把钱退回业主，重新出账是正常的；请确认不是重复出账',
+        });
+      }
       const unpaid = houseId ? unpaidByHouse.get(houseId) : undefined;
       if (unpaid?.length) {
         issues.push({
@@ -241,6 +279,16 @@ export class BillImportService {
           message:
             `该房屋本期已有待缴账单：${unpaid.map((b) => `${b.title} ¥${b.amount}`).join('、')}。` +
             '若与本行是同一笔费用，导入后业主会看到两张、可能重复缴费',
+        });
+      }
+      const draft = houseId ? draftByHouse.get(houseId) : undefined;
+      if (draft?.length) {
+        issues.push({
+          code: 'DRAFT_EXISTS',
+          severity: 'warn',
+          message:
+            `该房屋本期已有未发布的草稿账单：${draft.map((b) => `${b.title} ¥${b.amount}`).join('、')}。` +
+            '草稿业主看不到，但那批账单一旦发布就会变成两张',
         });
       }
       const errors = issues.filter((i) => (i.severity ?? 'error') === 'error');
