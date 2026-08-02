@@ -152,3 +152,51 @@ test('四个 tab 页的页面外壳一致（底部留白由 app.wxss 统一给�
     `tab 页底部留白已收归 app.wxss 的 .page.has-navbar，以下页面又写了一遍会重新分化: ${dupes.join(', ')}`,
   );
 });
+
+/*
+ * ──「我的」只放跟我有关的 ──
+ *
+ * 业主指出：社区公告、物业公示是全小区内容，摆在「我的」里是累赘。
+ * 它们由首页「社区动态 → 查看全部」进 community 页（自带 全部/公告/物业公示 筛选），
+ * 独立的 announcements / work-wall 页面与之完全重复，已删除。
+ */
+
+test('「我的」菜单每一项都是个人相关，且路由真实存在', () => {
+  const js = fs.readFileSync(path.join(MP, 'pages/mine/mine.js'), 'utf8');
+  // 菜单 key 白名单：新增一项前先问「这是"我的"吗」
+  const PERSONAL = new Set(['tickets', 'orders', 'payments', 'coupons', 'notify']);
+  const keys = [...js.matchAll(/\{ key: '(\w+)', title:/g)].map((m) => m[1]);
+  assert.ok(keys.length >= 4, `菜单解析失败，只找到 ${keys.length} 项`);
+  const alien = keys.filter((k) => !PERSONAL.has(k));
+  assert.deepStrictEqual(alien, [], `「我的」里混入了非个人内容：${alien.join('、')}`);
+  // 每个 key 都要有对应的跳转/处理，否则是死菜单
+  for (const k of keys) {
+    if (k === 'notify') continue; // notify 走 enableNotify
+    assert.ok(js.includes(`key === '${k}'`), `菜单项 ${k} 没有对应的跳转处理`);
+  }
+});
+
+test('社区内容仍然可达：首页「查看全部」→ community，且带公告/公示筛选', () => {
+  /*
+   * 删掉重复页面的前提是 community 页真的覆盖它们。
+   * 这条断言防「有人把 community 的筛选删了」——那时公示墙就真的无处可看了。
+   */
+  const idx = fs.readFileSync(path.join(MP, 'pages/index/index.js'), 'utf8');
+  assert.match(idx, /pages\/community\/community/, '首页不再通向社区动态页');
+  const comm = fs.readFileSync(path.join(MP, 'pages/community/community.js'), 'utf8');
+  assert.ok(comm.includes("value: 'ann'") && comm.includes("value: 'work'"), 'community 页丢了公告/公示筛选');
+});
+
+test('删掉的冗余页面不再被任何地方引用', () => {
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const p = path.join(dir, e.name);
+    return e.isDirectory() ? walk(p) : [p];
+  });
+  const offenders = [];
+  for (const f of walk(path.join(MP, 'pages')).concat(walk(path.join(MP, 'utils')))) {
+    if (!/\.(js|wxml|json)$/.test(f)) continue;
+    const src = fs.readFileSync(f, 'utf8');
+    if (/pages\/(announcements\/announcements|work-wall\/work-wall)/.test(src)) offenders.push(f);
+  }
+  assert.deepStrictEqual(offenders, [], `仍有引用已删除页面的文件`);
+});

@@ -1,8 +1,0 @@
-{
-  "navigationStyle": "default",
-  "navigationBarTitleText": "物业公示",
-  "navigationBarBackgroundColor": "#FAF7F2",
-  "navigationBarTextStyle": "black",
-  "enablePullDownRefresh": true,
-  "backgroundTextStyle": "dark"
-}

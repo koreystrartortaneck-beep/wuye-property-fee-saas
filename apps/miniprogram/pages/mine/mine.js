@@ -31,15 +31,21 @@ Page({
     /** 有在途绑定申请：决定「我的房屋」卡显示「审核中」还是「去绑定」 */
     hasPendingApply: false,
     deleting: false,
+    /*
+     * 「我的」只放**跟我有关**的：我的工单、我的预约、我的缴费、我的卡券、我的提醒。
+     *
+     * 社区公告与物业公示是全小区内容，不是「我的」——业主指出后移除。
+     * 它们由首页「社区动态 → 查看全部」进统一动态流（community 页，
+     * 自带 全部/公告/物业公示 筛选），独立的 announcements / work-wall
+     * 两个页面与之完全重复，已随本次一并删除。
+     * （这两项当初被塞进来，是因为那两个页面曾是全站无入口的死页面 ——
+     * 正确解法是删掉重复页面，而不是给它们造入口。）
+     */
     menus: [
       { key: 'tickets', title: '我的工单', desc: '报修与投诉建议进度' },
       { key: 'orders', title: '我的预约', desc: '生活服务预约记录' },
       { key: 'payments', title: '缴费记录', desc: '查看历史付款凭证' },
-      // 以下三页此前已开发完成并在 app.json 注册，但全站没有任何入口，
-      // 属"死页面"——功能可用却无人能进。补上入口。
-      { key: 'announcements', title: '社区公告', desc: '物业通知与公示' },
       { key: 'coupons', title: '我的卡券', desc: '物业发放的抵扣与服务券' },
-      { key: 'workwall', title: '物业公示', desc: '保洁巡检等日常工作留痕' },
       /*
        * 缴费提醒授权入口。
        *
@@ -178,9 +184,7 @@ Page({
     if (key === 'tickets') wx.navigateTo({ url: '/pages/tickets/tickets' });
     if (key === 'orders') wx.navigateTo({ url: '/pages/services/services?tab=1' });
     if (key === 'payments') wx.navigateTo({ url: '/pages/payments/payments' });
-    if (key === 'announcements') wx.navigateTo({ url: '/pages/announcements/announcements' });
     if (key === 'coupons') wx.navigateTo({ url: '/pages/coupons/coupons' });
-    if (key === 'workwall') wx.navigateTo({ url: '/pages/work-wall/work-wall' });
     if (key === 'notify') this.enableNotify();
   },
 
