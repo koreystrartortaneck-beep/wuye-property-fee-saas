@@ -25,8 +25,10 @@
 
       <view class="bt-acts">
         <view class="adm-btn adm-btn-ghost bt-btn" data-i="{{i}}" bindtap="toggle">{{b.expanded ? '收起明细' : '逐户核对'}}</view>
-        <view class="adm-btn bt-btn {{busy === b.id ? 'adm-btn-busy' : ''}}" data-i="{{i}}" bindtap="publish">发布({{b.count}} 户)</view>
+        <view wx:if="{{b.count > 0}}" class="adm-btn bt-btn {{busy === b.id ? 'adm-btn-busy' : ''}}" data-i="{{i}}" bindtap="publish">发布({{b.count}} 户)</view>
+        <view wx:else class="adm-btn adm-btn-ghost bt-btn bt-dead" data-i="{{i}}" bindtap="cancelBatch">整批不发</view>
       </view>
+      <view wx:if="{{b.count === 0}}" class="adm-hint">这批已经一户都不剩(全被剔除了),没有可发布的账单 —— 点「整批不发」把它收掉。</view>
 
       <block wx:if="{{b.expanded}}">
         <view class="adm-hint">点「剔除」= 这户本期不发账单(线下已收 / 不该出)。</view>

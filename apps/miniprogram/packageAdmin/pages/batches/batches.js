@@ -55,7 +55,13 @@ Page({
           };
         }),
       );
-      this.setData({ batches: batches.filter((b) => b.count > 0) });
+      /*
+       * 一条草稿批次都不能藏起来,哪怕它已经被剔干净(0 户待发)。
+       * 首页那条待办是按「批次状态=草稿」数的:这里若把 0 户的过滤掉,
+       * 待办说有 1 件事、点进来说「没有待发布的账单」—— 红点永远消不掉。
+       * 0 户的批次照样列出来,给它「整批不发」这条出路。
+       */
+      this.setData({ batches });
     } catch (e) {
       this.setData({ loadError: true });
     } finally {

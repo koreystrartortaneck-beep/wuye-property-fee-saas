@@ -41,3 +41,4 @@
   color: var(--danger, #c45656);
   font-size: 25rpx;
 }
+.bt-dead { color: var(--danger, #c45656); }
