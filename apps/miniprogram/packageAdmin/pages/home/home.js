@@ -46,6 +46,8 @@ Page({
     houseTotal: 0,
     searching: false,
     communityId: '',
+    /** 欠费概览(有欠费才显示) */
+    arrears: null,
   },
 
   async onShow() {
@@ -73,11 +75,17 @@ Page({
         // 「本月账单已生成待发布」以前点了只弹「请在电脑后台处理」——
         // 手机端现在能发布,这条必须能点进去,否则待办等于在通知你回办公室
         draftBatch: '/packageAdmin/pages/batches/batches',
+        tickets: '/packageAdmin/pages/tickets/tickets',
       };
       this.setData({
         todos: (d.todos || [])
           .filter((t) => t.count > 0)
           .map((t) => ({ ...t, url: ACTIONABLE[t.key] || '' })),
+        // 欠费不在 todos 里(它不是「待处理单据」而是常态),单独给一条入口
+        arrears:
+          d.arrears && d.arrears.houses > 0
+            ? { houses: d.arrears.houses, amount: d.arrears.amount, overdueHouses: d.arrears.overdueHouses }
+            : null,
       });
     } catch (e) {
       // 待办挂了不挡楼盘图
@@ -139,6 +147,14 @@ Page({
 
   goAnnounce() {
     wx.navigateTo({ url: `/packageAdmin/pages/announce/announce?communityId=${this.data.communityId}` });
+  },
+
+  goDun() {
+    wx.navigateTo({ url: '/packageAdmin/pages/dun/dun' });
+  },
+
+  goTickets() {
+    wx.navigateTo({ url: '/packageAdmin/pages/tickets/tickets' });
   },
 
   onTodoTap(e) {

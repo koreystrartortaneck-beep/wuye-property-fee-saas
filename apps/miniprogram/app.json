@@ -76,7 +76,10 @@
         "pages/billing/billing",
         "pages/announce/announce",
         "pages/bill-one/bill-one",
-        "pages/batches/batches"
+        "pages/batches/batches",
+        "pages/collect/collect",
+        "pages/dun/dun",
+        "pages/tickets/tickets"
       ]
     }
   ]

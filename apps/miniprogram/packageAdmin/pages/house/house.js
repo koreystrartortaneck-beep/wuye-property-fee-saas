@@ -79,11 +79,26 @@ Page({
         house,
         summary: profile.summary,
         billMonthText: anchor ? `每年 ${MONTH[Number(anchor.slice(5, 7))]}出账` : '没填放户日期,出不了账',
-        bills: (profile.bills || []).slice(0, 20).map((b) => ({
-          ...b,
-          statusLabel: BILL_STATUS[b.status] || b.status,
-          periodText: periodLabel(b.period),
-        })),
+        /*
+         * 每笔账单带上它对应的支付订单号与通道 —— 这一页要能直接动钱:
+         *   待缴 → 线下收款登记
+         *   微信已缴 → 退款(原路退回)
+         *   线下已缴 → 冲正(把这笔现金记录作废,账单回到待缴)
+         * profile.payments 里有 id/orderNo/channel,账单上有 paymentId,在这里对上。
+         */
+        bills: (profile.bills || []).slice(0, 20).map((b) => {
+          const pay = b.paymentId ? (profile.payments || []).find((p) => p.id === b.paymentId) : null;
+          return {
+            ...b,
+            statusLabel: BILL_STATUS[b.status] || b.status,
+            periodText: periodLabel(b.period),
+            orderNo: pay ? pay.orderNo : '',
+            channel: pay ? pay.channel : '',
+            canCollect: b.status === 'UNPAID',
+            canRefund: b.status === 'PAID' && pay && pay.channel === 'WXPAY' && pay.status === 'SUCCESS',
+            canReverse: b.status === 'PAID' && pay && pay.channel === 'OFFLINE' && pay.status === 'SUCCESS',
+          };
+        }),
         contacts: contacts.items || [],
         standards: (standards.items || [])
           .filter((s) => s.status === 'ACTIVE')
@@ -281,6 +296,76 @@ Page({
     await this.load();
   },
 
+  /** 业主拿现金来交:去收款登记页(金额在那页现查,不带过去) */
+  goCollect(e) {
+    const billId = e.currentTarget.dataset.id;
+    wx.navigateTo({ url: `/packageAdmin/pages/collect/collect?billId=${billId}&houseId=${this.data.id}` });
+  },
+
+  /*
+   * 退款:全额原路退回业主微信。
+   *
+   * 系统不支持部分退款(退款接口不接受金额,一律按原订单全额),所以界面
+   * 也绝不能给一个金额输入框。确认框把三件事说全:退多少、退到哪、能不能撤。
+   */
+  async refund(e) {
+    const { order, amount } = e.currentTarget.dataset;
+    const reason = await askText('退款原因', '必填,记入审计,业主客服都能查');
+    if (!reason) return;
+    const ok = await new Promise((resolve) =>
+      wx.showModal({
+        title: '确认退款',
+        content: `全额退 ¥${amount} 到业主的微信(原路退回,通常几分钟到账)。退款发起后不能撤销,这笔账单会变成「已退款」。`,
+        confirmText: '确认退款',
+        confirmColor: '#c45656',
+        success: (r) => resolve(r.confirm),
+      }),
+    );
+    if (!ok) return;
+    try {
+      await adminRequest('/admin/refunds', {
+        method: 'POST',
+        data: { orderNo: order, reason, requestId: `mp-refund-${order}` },
+      });
+      wx.showToast({ title: '已发起退款', icon: 'success' });
+      await this.load();
+    } catch (err) {
+      // 退款限管理员角色:403 要说清是权限问题,而不是让人反复重试
+      if (err && err.code === 40300) {
+        wx.showModal({ title: '权限不够', content: '退款只有物业管理员账号能做。请让管理员在手机或电脑后台操作。', showCancel: false });
+      }
+    }
+  },
+
+  /** 冲正:线下收款记错了。钱本来就没进系统,作废记录、账单回到待缴 */
+  async reverse(e) {
+    const { order, amount } = e.currentTarget.dataset;
+    const reason = await askText('冲正原因', '必填,例如「收款登记错户」');
+    if (!reason) return;
+    const ok = await new Promise((resolve) =>
+      wx.showModal({
+        title: '确认冲正',
+        content: `把这笔 ¥${amount} 的线下收款记录作废,账单回到「待缴」。现金本身在你手里,系统只是撤销这条记录。`,
+        confirmText: '确认冲正',
+        confirmColor: '#c45656',
+        success: (r) => resolve(r.confirm),
+      }),
+    );
+    if (!ok) return;
+    try {
+      await adminRequest(`/admin/payments/${order}/reverse-offline`, {
+        method: 'POST',
+        data: { reason, requestId: `mp-reverse-${order}` },
+      });
+      wx.showToast({ title: '已冲正,账单回到待缴', icon: 'none', duration: 2500 });
+      await this.load();
+    } catch (err) {
+      if (err && err.code === 40300) {
+        wx.showModal({ title: '权限不够', content: '冲正只有物业管理员账号能做。请让管理员操作。', showCancel: false });
+      }
+    }
+  },
+
   /** 只给这一户出账单:单户页面,不再回到批量流程里选范围 */
   goBillThisHouse() {
     const h = this.data.house;
@@ -293,3 +378,16 @@ Page({
     if (phone) wx.makePhoneCall({ phoneNumber: phone, fail: () => {} });
   },
 });
+
+/** 必填原因的输入框:空输入等于取消(后端也要求非空,提前挡住少一次失败请求) */
+function askText(title, placeholder) {
+  return new Promise((resolve) =>
+    wx.showModal({
+      title,
+      editable: true,
+      placeholderText: placeholder,
+      success: (r) => resolve(r.confirm && r.content && r.content.trim() ? r.content.trim() : ''),
+      fail: () => resolve(''),
+    }),
+  );
+}

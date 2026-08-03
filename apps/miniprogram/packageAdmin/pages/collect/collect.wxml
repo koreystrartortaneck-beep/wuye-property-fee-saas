@@ -1,0 +1,66 @@
+<view class="page adm-page">
+  <view wx:if="{{loading}}" class="adm-hint">加载中…</view>
+  <view wx:elif="{{loadError}}" class="adm-denied">
+    <view class="adm-denied-title">收不了这笔</view>
+    <view class="adm-denied-desc">{{loadError}}</view>
+    <view class="adm-btn adm-retry" bindtap="back">返回</view>
+  </view>
+
+  <!-- 收完:收据号摆在最显眼处,业主会当场问「有凭证吗」 -->
+  <block wx:elif="{{result}}">
+    <view class="done">
+      <view class="done-tick">✓</view>
+      <view class="done-num adm-num">已收 ¥{{result.amount}}</view>
+      <view class="done-lab">收据号 {{result.receiptNo}}</view>
+      <view class="done-lab">订单号 {{result.orderNo}}</view>
+    </view>
+    <view class="adm-hint">业主打开小程序,这笔已经是「已缴」并能看到电子收据。收错了可以在这户的账单里冲正(需管理员账号)。</view>
+    <view class="adm-btn act" bindtap="back">完成</view>
+  </block>
+
+  <block wx:else>
+    <!-- 收谁的、收多少:金额不给改,它由账单说了算 -->
+    <view class="sum-card">
+      <view class="sum-num adm-num">¥{{bill.amount}}</view>
+      <view class="sum-lab">{{bill.houseName}} · {{bill.title}}</view>
+    </view>
+
+    <view class="adm-sec">收款方式</view>
+    <view class="m-row">
+      <view
+        class="m-i {{method === item ? 'm-on' : ''}}"
+        wx:for="{{methods}}"
+        wx:key="*this"
+        data-i="{{index}}"
+        bindtap="pickMethod"
+      >{{item}}</view>
+    </view>
+
+    <view class="adm-sec">凭据</view>
+    <view class="adm-card">
+      <view class="f-row">
+        <view class="f-lab">单据号</view>
+        <input class="adm-input f-in" data-k="voucherNo" value="{{voucherNo}}" bindinput="onInput" placeholder="收据本编号 / 转账凭证号" />
+      </view>
+      <view class="f-row">
+        <view class="f-lab">收款日期</view>
+        <picker class="f-in" mode="date" value="{{paidAt}}" bindchange="onPaidAt">
+          <view class="adm-input pick-line">{{paidAt}} ›</view>
+        </picker>
+      </view>
+      <view class="f-row">
+        <view class="f-lab">付款人</view>
+        <input class="adm-input f-in" data-k="payerName" value="{{payerName}}" bindinput="onInput" placeholder="选填,谁来交的" />
+      </view>
+      <view class="f-row">
+        <view class="f-lab">备注</view>
+        <input class="adm-input f-in" data-k="remark" value="{{remark}}" bindinput="onInput" placeholder="选填" />
+      </view>
+    </view>
+    <view class="adm-hint">单据号是这笔现金唯一的线下痕迹,以后对账只能靠它回到纸面,所以必填。</view>
+
+    <view class="adm-btn act {{submitting ? 'adm-btn-busy' : ''}}" bindtap="submit">
+      {{submitting ? '登记中…' : '确认收到 ¥' + bill.amount}}
+    </view>
+  </block>
+</view>

@@ -1,0 +1,52 @@
+@import "../../adm.wxss";
+
+.t-card {
+  margin-bottom: 22rpx;
+  border-radius: 32rpx;
+  background: rgba(253, 251, 247, 0.94);
+  border: 1rpx solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 20rpx 50rpx rgba(70, 52, 29, 0.08);
+  padding: 26rpx;
+}
+.t-head {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+.t-type {
+  padding: 8rpx 20rpx;
+  border-radius: 999rpx;
+  background: rgba(90, 70, 128, 0.09);
+  color: var(--plum, #3b2b57);
+  font-size: 24rpx;
+  font-weight: 800;
+}
+.t-house {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: var(--gold-deep, #b8862f);
+}
+.t-body {
+  margin-top: 18rpx;
+  font-size: 29rpx;
+  line-height: 1.6;
+  color: var(--text, #251c38);
+}
+.t-at {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: var(--text-4, #8b8199);
+  font-variant-numeric: tabular-nums;
+}
+.t-btn { margin-top: 24rpx; }
+
+.sec-act {
+  float: right;
+  padding: 0 8rpx;
+  font-size: 26rpx;
+  font-weight: 800;
+  color: var(--gold-deep, #b8862f);
+}

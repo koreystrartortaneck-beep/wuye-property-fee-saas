@@ -175,3 +175,32 @@
   margin-top: 28rpx;
 }
 .quick-btn { flex: 1; }
+
+/* 欠费条:金额在左、动作在右,整条可点 */
+.ar-bar {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  margin-top: 22rpx;
+  padding: 24rpx 28rpx;
+  border-radius: 28rpx;
+  background: linear-gradient(135deg, rgba(196, 86, 86, 0.12), rgba(253, 251, 247, 0.94));
+  border: 2rpx solid rgba(196, 86, 86, 0.22);
+}
+.ar-main { flex: 1; min-width: 0; }
+.ar-num {
+  font-size: 38rpx;
+  font-weight: 900;
+  color: #b23f3f;
+}
+.ar-lab {
+  margin-top: 2rpx;
+  font-size: 23rpx;
+  color: var(--text-3, #7c7288);
+}
+.ar-go {
+  flex-shrink: 0;
+  font-size: 26rpx;
+  font-weight: 800;
+  color: #b23f3f;
+}

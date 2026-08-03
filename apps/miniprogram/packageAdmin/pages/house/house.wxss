@@ -74,6 +74,29 @@
 .add-phone { flex: 1; min-width: 0; }
 .add-name { flex: 0 0 220rpx; }
 
+/* 账单行:上半是这笔账,下半是这笔账该做的动作 */
+.bill-row {
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid rgba(37, 28, 56, 0.05);
+}
+.bill-row:last-child { border-bottom: none; }
+.bill-line {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  min-height: 88rpx;
+}
+.bill-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 12rpx;
+}
+.bill-acts .adm-pill {
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+}
 .bill-right { flex-shrink: 0; text-align: right; }
 .bill-st {
   margin-top: 2rpx;

@@ -270,6 +270,69 @@ test('发布是人点的最后一下,且发布前必须确认户数', () => {
   assert.match(js, /admin\/bill-batches\?period=/, '发布按钮上的户数/金额没有取自真实批次');
 });
 
+test('线下收款:金额不给改、单据号必填、重复提交不重复收款', () => {
+  /*
+   * ① 金额来自账单,收多少是账单说的 —— 页面上绝不能出现金额输入框
+   *   (系统只支持整笔核销,给个输入框等于骗人)。
+   * ② 提交前现查一遍账单状态:上一页的数字可能已过时(别人刚收过/账单被作废),
+   *   拿过时的金额收现金是真金白银的错。
+   * ③ requestId 由「账单+单据号」拼出:手抖点两下是同一次(服务端重放同一张收据),
+   *   换了单据号才算另一次。
+   */
+  const js = stripJs(read('packageAdmin/pages/collect/collect.js'));
+  const wxml = read('packageAdmin/pages/collect/collect.wxml').replace(/<!--[\s\S]*?-->/g, '');
+  assert.ok(!/data-k="amount"|k: 'amount'/.test(js + wxml), '收款页出现了金额输入');
+  assert.match(js, /status=UNPAID/, '没有现查账单状态就收钱');
+  assert.match(js, /requestId: `mp-offline-\$\{this\.data\.billId\}-\$\{voucherNo/, 'requestId 没有绑定账单+单据号');
+  assert.match(js, /voucherNo\)\s*return wx\.showToast|if \(!voucherNo\)/, '单据号没有必填校验');
+  assert.match(wxml, /收据号/, '收完没有显示收据号');
+});
+
+test('退款只能全额原路退回,且必须填原因', () => {
+  /*
+   * 退款接口不接受金额(一律按原订单全额),所以界面绝不能给金额输入框 ——
+   * 给了就是让人以为能退一部分。原因必填:审计里那句话是以后唯一的解释。
+   * 403 要说清是权限问题(退款限管理员),而不是让人反复重试。
+   */
+  const js = stripJs(read('packageAdmin/pages/house/house.js'));
+  assert.match(js, /admin\/refunds/, '没有调退款接口');
+  assert.match(js, /全额退/, '确认框没有说清是全额退款');
+  assert.match(js, /askText\('退款原因'/, '退款没有要求填原因');
+  assert.match(js, /40300[\s\S]{0,200}管理员/, '403 没有解释成权限问题');
+  // 冲正:线下收款记错了的出路,同样要原因
+  assert.match(js, /reverse-offline/, '线下收款没有冲正的出路');
+  assert.match(js, /askText\('冲正原因'/, '冲正没有要求填原因');
+});
+
+test('催缴:合计取后端全量口径,截断要说出来,发送结果如实报数', () => {
+  /*
+   * ① 欠费总额是拿去汇报的数。列表是截断过的,自己把这几行加起来会比真实欠费少。
+   * ② queued 数的是**账单条数**(一户欠三期就是三条)——说成「已通知 N 户」是假话。
+   * ③ 提醒走微信订阅消息,业主没授权就收不到,界面必须明说,
+   *   否则物业以为发过了、业主那边什么都没响。
+   */
+  const js = stripJs(read('packageAdmin/pages/dun/dun.js'));
+  assert.match(js, /total: d\.totalAmount/, '欠费合计不是取后端全量口径');
+  assert.match(js, /truncated/, '列表截断没有告知');
+  assert.match(js, /r\.queued/, '发送结果没有用后端的真实条数');
+  assert.ok(/没授权/.test(js) || /没授权/.test(read('packageAdmin/pages/dun/dun.wxml')), '没有说明订阅未授权收不到');
+  assert.match(js, /admin\/arrears\/dun/, '没有调催缴接口');
+});
+
+test('工单:受理要填处理人、办结要填回复——业主两样都看得到', () => {
+  /*
+   * 「一键办结」留下的是一条没人看得懂的记录,业主只会再报一次。
+   * 两个接口后端都要求非空,页面用可编辑弹窗提前挡住空输入。
+   */
+  const js = stripJs(read('packageAdmin/pages/tickets/tickets.js'));
+  assert.match(js, /tickets\/\$\{id\}\/process/, '没有受理接口');
+  assert.match(js, /tickets\/\$\{id\}\/done/, '没有办结接口');
+  assert.match(js, /editable: true/, '受理/办结没有可输入的弹窗');
+  assert.match(js, /业主会看到/, '没有告知这些字业主可见');
+  // 枚举文案必须取自 utils/labels(与后端枚举有守卫比对),页面不许自建映射
+  assert.match(js, /require\('\.\.\/\.\.\/\.\.\/utils\/labels'\)/, '工单状态文案没有走 utils/labels');
+});
+
 test('发公告:发布即可见,所以要确认受众;可撤回但要说清收不回', () => {
   const js = stripJs(read('packageAdmin/pages/announce/announce.js'));
   assert.match(js, /本公司全部小区|本小区/, '确认框没有说清受众范围');

@@ -132,18 +132,25 @@
     </view>
     <view class="adm-hint">换住户 = 先移除旧号(对方立即看不到账单),再添加新号(对方授权手机号即见账单)</view>
 
-    <!-- 账单 -->
+    <!-- 账单:每一行自带这笔钱该做的动作 -->
     <view class="adm-sec">账单</view>
     <view class="adm-card">
       <view wx:if="{{bills.length === 0}}" class="adm-hint">还没有账单</view>
-      <view class="adm-row" wx:for="{{bills}}" wx:key="id">
-        <view class="adm-row-main">
-          <view class="adm-row-title">{{item.title}}</view>
-          <view class="adm-row-sub adm-num">{{item.periodText}}</view>
+      <view class="bill-row" wx:for="{{bills}}" wx:key="id">
+        <view class="bill-line">
+          <view class="adm-row-main">
+            <view class="adm-row-title">{{item.title}}</view>
+            <view class="adm-row-sub adm-num">{{item.periodText}}</view>
+          </view>
+          <view class="bill-right">
+            <view class="adm-row-title adm-num">¥{{item.amount}}</view>
+            <view class="bill-st {{item.status === 'UNPAID' ? 'adm-danger' : ''}}">{{item.statusLabel}}</view>
+          </view>
         </view>
-        <view class="bill-right">
-          <view class="adm-row-title adm-num">¥{{item.amount}}</view>
-          <view class="bill-st {{item.status === 'UNPAID' ? 'adm-danger' : ''}}">{{item.statusLabel}}</view>
+        <view wx:if="{{item.canCollect || item.canRefund || item.canReverse}}" class="bill-acts">
+          <view wx:if="{{item.canCollect}}" class="adm-pill adm-pill-ok" data-id="{{item.id}}" bindtap="goCollect">收到现金 · 登记</view>
+          <view wx:if="{{item.canRefund}}" class="adm-pill adm-pill-danger" data-order="{{item.orderNo}}" data-amount="{{item.amount}}" bindtap="refund">退款</view>
+          <view wx:if="{{item.canReverse}}" class="adm-pill adm-pill-danger" data-order="{{item.orderNo}}" data-amount="{{item.amount}}" bindtap="reverse">冲正线下收款</view>
         </view>
       </view>
     </view>
