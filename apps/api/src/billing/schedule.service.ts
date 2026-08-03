@@ -79,7 +79,15 @@ export class ScheduleService {
           where: { enabled: true, billDay: now.getDate() },
         });
         for (const rule of rules) {
-          const period = currentPeriod(now, rule.period as RulePeriod);
+          /*
+           * 周年方案:billDay 复用为「每月自动生成草稿的触发日」,扫描键 = 当月。
+           * 只生成草稿(业主不可见),发布仍是物业过目后手动 —— 自动化的是准备,不是决定。
+           * legacy 三种周期照旧走 currentPeriod(锚点月为 null 时跳过)。
+           */
+          const period =
+            rule.periodScheme === 'ANNIVERSARY'
+              ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+              : currentPeriod(now, rule.period as RulePeriod);
           if (!period) continue;
           try {
             await this.billRun.generate(rule.id, period);

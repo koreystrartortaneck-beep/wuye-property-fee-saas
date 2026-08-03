@@ -8,6 +8,7 @@ import { calcOne } from './engine/calc';
 import { centsToStr, toCents } from './engine/money';
 import { allocateShare } from './engine/share';
 import { MeterService } from './meter.controller';
+import { anniversaryPeriod } from './period';
 
 interface SkipDetail {
   houseId: string;
@@ -23,6 +24,34 @@ export interface GenerateResult {
   skippedDetail?: SkipDetail[];
   /** 该账期批次已发布，无法再追加账单——调用方须据此给出正确提示 */
   alreadyPublished?: boolean;
+}
+
+export interface GenerateOptions {
+  /** 预览后剔除的房屋（本次不出账，计入 skippedDetail: EXCLUDED_BY_ADMIN） */
+  excludeHouseIds?: string[];
+}
+
+/** 每户一个出账目标：周年方案下 period/dueDate 因户而异，legacy 全批相同 */
+interface BillTarget {
+  house: { id: string; code: string; area: import('@prisma/client').Prisma.Decimal | null };
+  period: string;
+  title: string;
+  dueDate: Date;
+  /** 周年账期起止，进账单 snapshot（展示层渲染「2026 年度」用） */
+  periodRange?: { start: string; end: string };
+}
+
+export interface PreviewRow {
+  houseId: string;
+  code: string;
+  displayName: string;
+  period: string;
+  periodRange?: { start: string; end: string };
+  dueDate: string;
+  amountCents: number | null;
+  amount: string | null;
+  snapshot: Record<string, unknown> | null;
+  skipReason?: string;
 }
 
 /**
@@ -76,12 +105,13 @@ export class BillRunService {
     private readonly meter: MeterService,
   ) {}
 
-  async generate(ruleId: string, period: string): Promise<GenerateResult> {
+  async generate(ruleId: string, period: string, opts?: GenerateOptions): Promise<GenerateResult> {
     const rule = await this.prisma.t.feeRule.findUnique({ where: { id: ruleId } });
     if (!rule) throw new BizException(ErrorCode.NOT_FOUND, '规则不存在');
     if (rule.ruleType === 'FORMULA') {
       throw new BizException(ErrorCode.FORMULA_INVALID, 'FORMULA 规则已停用，请先转换规则或改用账单导入');
     }
+    this.assertSchemeSupported(rule);
 
     const batchNo = `RULE-${period}-${ruleId}`;
     const existingBatch = await this.prisma.t.billBatch.findFirst({ where: { batchNo } });
@@ -121,18 +151,31 @@ export class BillRunService {
       update: { status: 'RUNNING', finishedAt: null },
     });
 
-    const houses = await this.prisma.t.house.findMany({
-      where: { communityId: rule.communityId, status: 'ACTIVE', type: rule.houseType },
-    });
-
-    const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + rule.dueDays);
-    dueDate.setHours(23, 59, 59, 0);
+    const selection = await this.selectTargets(rule, period);
+    let targets = selection.targets;
+    const houses = targets.map((t) => t.house);
 
     let generated = 0;
     let skipped = 0;
     let generatedCents = 0;
-    const skippedDetail: SkipDetail[] = [];
+    const skippedDetail: SkipDetail[] = [...selection.skipped];
+    skipped += selection.skipped.length;
+
+    /*
+     * 预览后剔除:物业在预览里取消勾选的户,本次不出账。
+     * 必须计入 skippedDetail —— 静默少出一户和多出一户同样危险,
+     * 下个月对不上「为什么这户没账单」时,这里是唯一的答案。
+     */
+    if (opts?.excludeHouseIds?.length) {
+      const exclude = new Set(opts.excludeHouseIds);
+      for (const t of targets) {
+        if (exclude.has(t.house.id)) {
+          skipped++;
+          skippedDetail.push({ houseId: t.house.id, code: t.house.code, reason: 'EXCLUDED_BY_ADMIN' });
+        }
+      }
+      targets = targets.filter((t) => !exclude.has(t.house.id));
+    }
 
     /*
      * 先攒起来，最后一次 createMany 落库。
@@ -155,20 +198,28 @@ export class BillRunService {
      * 脏数据。这里只放弃 tenantId 一项的检查，其余照常。
      */
     const pending: Array<Omit<Prisma.BillCreateManyInput, 'tenantId'>> = [];
-    const stageBill = (houseId: string, cents: number, snapshot: Record<string, unknown>) => {
+    /*
+     * period/dueDate/title 从循环不变量变成每户值(BillTarget):
+     * 周年方案下每户的账期起始日、缴费期限都不同;legacy 的 selectTargets
+     * 给所有户相同的值,行为不变。写路径其余部分(批次/run/createMany/聚合)零改动。
+     */
+    const stageBill = (target: BillTarget, cents: number, snapshot: Record<string, unknown>) => {
       pending.push({
         communityId: rule.communityId,
-        houseId,
+        houseId: target.house.id,
         ruleId: rule.id,
         billRunId: run.id,
         batchId: batch.id,
         source: 'RULE',
-        period,
-        title: `${rule.name} ${period}`,
-        snapshot: snapshot as Prisma.InputJsonValue,
+        period: target.period,
+        title: target.title,
+        snapshot: {
+          ...snapshot,
+          ...(target.periodRange ? { periodStart: target.periodRange.start, periodEnd: target.periodRange.end } : {}),
+        } as Prisma.InputJsonValue,
         amount: centsToStr(cents),
         status: 'DRAFT',
-        dueDate,
+        dueDate: target.dueDate,
       });
       generatedCents += cents;
     };
@@ -254,13 +305,16 @@ export class BillRunService {
         houses.map((h) => ({ id: h.id, area: h.area === null ? null : h.area.toString() })),
         shareBy,
       );
+      const targetByHouse = new Map(targets.map((t) => [t.house.id, t]));
       for (const houseId of shareSkipped) {
         skipped++;
         const house = houses.find((h) => h.id === houseId);
         skippedDetail.push({ houseId, code: house?.code ?? '', reason: 'AREA_MISSING' });
       }
       for (const [houseId, cents] of alloc) {
-        stageBill(houseId, cents, {
+        const target = targetByHouse.get(houseId);
+        if (!target) continue; // 被剔除的户不出账(alloc 输入已过滤,防御)
+        stageBill(target, cents, {
           shareBy,
           poolAmount: pool.totalAmount.toString(),
           houseCount: alloc.size,
@@ -295,7 +349,8 @@ export class BillRunService {
         }
       }
 
-      for (const house of houses) {
+      for (const target of targets) {
+        const house = target.house;
         let readingDiff: number | null | undefined;
         if (meterType) {
           readingDiff = diffByHouse.has(house.id) ? (diffByHouse.get(house.id) as number) : null;
@@ -305,13 +360,17 @@ export class BillRunService {
           params: rule.params as Record<string, unknown>,
           house: { id: house.id, area: house.area === null ? null : house.area.toString() },
           readingDiff,
+          // 周年年度账单 = 月单价 × 12。把 ×12 放进引擎而不是让物业把单价填成 16.8:
+          // 填 1.4 会少收 12 倍,而且对账查不出来(本地与微信用同一个错误值)。
+          months: rule.periodScheme === 'ANNIVERSARY' && rule.ruleType === 'AREA_PRICE' ? 12 : 1,
+          rounding: rule.rounding,
         });
         if (!result.ok) {
           skipped++;
           skippedDetail.push({ houseId: house.id, code: house.code, reason: result.skipReason });
           continue;
         }
-        stageBill(house.id, result.cents, result.snapshot);
+        stageBill(target, result.cents, result.snapshot);
       }
     }
 
@@ -352,5 +411,227 @@ export class BillRunService {
     });
     this.logger.log(`草稿出账 rule=${rule.name} period=${period} batch=${batch.id} generated=${generated} skipped=${skipped}`);
     return { batchId: batch.id, status: 'DRAFT', generated, skipped, skippedDetail };
+  }
+
+  /** SHARE/METER 不支持周年账期(v1 明确不做,而不是静默出错账) */
+  private assertSchemeSupported(rule: { periodScheme: string; ruleType: string }): void {
+    if (rule.periodScheme === 'ANNIVERSARY' && !['AREA_PRICE', 'FIXED'].includes(rule.ruleType)) {
+      throw new BizException(
+        ErrorCode.VALIDATION,
+        '按户周年账期目前仅支持「按面积单价」与「固定金额」两种计费方式',
+      );
+    }
+  }
+
+  /**
+   * 选房:按 periodScheme 分派。
+   *
+   * legacy(MONTHLY/QUARTERLY/YEARLY):原查询逐字保留 —— 按小区+房屋类型全选,
+   * period/dueDate 全批相同,行为与重构前逐字节一致(现有 spec 一字不改必须绿)。
+   *
+   * ANNIVERSARY:只看 HouseStandard 挂接(挂了才出账,不挂 = 不出账/免收)。
+   *   锚点 = 挂接 startDate ?? 房屋 handoverDate;锚点月份 == 扫描月才入选;
+   *   每户各自的账期起始日做 period('2026-03-15'),dueDate = 起始 + dueDays,
+   *   下限 now+7 天 —— 否则补跑历史月会生成一发布即逾期、当天就触发催缴的账单。
+   */
+  private async selectTargets(
+    rule: Pick<
+      import('@prisma/client').FeeRule,
+      'id' | 'name' | 'communityId' | 'houseType' | 'dueDays' | 'periodScheme'
+    >,
+    runKey: string,
+  ): Promise<{ targets: BillTarget[]; skipped: SkipDetail[] }> {
+    if (rule.periodScheme !== 'ANNIVERSARY') {
+      const houses = await this.prisma.t.house.findMany({
+        where: { communityId: rule.communityId, status: 'ACTIVE', type: rule.houseType },
+      });
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + rule.dueDays);
+      dueDate.setHours(23, 59, 59, 0);
+      return {
+        targets: houses.map((h) => ({
+          house: h,
+          period: runKey,
+          title: `${rule.name} ${runKey}`,
+          dueDate,
+        })),
+        skipped: [],
+      };
+    }
+
+    if (!/^\d{4}-\d{2}$/.test(runKey)) {
+      throw new BizException(ErrorCode.VALIDATION, '按户周年出账按「扫描月」触发，账期参数应为 YYYY-MM');
+    }
+
+    const attachments = await this.prisma.t.houseStandard.findMany({
+      where: { ruleId: rule.id, status: 'ACTIVE', house: { status: 'ACTIVE' } },
+      include: { house: true },
+    });
+
+    const targets: BillTarget[] = [];
+    const skipped: SkipDetail[] = [];
+    const now = new Date();
+    const minDue = new Date(now);
+    minDue.setDate(minDue.getDate() + 7);
+
+    const candidates: BillTarget[] = [];
+    for (const att of attachments) {
+      // endDate = 摘除:之后的扫描月不再出账,历史账单保留
+      const anchor = att.startDate ?? att.house.handoverDate;
+      if (!anchor) {
+        skipped.push({ houseId: att.houseId, code: att.house.code, reason: 'HANDOVER_DATE_MISSING' });
+        continue;
+      }
+      const ap = anniversaryPeriod(anchor, runKey);
+      if (!ap) continue; // 锚点月份不是扫描月:这个月不该给这户出账,不算跳过
+      if (att.endDate && ap.start > att.endDate) continue;
+
+      const dueDate = new Date(ap.start);
+      dueDate.setDate(dueDate.getDate() + rule.dueDays);
+      if (dueDate < minDue) dueDate.setTime(minDue.getTime());
+      dueDate.setHours(23, 59, 59, 0);
+
+      const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      candidates.push({
+        house: att.house,
+        period: ap.period,
+        title: `${rule.name} ${ap.start.getFullYear()}年度`,
+        dueDate,
+        periodRange: { start: fmt(ap.start), end: fmt(ap.end) },
+      });
+    }
+
+    /*
+     * 防双账单:锚点(放户日期/挂接起始日)被改动后,同一房年会算出**不同的**
+     * period 字符串 —— 精确唯一键拦不住,重跑会出第二张。
+     * 按「该规则该房在最近一年内已有非 CANCELED 账单」查重:
+     * 查询按字符串区间取(period 是字典序友好的 ISO 串),
+     * 再在内存里只认 YYYY-MM-DD 形状(排除同规则历史上的 legacy 月账单标签)。
+     */
+    if (candidates.length > 0) {
+      const [y, m] = runKey.split('-').map(Number);
+      const lower = `${m === 12 ? y : y - 1}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`;
+      const upper = `${y}-${String(m).padStart(2, '0')}-99`;
+      const recent = await this.prisma.t.bill.findMany({
+        where: {
+          ruleId: rule.id,
+          houseId: { in: candidates.map((c) => c.house.id) },
+          status: { notIn: ['CANCELED'] },
+          period: { gte: lower, lte: upper },
+        },
+        select: { houseId: true, period: true },
+      });
+      const billed = new Map<string, string[]>();
+      for (const b of recent) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(b.period)) continue;
+        billed.set(b.houseId, [...(billed.get(b.houseId) ?? []), b.period]);
+      }
+      for (const c of candidates) {
+        const periods = billed.get(c.house.id) ?? [];
+        // 同 period 交给唯一键幂等跳过(重跑补漏的正常路径);不同 period 才是锚点漂移
+        if (periods.some((pp) => pp !== c.period)) {
+          skipped.push({ houseId: c.house.id, code: c.house.code, reason: 'ANNIVERSARY_ALREADY_BILLED' });
+          continue;
+        }
+        targets.push(c);
+      }
+    }
+
+    return { targets, skipped };
+  }
+
+  /**
+   * 干跑预览:与 generate 同一条选房+计费路径,零写入。
+   * 每行给出金额与计算依据(snapshot),物业核对后勾选剔除再生成草稿。
+   */
+  async preview(ruleId: string, runKey: string): Promise<{ rows: PreviewRow[]; totalCents: number; total: string }> {
+    const rule = await this.prisma.t.feeRule.findUnique({ where: { id: ruleId } });
+    if (!rule) throw new BizException(ErrorCode.NOT_FOUND, '规则不存在');
+    if (rule.ruleType === 'FORMULA') {
+      throw new BizException(ErrorCode.FORMULA_INVALID, 'FORMULA 规则已停用');
+    }
+    if (rule.ruleType === 'SHARE') {
+      throw new BizException(ErrorCode.VALIDATION, '公摊规则按池子整批分摊，请直接生成草稿核对');
+    }
+    this.assertSchemeSupported(rule);
+
+    const { targets, skipped } = await this.selectTargets(rule, runKey);
+
+    const meterType = rule.ruleType === 'METER' ? (rule.params as { meterType: MeterType }).meterType : null;
+    const diffByHouse = new Map<string, number>();
+    if (meterType && targets.length > 0) {
+      const readings = await this.prisma.t.meterReading.findMany({
+        where: { period: runKey, meterType, houseId: { in: targets.map((t) => t.house.id) } },
+        select: { houseId: true, value: true, prevValue: true },
+      });
+      for (const r of readings) {
+        if (r.prevValue === null) continue;
+        diffByHouse.set(r.houseId, Number(r.value) - Number(r.prevValue));
+      }
+    }
+
+    const displayNames = new Map(
+      (
+        await this.prisma.t.house.findMany({
+          where: { id: { in: [...targets.map((t) => t.house.id), ...skipped.map((s) => s.houseId)] } },
+          select: { id: true, displayName: true },
+        })
+      ).map((h) => [h.id, h.displayName]),
+    );
+
+    const rows: PreviewRow[] = [];
+    let totalCents = 0;
+    for (const s of skipped) {
+      rows.push({
+        houseId: s.houseId,
+        code: s.code,
+        displayName: displayNames.get(s.houseId) ?? '',
+        period: runKey,
+        dueDate: '',
+        amountCents: null,
+        amount: null,
+        snapshot: null,
+        skipReason: s.reason,
+      });
+    }
+    for (const t of targets) {
+      const result = calcOne({
+        ruleType: rule.ruleType as RuleType,
+        params: rule.params as Record<string, unknown>,
+        house: { id: t.house.id, area: t.house.area === null ? null : t.house.area.toString() },
+        readingDiff: meterType ? (diffByHouse.get(t.house.id) ?? null) : undefined,
+        months: rule.periodScheme === 'ANNIVERSARY' && rule.ruleType === 'AREA_PRICE' ? 12 : 1,
+        rounding: rule.rounding,
+      });
+      if (!result.ok) {
+        rows.push({
+          houseId: t.house.id,
+          code: t.house.code,
+          displayName: displayNames.get(t.house.id) ?? '',
+          period: t.period,
+          periodRange: t.periodRange,
+          dueDate: t.dueDate.toISOString(),
+          amountCents: null,
+          amount: null,
+          snapshot: null,
+          skipReason: result.skipReason,
+        });
+        continue;
+      }
+      totalCents += result.cents;
+      rows.push({
+        houseId: t.house.id,
+        code: t.house.code,
+        displayName: displayNames.get(t.house.id) ?? '',
+        period: t.period,
+        periodRange: t.periodRange,
+        dueDate: t.dueDate.toISOString(),
+        amountCents: result.cents,
+        amount: centsToStr(result.cents),
+        snapshot: result.snapshot,
+      });
+    }
+    return { rows, totalCents, total: centsToStr(totalCents) };
   }
 }

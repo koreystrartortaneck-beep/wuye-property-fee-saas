@@ -8,16 +8,26 @@ import { BillRunController, BillsAdminService } from './bill-run.controller';
 import { BillRunService } from './bill-run.service';
 import { BILL_ORDER_CLOSER, BillWorkflowService } from './bill-workflow.service';
 import { FeeRulesController, FeeRulesService } from './fee-rules.controller';
+import { HouseStandardsController, HouseStandardsService } from './house-standards.controller';
 import { MeterController, MeterService } from './meter.controller';
 import { ScheduleService } from './schedule.service';
 import { SharePoolController, SharePoolService } from './share-pool.controller';
 
 @Module({
   imports: [PaymentModule],
-  controllers: [FeeRulesController, MeterController, SharePoolController, BillRunController, BillImportController, ArrearsController],
+  controllers: [
+    FeeRulesController,
+    HouseStandardsController,
+    MeterController,
+    SharePoolController,
+    BillRunController,
+    BillImportController,
+    ArrearsController,
+  ],
   providers: [
     ArrearsService,
     FeeRulesService,
+    HouseStandardsService,
     MeterService,
     SharePoolService,
     BillRunService,

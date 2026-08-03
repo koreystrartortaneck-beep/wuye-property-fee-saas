@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Injectable, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, MaxLength, Min, ValidateNested } from 'class-validator';
 import { ErrorCode, HOUSE_TYPES, HouseType } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { normalizePhone } from '../auth/auth.service';
@@ -69,6 +69,20 @@ class HouseRowDto {
   @IsString()
   @MaxLength(191)
   contactPhones?: string;
+
+  /*
+   * 放户日期(YYYY-MM-DD)—— 按户周年账期的锚点。
+   * 字符串进、服务端转 Date:Excel 里就是文本列,让物业照抄不做格式转换。
+   */
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: '放户日期格式须为 YYYY-MM-DD' })
+  handoverDate?: string;
+
+  /** 挂接的收费标准代号,分号分隔("WYF-ZZ;CKF")。未知代号 = 行失败并说明 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(191)
+  standardCodes?: string;
 }
 
 class ImportHousesDto {
@@ -124,6 +138,10 @@ class UpdateHouseDto {
   ownerPhone?: string;
 
   @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: '放户日期格式须为 YYYY-MM-DD' })
+  handoverDate?: string;
+
+  @IsOptional()
   @IsIn(['ACTIVE', 'DISABLED'])
   status?: 'ACTIVE' | 'DISABLED';
 }
@@ -135,6 +153,16 @@ export class HousesService {
     private readonly audit: AuditService,
     private readonly bindingSync: BindingSyncService,
   ) {}
+
+  /** 行数据 → House 列:剥掉传输字段(联系人/标准代号),放户日期转 Date */
+  private rowToHouseData(row: HouseRowDto): Record<string, unknown> {
+    const { contactPhones: _cp, standardCodes: _sc, handoverDate, ...rest } = row;
+    return {
+      ...rest,
+      // UTC 午夜:对 UTC/东八区进程都落在同一个日历日(@db.Date 只存日期部分)
+      ...(handoverDate ? { handoverDate: new Date(`${handoverDate}T00:00:00Z`) } : {}),
+    };
+  }
 
   /** 单行业务校验：住宅必须有面积 */
   private validateRow(row: HouseRowDto): string | null {
@@ -191,7 +219,7 @@ export class HousesService {
          * 不用 `as never`：那会让 Prisma 对**其余所有字段**的校验一并失效，
          * 而 createMany 是批量写，错一个字段名就是几千行脏数据。
          */
-        data: toCreate.map(({ contactPhones: _cp, ...r }) => ({ ...r, communityId: dto.communityId })) as Prisma.HouseCreateManyInput[],
+        data: toCreate.map((r) => ({ ...this.rowToHouseData(r), communityId: dto.communityId })) as Prisma.HouseCreateManyInput[],
         // 兜住 @@unique([communityId, code])：同一次导入里文件内重复的房号
         skipDuplicates: true,
       });
@@ -202,8 +230,7 @@ export class HousesService {
       const id = idByCode.get(row.code);
       if (!id) continue;
       try {
-        const { contactPhones: _cp, ...data } = row;
-        await this.prisma.t.house.update({ where: { id }, data });
+        await this.prisma.t.house.update({ where: { id }, data: this.rowToHouseData(row) as Prisma.HouseUpdateInput });
         updated++;
       } catch (e) {
         failed.push({
@@ -214,7 +241,56 @@ export class HousesService {
     }
 
     const contacts = await this.importContacts(dto.communityId, valid, adminId);
-    return { created, updated, failed, contacts };
+    const standards = await this.importStandards(dto.communityId, valid, adminId, failed);
+    return { created, updated, failed, contacts, standards };
+  }
+
+  /**
+   * 导入行的 standardCodes → HouseStandard 挂接。
+   * 未知代号是**行级失败**(计入 failed 并指名代号),不是静默跳过 ——
+   * 物业以为挂上了、下月出账少一片,比导入当场报错难查得多。
+   */
+  private async importStandards(
+    communityId: string,
+    rows: HouseRowDto[],
+    adminId: string,
+    failed: { index: number; reason: string }[],
+  ) {
+    const wanted = rows.filter((r) => r.standardCodes?.trim());
+    if (wanted.length === 0) return { attached: 0 };
+
+    const allCodes = [...new Set(wanted.flatMap((r) => r.standardCodes!.split(/[;；]/).map((s) => s.trim()).filter(Boolean)))];
+    const rules = await this.prisma.t.feeRule.findMany({
+      where: { communityId, code: { in: allCodes } },
+      select: { id: true, code: true },
+    });
+    const ruleByCode = new Map(rules.map((r) => [r.code!, r.id]));
+
+    const houses = await this.prisma.t.house.findMany({
+      where: { communityId, code: { in: wanted.map((r) => r.code) } },
+      select: { id: true, code: true },
+    });
+    const houseByCode = new Map(houses.map((h) => [h.code, h.id]));
+
+    const data: Array<{ houseId: string; ruleId: string; createdBy: string }> = [];
+    for (const row of wanted) {
+      const houseId = houseByCode.get(row.code);
+      if (!houseId) continue; // 行本身失败(如缺面积)没落库,标准也不挂
+      for (const code of row.standardCodes!.split(/[;；]/).map((s) => s.trim()).filter(Boolean)) {
+        const ruleId = ruleByCode.get(code);
+        if (!ruleId) {
+          failed.push({ index: rows.indexOf(row), reason: `收费标准代号「${code}」在该小区不存在` });
+          continue;
+        }
+        data.push({ houseId, ruleId, createdBy: adminId });
+      }
+    }
+    if (data.length === 0) return { attached: 0 };
+    const res = await this.prisma.t.houseStandard.createMany({
+      data: data as Prisma.HouseStandardCreateManyInput[],
+      skipDuplicates: true, // 重复导入幂等
+    });
+    return { attached: res.count };
   }
 
   /**
@@ -309,8 +385,13 @@ export class HousesService {
      * ownerPhone 列处于冻结期,仍随之同步,保证欠费导出等旧读路径的数据不断档;
      * P4 后台改用联系人列表后,这条桥保持兼容直至删列。
      */
+    // handoverDate 走字符串进(前端/DTO 层),落库前转 Date(@db.Date 只存日期部分)
+    const data: Record<string, unknown> = {
+      ...dto,
+      ...(dto.handoverDate ? { handoverDate: new Date(`${dto.handoverDate}T00:00:00Z`) } : {}),
+    };
     if (dto.ownerPhone === undefined) {
-      return this.prisma.t.house.update({ where: { id }, data: dto });
+      return this.prisma.t.house.update({ where: { id }, data: data as Prisma.HouseUpdateInput });
     }
     const house = await this.prisma.t.house.findFirst({
       where: { id },
@@ -330,7 +411,7 @@ export class HousesService {
       if (newPhone && newPhone !== oldPhone) {
         await this.bindingSync.grantContact(tx, house, newPhone, dto.ownerName ?? null, 'ADMIN', actor);
       }
-      return tx.house.update({ where: { id }, data: { ...dto, ownerPhone: newPhone } });
+      return tx.house.update({ where: { id }, data: { ...data, ownerPhone: newPhone } as Prisma.HouseUpdateInput });
     });
   }
 

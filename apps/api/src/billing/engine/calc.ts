@@ -1,4 +1,4 @@
-import { RuleType } from '@pf/shared';
+import { AmountRounding, RuleType } from '@pf/shared';
 import { evalFormula } from './formula';
 import { toCents } from './money';
 
@@ -9,6 +9,26 @@ export interface CalcInput {
   house: { id: string; area: string | null };
   /** METER 专用：本期读数 − 上期读数；null 表示缺读数 */
   readingDiff?: number | null;
+  /*
+   * 账期月数,只作用于 AREA_PRICE(单价的量纲是 元/㎡/月)。
+   * 周年年度账单传 12 —— 把「×12」放进引擎而不是让物业把单价填成 16.8:
+   * 后者是个必踩的陷阱(填 1.4 → 少收 12 倍,对账还查不出来,
+   * 因为本地和微信用的是同一个错误值)。FIXED 的金额本来就是「每账期多少」,不乘。
+   */
+  months?: number;
+  /*
+   * 金额取整。YUAN = 半进到整元 —— 物业手工账本按整元记
+   * (100.24㎡ × 1.4 × 12 = 1684.032 记 1684),系统必须能对上。
+   * 取整发生在**全账期金额算完之后的最后一步**,只舍入一次;
+   * snapshot 里保留 rawCents,对账时能看到舍入前的精确值。
+   */
+  rounding?: AmountRounding;
+}
+
+/** 半进到整元(100 分的倍数)。CENT 原样返回。 */
+function applyRounding(cents: number, rounding: AmountRounding | undefined): number {
+  if (rounding !== 'YUAN') return cents;
+  return Math.round(cents / 100) * 100;
 }
 
 export type CalcResult =
@@ -39,13 +59,36 @@ export function calcOne(input: CalcInput): CalcResult {
        * 2^53 内精确（单价分 ~1e6 × 面积分 ~1e6 ≈ 1e12），再除 100 取整即为
        * 正确的四舍五入。
        */
-      const cents = Math.round((toCents(unitPrice) * toCents(house.area)) / 100);
-      return { ok: true, cents, snapshot: { unitPrice, area: house.area } };
+      const months = input.months ?? 1;
+      /*
+       * 整段账期一次算完、只舍入一次:先 round 到分,再(可选)半进到元。
+       * 分两步(先算月再×12)会引入每月一次的舍入,月月 +0.4 分这类误差
+       * 累积起来在 .5 边界上会差出 1 元。整数乘积 ≤1e6×1e6×12≈1.2e13 < 2^53,精确。
+       */
+      const rawCents = Math.round((toCents(unitPrice) * toCents(house.area) * months) / 100);
+      const cents = applyRounding(rawCents, input.rounding);
+      return {
+        ok: true,
+        cents,
+        snapshot: {
+          unitPrice,
+          area: house.area,
+          ...(months !== 1 ? { months } : {}),
+          ...(input.rounding === 'YUAN' ? { rounding: 'YUAN', rawCents } : {}),
+        },
+      };
     }
 
     case 'FIXED': {
+      // FIXED 的金额语义是「每账期多少」(商场包租 15000 元/年),不乘 months
       const amount = params.amount as number;
-      return { ok: true, cents: toCents(amount), snapshot: { amount } };
+      const rawCents = toCents(amount);
+      const cents = applyRounding(rawCents, input.rounding);
+      return {
+        ok: true,
+        cents,
+        snapshot: { amount, ...(input.rounding === 'YUAN' && cents !== rawCents ? { rounding: 'YUAN', rawCents } : {}) },
+      };
     }
 
     case 'METER': {

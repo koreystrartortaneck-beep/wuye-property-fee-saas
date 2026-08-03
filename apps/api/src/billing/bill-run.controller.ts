@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Injectable, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { IsIn, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsIn, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { BILL_BATCH_STATUSES, BILL_STATUSES, BillBatchStatus, BillStatus } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
@@ -10,6 +10,24 @@ import { BillRunService } from './bill-run.service';
 import { BillWorkflowService } from './bill-workflow.service';
 
 class TriggerRunDto {
+  @IsString()
+  @IsNotEmpty()
+  ruleId!: string;
+
+  // 周年方案的触发键也是 YYYY-MM(扫描月),此正则天然覆盖;每户的 YYYY-MM-DD
+  // 账期标签由服务端生成,不经此 DTO
+  @Matches(/^\d{4}(-\d{2}|-Q[1-4])?$/, { message: 'period 格式须为 YYYY-MM / YYYY-Qn / YYYY' })
+  period!: string;
+
+  /** 预览后剔除的房屋(本次不出账,计入 skippedDetail) */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(500, { message: '单次最多剔除 500 套' })
+  @IsString({ each: true })
+  excludeHouseIds?: string[];
+}
+
+class PreviewRunQuery {
   @IsString()
   @IsNotEmpty()
   ruleId!: string;
@@ -128,7 +146,13 @@ export class BillRunController {
 
   @Post('bill-runs')
   trigger(@Body() dto: TriggerRunDto) {
-    return this.billRun.generate(dto.ruleId, dto.period);
+    return this.billRun.generate(dto.ruleId, dto.period, { excludeHouseIds: dto.excludeHouseIds });
+  }
+
+  /** 干跑预览:逐行金额+计算依据+跳过原因,零写入。物业核对后剔除再生成草稿 */
+  @Get('bill-runs/preview')
+  preview(@Query() q: PreviewRunQuery) {
+    return this.billRun.preview(q.ruleId, q.period);
   }
 
   @Get('bill-runs')

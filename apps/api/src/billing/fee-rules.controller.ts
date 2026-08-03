@@ -1,7 +1,19 @@
 import { Body, Controller, Get, Injectable, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ErrorCode, HOUSE_TYPES, HouseType, RULE_PERIODS, RULE_TYPES, RulePeriod, RuleType } from '@pf/shared';
+import {
+  AMOUNT_ROUNDINGS,
+  AmountRounding,
+  ErrorCode,
+  HOUSE_TYPES,
+  HouseType,
+  PERIOD_SCHEMES,
+  PeriodScheme,
+  RULE_PERIODS,
+  RULE_TYPES,
+  RulePeriod,
+  RuleType,
+} from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { RolesGuard } from '../auth/roles.decorator';
 import { BizException } from '../common/biz.exception';
@@ -37,6 +49,25 @@ class CreateFeeRuleDto {
   @IsIn(RULE_PERIODS as unknown as string[])
   period!: RulePeriod;
 
+  /*
+   * 账期方案。缺省 = period 同值(legacy 行为)。ANNIVERSARY = 按户周年:
+   * 选房走 HouseStandard 挂接,每户以放户日期为锚各自成账期。
+   */
+  @IsOptional()
+  @IsIn(PERIOD_SCHEMES as unknown as string[])
+  periodScheme?: PeriodScheme;
+
+  /** 标准代号(如 WYF-ZZ):跨小区复制目录时按它对齐/去重 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  code?: string;
+
+  /** 金额取整。周年年费用 YUAN 对齐物业手工账本 */
+  @IsOptional()
+  @IsIn(AMOUNT_ROUNDINGS as unknown as string[])
+  rounding?: AmountRounding;
+
   @Type(() => Number)
   @IsInt()
   @Min(1)
@@ -48,6 +79,16 @@ class CreateFeeRuleDto {
   @Min(1)
   @Max(90)
   dueDays!: number;
+}
+
+class CopyStandardsDto {
+  @IsString()
+  @IsNotEmpty()
+  fromCommunityId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  toCommunityId!: string;
 }
 
 class UpdateFeeRuleDto {
@@ -111,15 +152,73 @@ export class FeeRulesService {
       throw new BizException(ErrorCode.FORMULA_INVALID, 'FORMULA 规则已停用，请改用固定/面积/计量/公摊规则或账单导入');
     }
     validateRuleParams(dto.ruleType, dto.params);
+    const periodScheme = dto.periodScheme ?? dto.period;
+    if (periodScheme === 'ANNIVERSARY' && !['AREA_PRICE', 'FIXED'].includes(dto.ruleType)) {
+      throw new BizException(ErrorCode.VALIDATION, '按户周年账期目前仅支持「按面积单价」与「固定金额」');
+    }
     /*
      * 整体 as never 会关掉全部字段校验；params 是 Json 列，只需把它单独窄转成
      * InputJsonValue —— 这样字段名与其余字段类型仍然受检。
      */
     const data: Omit<Prisma.FeeRuleUncheckedCreateInput, 'tenantId'> = {
       ...dto,
+      periodScheme,
+      code: dto.code?.trim() || null,
       params: dto.params as Prisma.InputJsonValue,
     };
-    return this.prisma.t.feeRule.create({ data: data as Prisma.FeeRuleUncheckedCreateInput });
+    try {
+      return await this.prisma.t.feeRule.create({ data: data as Prisma.FeeRuleUncheckedCreateInput });
+    } catch (e) {
+      if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002') {
+        throw new BizException(ErrorCode.VALIDATION, `标准代号「${dto.code}」在该小区已存在`);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * 跨小区复制标准目录 —— 开新楼盘的第 2 步(建小区 → 复制标准 → 导房 → 出账)。
+   * 按 code 对齐:目标小区已有同 code 的跳过(幂等,重复点不炸);
+   * 没有 code 的 legacy 规则不参与复制(它们按 houseType 自动匹配,复制过去会误伤)。
+   */
+  async copyStandards(dto: CopyStandardsDto) {
+    await assertCommunityInTenant(this.prisma, dto.fromCommunityId);
+    await assertCommunityInTenant(this.prisma, dto.toCommunityId);
+    if (dto.fromCommunityId === dto.toCommunityId) {
+      throw new BizException(ErrorCode.VALIDATION, '源小区与目标小区相同');
+    }
+    const source = await this.prisma.t.feeRule.findMany({
+      where: { communityId: dto.fromCommunityId, code: { not: null } },
+    });
+    if (source.length === 0) {
+      throw new BizException(ErrorCode.VALIDATION, '源小区没有可复制的标准（只有带「标准代号」的会被复制）');
+    }
+    const existing = await this.prisma.t.feeRule.findMany({
+      where: { communityId: dto.toCommunityId, code: { in: source.map((r) => r.code!) } },
+      select: { code: true },
+    });
+    const skip = new Set(existing.map((r) => r.code));
+    const toCopy = source.filter((r) => !skip.has(r.code));
+    for (const r of toCopy) {
+      await this.prisma.t.feeRule.create({
+        data: {
+          communityId: dto.toCommunityId,
+          name: r.name,
+          code: r.code,
+          category: r.category,
+          houseType: r.houseType,
+          ruleType: r.ruleType,
+          params: r.params as Prisma.InputJsonValue,
+          period: r.period,
+          periodScheme: r.periodScheme,
+          rounding: r.rounding,
+          billDay: r.billDay,
+          dueDays: r.dueDays,
+          enabled: r.enabled,
+        } as Omit<Prisma.FeeRuleUncheckedCreateInput, 'tenantId'> as Prisma.FeeRuleUncheckedCreateInput,
+      });
+    }
+    return { copied: toCopy.length, skipped: skip.size };
   }
 
   async list(q: ListFeeRulesQuery) {
@@ -210,6 +309,11 @@ export class FeeRulesController {
   @Get('formula-report')
   formulaReport() {
     return this.service.formulaReport();
+  }
+
+  @Post('copy')
+  copy(@Body() dto: CopyStandardsDto) {
+    return this.service.copyStandards(dto);
   }
 
   @Get('launch-readiness')
