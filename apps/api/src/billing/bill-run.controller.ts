@@ -3,7 +3,7 @@ import { ArrayMaxSize, IsArray, IsIn, IsNotEmpty, IsOptional, IsString, Matches,
 import { BILL_BATCH_STATUSES, BILL_STATUSES, BillBatchStatus, BillStatus } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
-import { RolesGuard } from '../auth/roles.decorator';
+import { Roles, RolesGuard } from '../auth/roles.decorator';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { BillRunService } from './bill-run.service';
@@ -221,7 +221,12 @@ export class BillRunController {
   /*
    * 整批作废 —— 「这一批不该发」的出路。
    * 只作废未发布的批次;已发布的要撤只能逐户作废(那时业主已经看到了)。
+   *
+   * 限 TENANT_ADMIN:一下作废整批(可达 2000 户)的草稿,与删房屋、退款同级。
+   * 逐户作废(bills/:id/cancel)刻意不限制 —— 那是柜台每天要做的事,
+   * 且影响面就是一户,方向相反。
    */
+  @Roles('TENANT_ADMIN')
   @Post('bill-batches/:id/cancel')
   cancelBatch(@Current() cur: CurrentAdmin, @Param('id') id: string, @Body() dto: CancelBillDto) {
     return this.workflow.cancelBatch({

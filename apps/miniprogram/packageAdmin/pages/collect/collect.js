@@ -27,6 +27,8 @@ Page({
     method: '现金',
     voucherNo: '',
     paidAt: '',
+    /** 日期选择上限:钱不可能在未来收到 */
+    today: '',
     payerName: '',
     remark: '',
     submitting: false,
@@ -36,7 +38,7 @@ Page({
   onLoad(q) {
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    this.setData({ billId: q.billId || '', houseId: q.houseId || '', paidAt: today });
+    this.setData({ billId: q.billId || '', houseId: q.houseId || '', paidAt: today, today });
     void this.load();
   },
 
@@ -49,12 +51,12 @@ Page({
        * 拿着过时的金额收现金是真金白银的错。
        */
       const d = await adminRequest(
-        `/admin/bills?houseId=${this.data.houseId}&status=UNPAID&page=1&pageSize=100`,
+        `/admin/bills?houseId=${this.data.houseId}&status=UNPAID&page=1&pageSize=200`,
         { silent: true },
       );
       const bill = (d.list || []).find((x) => x.id === this.data.billId);
       if (!bill) {
-        this.setData({ loadError: '这笔账单已经不是「待缴」了(可能刚被收过或已作废),请返回刷新后再看。' });
+        this.setData({ loadError: '没找到这笔待缴账单 —— 它可能刚被收过、已作废,或这户待缴账单超过 200 笔。请返回刷新后再看。' });
         return;
       }
       const name = (bill.house && (bill.house.displayName || bill.house.code)) || '';

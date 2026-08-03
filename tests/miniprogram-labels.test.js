@@ -41,6 +41,7 @@ const CASES = [
   { name: 'METER_TYPES', map: labels.METER_TYPE },
   { name: 'SHARE_BY', map: labels.SHARE_BY },
   { name: 'HOUSE_TYPES', map: labels.HOUSE_TYPE },
+  { name: 'ADMIN_ROLES', map: labels.ADMIN_ROLE },
 ];
 
 for (const { name, map } of CASES) {

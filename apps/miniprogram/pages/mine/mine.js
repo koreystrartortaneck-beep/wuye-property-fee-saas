@@ -2,7 +2,7 @@ const config = require('../../config');
 const { request } = require('../../utils/request');
 const { bindPhone, loadMyHouses } = require('../../utils/auth');
 const { requestSubscribe, getSubscribeState } = require('../../utils/subscribe');
-const { BINDING_RELATION } = require('../../utils/labels');
+const { BINDING_RELATION, ADMIN_ROLE, label } = require('../../utils/labels');
 const { BUILD } = require('../../utils/version');
 const { exchangeAdmin } = require('../../utils/admin');
 
@@ -22,6 +22,7 @@ Page({
      * 界面显隐只是引导 —— 真正的门在服务端(AdminGuard),入口被转发也进不去。
      */
     adminName: '',
+    adminRoleText: '',
     loadError: false, // 档案加载失败：与「真的没绑房屋」区分开
     nav: { spacerPx: 48, rowPx: 32 },
     /** 订阅授权状态：accept/reject/ban/unknown，决定「缴费提醒」的说明与点击行为 */
@@ -76,7 +77,13 @@ Page({
 
   async onShow() {
     // 静默探测管理员身份,不阻塞页面其余加载
-    exchangeAdmin().then((admin) => this.setData({ adminName: admin ? admin.name : '' }));
+    exchangeAdmin().then((admin) =>
+      this.setData({
+        adminName: admin ? admin.name : '',
+        // 显示角色,不显示账号名:生产上那个账号就叫 admin
+        adminRoleText: admin ? label(ADMIN_ROLE, admin.role, '物业工作人员') : '',
+      }),
+    );
     // 放在 onShow：业主去微信「设置 → 订阅消息」改完再回来，这里要能刷新
     void this.refreshNotifyState();
     const app = getApp();

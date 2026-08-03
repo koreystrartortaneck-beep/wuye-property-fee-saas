@@ -163,6 +163,15 @@ Page({
       });
       wx.showToast({ title: '已整批作废', icon: 'none' });
       await this.load();
+    } catch (err) {
+      // 整批作废限管理员:403 要说清是权限,不能让人反复重试
+      if (err && err.code === 40300) {
+        wx.showModal({
+          title: '权限不够',
+          content: '整批作废只有物业管理员账号能做(逐户剔除不受限)。请让管理员操作。',
+          showCancel: false,
+        });
+      }
     } finally {
       this.setData({ busy: '' });
     }

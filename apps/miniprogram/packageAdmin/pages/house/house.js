@@ -1,5 +1,6 @@
 const { adminRequest } = require('../../../utils/admin');
-const { periodLabel } = require('../../../utils/labels');
+// 枚举文案一律取自 utils/labels(与后端枚举有守卫逐项比对),页面不自建映射
+const { BILL_STATUS, label, periodLabel } = require('../../../utils/labels');
 
 /*
  * 房屋详情 —— 管理端的核心一屏:这套房的一切,以及现场要做的动作。
@@ -13,7 +14,6 @@ const { periodLabel } = require('../../../utils/labels');
  * 批量出账在首页底部的「发账单」,两条路各自笔直。
  */
 
-const BILL_STATUS = { UNPAID: '待缴', PAID: '已缴', CANCELED: '已作废', DRAFT: '草稿', REFUNDING: '退款中', REFUNDED: '已退款' };
 const MONTH = ['', '1 月', '2 月', '3 月', '4 月', '5 月', '6 月', '7 月', '8 月', '9 月', '10 月', '11 月', '12 月'];
 
 /** 标准的计价口径,给人看的一句话 */
@@ -90,7 +90,7 @@ Page({
           const pay = b.paymentId ? (profile.payments || []).find((p) => p.id === b.paymentId) : null;
           return {
             ...b,
-            statusLabel: BILL_STATUS[b.status] || b.status,
+            statusLabel: label(BILL_STATUS, b.status),
             periodText: periodLabel(b.period),
             orderNo: pay ? pay.orderNo : '',
             channel: pay ? pay.channel : '',

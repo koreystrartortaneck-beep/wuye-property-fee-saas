@@ -144,7 +144,7 @@
     <view class="menu-row" bindtap="goAdmin">
       <view>
         <view class="menu-name">物业管理</view>
-        <view class="menu-desc">{{adminName}} · 查户 / 审批 / 换绑</view>
+        <view class="menu-desc">{{adminRoleText}} · 房屋 / 账单 / 收款 / 报修</view>
       </view>
       <view class="arrow">›</view>
     </view>

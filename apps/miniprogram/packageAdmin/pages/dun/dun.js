@@ -140,12 +140,16 @@ Page({
     this.setData({ dunning: true });
     try {
       /*
-       * requestId 带上这批户的指纹:同一批重复点是同一次(服务端幂等),
-       * 换了一批才算新的一次。后端另有 6 次/分钟的频率上限。
+       * requestId = 日期 + 这批户的哈希。两处都不能省:
+       *   · 带日期:催缴是要重复做的事(催了不交,过几天再催)。不带日期的话
+       *     同一批户第二次点会被服务端判成重放 —— 界面报成功,实际一条没发。
+       *   · 用全量哈希而不是截断拼接:截断会让两批不同的户算出同一个 key,
+       *     那时服务端会报「幂等键已用于不同请求」,人完全看不懂。
+       * 后端另有 6 次/分钟的频率上限。
        */
       const r = await adminRequest('/admin/arrears/dun', {
         method: 'POST',
-        data: { houseIds: ids, requestId: `mp-dun-${ids.length}-${ids.slice().sort().join('').slice(0, 40)}` },
+        data: { houseIds: ids, requestId: `mp-dun-${todayKey()}-${ids.length}-${hash32(ids.slice().sort().join(','))}` },
       });
       /*
        * 如实报数:queued 数的是**账单条数**(一户欠三期就是三条),
@@ -154,9 +158,17 @@ Page({
       const q2 = r && r.queued != null ? r.queued : 0;
       const h = r && r.houses != null ? r.houses : ids.length;
       const sk = r && r.skipped ? r.skipped : 0;
+      /*
+       * 一条都没排出去要单独说清:同一张账单的同一类提醒系统只发一次
+       * (微信一次性订阅本身也不允许重复推),否则物业会以为「点了就发了」,
+       * 而业主那边什么都没响。这时唯一有效的手段是打电话。
+       */
       wx.showModal({
-        title: '已排提醒',
-        content: `${h} 户 · 新排 ${q2} 条${sk > 0 ? `,另有 ${sk} 条之前已排过` : ''}。提醒由微信订阅消息发出,没授权的业主收不到,那几户还得打电话。`,
+        title: q2 > 0 ? '已排提醒' : '这次没有新提醒发出',
+        content:
+          q2 > 0
+            ? `${h} 户 · 新排 ${q2} 条${sk > 0 ? `,另有 ${sk} 条之前已排过` : ''}。提醒由微信订阅消息发出,没授权的业主收不到,那几户还得打电话。`
+            : `这 ${h} 户的提醒之前已经发过(每张账单的同一类提醒只发一次,微信一次性订阅也不允许重复推)。要继续催,请打电话。`,
         showCancel: false,
       });
       this.setData({ picked: [] });
@@ -165,3 +177,23 @@ Page({
     }
   },
 });
+
+/** 本地日期 YYYYMMDD:催缴的幂等键按天分段,同一批户明天还能再催一次 */
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/*
+ * 32 位字符串哈希(FNV-1a 变体)。
+ * 用它而不是「拼起来截断 40 字符」:截断会让两批不同的户算出同一个幂等键,
+ * 服务端会报「幂等键已用于不同请求」,而人完全看不懂那句话在说什么。
+ */
+function hash32(s) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = (h * 0x01000193) >>> 0;
+  }
+  return h.toString(36);
+}

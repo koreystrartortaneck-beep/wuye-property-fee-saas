@@ -42,6 +42,19 @@ const INVOICE_STATUS = {
 const INVOICE_TITLE_TYPE = { PERSONAL: '个人', ENTERPRISE: '企业' };
 
 /** 工单 */
+/*
+ * 管理端角色 → 中文。
+ *
+ * 界面上绝不显示账号名:生产上那个账号就叫 `admin`,业主/工作人员看到
+ * 「admin · 查户 / 审批 / 换绑」既不专业也泄露了登录名。显示角色即可。
+ */
+const ADMIN_ROLE = {
+  SUPER_ADMIN: '平台超级管理员',
+  PLATFORM_READONLY: '平台只读账号',
+  TENANT_ADMIN: '物业管理员',
+  STAFF: '物业工作人员',
+};
+
 const TICKET_TYPE = { REPAIR: '报修', COMPLAINT: '投诉', SUGGESTION: '建议' };
 const TICKET_STATUS = { PENDING: '待受理', PROCESSING: '处理中', DONE: '已办结', CLOSED: '已关闭' };
 
@@ -109,6 +122,7 @@ module.exports = {
   INVOICE_TITLE_TYPE,
   TICKET_TYPE,
   TICKET_STATUS,
+  ADMIN_ROLE,
   PASS_STATUS,
   SERVICE_ORDER_STATUS,
   COUPON_TYPE,

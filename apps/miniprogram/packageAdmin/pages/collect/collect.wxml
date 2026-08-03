@@ -44,7 +44,7 @@
       </view>
       <view class="f-row">
         <view class="f-lab">收款日期</view>
-        <picker class="f-in" mode="date" value="{{paidAt}}" bindchange="onPaidAt">
+        <picker class="f-in" mode="date" value="{{paidAt}}" end="{{today}}" bindchange="onPaidAt">
           <view class="adm-input pick-line">{{paidAt}} ›</view>
         </picker>
       </view>
