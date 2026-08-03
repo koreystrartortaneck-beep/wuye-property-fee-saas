@@ -60,7 +60,7 @@
         </view>
       </scroll-view>
 
-      <!-- 楼盘图:一层一行,格子撑满,顶层在上 -->
+      <!-- 楼盘图:一层一行,列数固定(每层同一列 = 同一位置),顶层在上 -->
       <view class="unit-card" wx:for="{{units}}" wx:key="unit" wx:for-item="u">
         <view class="unit-head">
           <view class="unit-name">{{picked}}<text wx:if="{{u.unit}}"> · {{u.unit}}</text></view>
@@ -72,19 +72,22 @@
         </view>
         <view class="frow" wx:for="{{u.floors}}" wx:key="floor" wx:for-item="f">
           <view class="ftag">{{f.floor > 0 ? f.floor : ''}}</view>
-          <view
-            class="cell {{item.unpaidCount > 0 ? 'cell-unpaid' : ''}} {{item.disabled ? 'cell-off' : ''}}"
-            wx:for="{{f.cells}}"
-            wx:key="id"
-            data-id="{{item.id}}"
-            bindtap="goHouse"
-            hover-class="cell-hover"
-          >
-            <view class="cno">{{item.label}}</view>
-            <view wx:if="{{item.unpaidCount > 0}}" class="camt">¥{{item.unpaidAmount}}</view>
+          <view class="cells cols-{{u.cols}}">
+            <view
+              class="cell {{item.unpaidCount > 0 ? 'cell-unpaid' : ''}} {{item.disabled ? 'cell-off' : ''}}"
+              wx:for="{{f.cells}}"
+              wx:key="id"
+              data-id="{{item.id}}"
+              bindtap="goHouse"
+              hover-class="cell-hover"
+            >
+              <view class="cno">{{item.label}}</view>
+              <view wx:if="{{item.unpaidCount > 0}}" class="camt">¥{{item.unpaidAmount}}</view>
+            </view>
           </view>
         </view>
       </view>
+      <view wx:if="{{units.length > 0}}" class="adm-hint">点房间 = 进这一户:改面积/放户日期、换住户手机号、只给这一户发账单</view>
 
       <!-- 两个批量动作:发账单(户/群/全部)与发公告 -->
       <view class="quick" wx:if="{{buildings.length > 0}}">

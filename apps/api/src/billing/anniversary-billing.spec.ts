@@ -114,17 +114,32 @@ function makePrisma(opts: {
   rule?: Record<string, unknown> | null;
   attachments?: Array<Record<string, unknown>>;
   recentBills?: Array<{ houseId: string; period: string }>;
+  /** 库里已有的批次(批次号 → 状态),用来演「主批次已发布」 */
+  existingBatches?: Record<string, string>;
 }) {
   const created: Record<string, unknown>[][] = [];
   const writes: string[] = [];
+  // 批次表:按批次号索引,create 也写进去 —— 第二次 generate 才能找到第一次建的那批
+  const batches = new Map<string, { id: string; batchNo: string; status: string }>(
+    Object.entries(opts.existingBatches ?? {}).map(([batchNo, status]) => [
+      batchNo,
+      { id: `pre-${batchNo}`, batchNo, status },
+    ]),
+  );
   const prisma = {
     t: {
       feeRule: { findUnique: jest.fn(async () => opts.rule ?? RULE) },
       billBatch: {
-        findFirst: jest.fn(async () => null),
+        findFirst: jest.fn(async ({ where }: { where: { batchNo: string } }) => batches.get(where.batchNo) ?? null),
         create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => {
           writes.push('batch');
-          return { id: 'batch-1', ...data };
+          const row = { id: `batch-${batches.size + 1}`, ...data } as unknown as {
+            id: string;
+            batchNo: string;
+            status: string;
+          };
+          batches.set(row.batchNo, row);
+          return row;
         }),
         update: jest.fn(async () => ({})),
         updateMany: jest.fn(async () => ({ count: 1 })),
@@ -362,5 +377,86 @@ describe('定向出账(某一户 / 某几户 / 全部)', () => {
     const { prisma } = three();
     const r = await svc(prisma).preview('rule-1', '2026-03', ['h3']);
     expect(r.rows.map((x) => x.houseId)).toEqual(['h3']);
+  });
+});
+
+describe('主批次已发布之后的定向补账', () => {
+  const one = (existingBatches: Record<string, string>) =>
+    makePrisma({
+      existingBatches,
+      attachments: [
+        { houseId: 'h1', startDate: null, endDate: null, house: makeHouse('h1', 'A-1', new Date(2019, 2, 15)) },
+      ],
+    });
+
+  it('全量重跑撞上已发布批次 → 照旧 alreadyPublished,不偷偷新建一批', async () => {
+    /*
+     * 全量重跑的意思是「这个月这批账重算一遍」,而已发布的金额必须钉死。
+     * 这条路径的行为一个字都不许改 —— 电脑后台的提示文案就挂在它上面。
+     */
+    const { prisma, writes } = one({ 'RULE-2026-03-rule-1': 'PUBLISHED' });
+    const r = await svc(prisma).generate('rule-1', '2026-03');
+    expect(r.alreadyPublished).toBe(true);
+    expect(r.generated).toBe(0);
+    expect(writes).toHaveLength(0); // 批次/run/账单一个都没写
+  });
+
+  it('定向补一户 → 开补充批次,账单照样出得来', async () => {
+    /*
+     * 真实场景:3 月该收的那户当时漏了,8 月新住户上门交钱。主批次早已发布,
+     * 但这户今年的账一张都没出过 —— 把人堵在这里,他就只能回电脑前。
+     */
+    const { prisma, created } = one({ 'RULE-2026-03-rule-1': 'PUBLISHED' });
+    const r = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] });
+    expect(r.alreadyPublished).toBeUndefined();
+    expect(created[0].map((b) => b.houseId)).toEqual(['h1']);
+    expect(prisma.t.billBatch.create.mock.calls[0][0].data).toMatchObject({
+      batchNo: 'RULE-2026-03-rule-1-B2',
+      period: '2026-03',
+      status: 'DRAFT',
+    });
+  });
+
+  it('补充批次还是草稿就复用它——一天补三户不该变成三个批次', async () => {
+    const { prisma } = one({ 'RULE-2026-03-rule-1': 'PUBLISHED' });
+    const a = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] });
+    const b = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] });
+    expect(a.batchId).toBe(b.batchId);
+    expect(prisma.t.billBatch.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('补充批次也发布了 → 再补落到下一个号,不往已发布的批次里塞', async () => {
+    const { prisma } = one({
+      'RULE-2026-03-rule-1': 'PUBLISHED',
+      'RULE-2026-03-rule-1-B2': 'PUBLISHED',
+    });
+    await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] });
+    expect(prisma.t.billBatch.create.mock.calls[0][0].data).toMatchObject({
+      batchNo: 'RULE-2026-03-rule-1-B3',
+    });
+  });
+
+  it('补充批次用满 20 个 → 明确报错,不无限开批次', async () => {
+    const full: Record<string, string> = { 'RULE-2026-03-rule-1': 'PUBLISHED' };
+    for (let n = 2; n <= 20; n++) full[`RULE-2026-03-rule-1-B${n}`] = 'PUBLISHED';
+    const { prisma } = one(full);
+    await expect(svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] })).rejects.toThrow(BizException);
+  });
+
+  it('防双账单的防线不在批次上:换批次也出不了同一户同一年的第二张', async () => {
+    /*
+     * 补充批次唯一放宽的是「往哪个批次里装」。该不该出账仍由
+     * 周年区间查重 + Bill @@unique([ruleId,houseId,period]) 说话。
+     */
+    const { prisma, created } = makePrisma({
+      existingBatches: { 'RULE-2026-03-rule-1': 'PUBLISHED' },
+      attachments: [
+        { houseId: 'h1', startDate: null, endDate: null, house: makeHouse('h1', 'A-1', new Date(2019, 2, 20)) },
+      ],
+      recentBills: [{ houseId: 'h1', period: '2026-03-15' }],
+    });
+    const r = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] });
+    expect(created).toHaveLength(0);
+    expect(r.skippedDetail?.[0]).toMatchObject({ reason: 'ANNIVERSARY_ALREADY_BILLED' });
   });
 });

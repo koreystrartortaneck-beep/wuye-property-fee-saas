@@ -148,6 +148,11 @@ export class HouseProfileService {
         displayName: house.displayName,
         type: house.type,
         area: house.area?.toString() ?? null,
+        /*
+         * 放户日期:按户周年账期的锚点 —— 「这户每年几月该出账」全靠它。
+         * @db.Date 只存日期部分,取 ISO 前 10 位即日历日,不受时区影响。
+         */
+        handoverDate: house.handoverDate ? house.handoverDate.toISOString().slice(0, 10) : null,
         status: house.status,
         ownerName: house.ownerName,
         ownerPhone: house.ownerPhone,

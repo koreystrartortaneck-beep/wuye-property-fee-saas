@@ -103,12 +103,13 @@
 
 .frow {
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   gap: 14rpx;
   margin-bottom: 14rpx;
 }
 .ftag {
   flex: 0 0 56rpx;
+  height: 92rpx; /* 与一格等高:整层换行时楼层号仍贴着第一排 */
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -117,23 +118,42 @@
   color: #b0a8bd;
   font-variant-numeric: tabular-nums;
 }
-/* 格子撑满整行(方案A):可点面积最大,一层两户就是两个大格 */
-.cell {
+/*
+ * 定列数(2~4 列,见 home.js 的 withColumns)。
+ * 一层两户 → 两个大格;门市一层 11 户 → 4 列换行,房号仍然读得清。
+ */
+.cells {
   flex: 1;
   min-width: 0;
-  padding: 18rpx 0 14rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+.cell {
+  flex: 0 0 auto;
+  min-height: 92rpx;
+  padding: 18rpx 6rpx 14rpx;
   border-radius: 18rpx;
   background: rgba(90, 70, 128, 0.06);
   border: 2rpx solid rgba(90, 70, 128, 0.08);
   text-align: center;
+  box-sizing: border-box;
 }
+.cols-2 .cell { width: calc((100% - 12rpx) / 2); }
+.cols-3 .cell { width: calc((100% - 24rpx) / 3); }
+.cols-4 .cell { width: calc((100% - 36rpx) / 4); }
 .cell-hover { transform: scale(0.97); }
 .cno {
   font-size: 30rpx;
+  line-height: 1.25;
   font-weight: 800;
   color: var(--text, #251c38);
   font-variant-numeric: tabular-nums;
+  /* 「107门市」这种带字的号宁可折行也不截断:房号截一半就指错了房 */
+  word-break: break-all;
 }
+.cols-3 .cno { font-size: 28rpx; }
+.cols-4 .cno { font-size: 26rpx; }
 .camt {
   margin-top: 2rpx;
   font-size: 20rpx;

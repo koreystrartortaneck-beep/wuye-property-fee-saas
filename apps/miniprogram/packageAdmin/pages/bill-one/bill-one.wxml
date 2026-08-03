@@ -1,0 +1,88 @@
+<view class="page adm-page">
+  <view wx:if="{{loading}}" class="adm-hint">正在算这户该收多少…</view>
+  <view wx:elif="{{loadError}}" class="adm-denied">
+    <view class="adm-denied-title">加载失败</view>
+    <view class="adm-denied-desc">请检查网络后重试</view>
+    <view class="adm-btn adm-retry" bindtap="load">重试</view>
+  </view>
+
+  <block wx:else>
+    <!-- 这是给谁出账 -->
+    <view class="who">
+      <view class="who-name">{{house.displayName}}</view>
+      <view class="who-meta">{{house.code}}<text wx:if="{{house.handoverDate}}"> · 放户 {{house.handoverDate}}</text></view>
+    </view>
+
+    <!-- 还没生成:列出这户挂着的标准与算出来的金额 -->
+    <block wx:if="{{!result}}">
+      <view wx:if="{{candidates.length === 0}}" class="adm-card">
+        <view class="adm-hint">这户没挂按年收费的标准,所以出不了账单。回上一页「收费标准」里挂一条即可。</view>
+      </view>
+
+      <view class="adm-card" wx:if="{{candidates.length > 0}}">
+        <view
+          class="adm-row {{item.blocked ? 'row-off' : ''}}"
+          wx:for="{{candidates}}"
+          wx:key="ruleId"
+          data-i="{{index}}"
+          bindtap="pickCandidate"
+          hover-class="adm-row-hover"
+        >
+          <view class="tick {{pickedIndex === index ? 'tick-on' : ''}}">{{pickedIndex === index ? '✓' : ''}}</view>
+          <view class="adm-row-main">
+            <view class="adm-row-title">{{item.ruleName}}</view>
+            <view wx:if="{{item.blocked}}" class="adm-row-sub adm-danger">{{item.blocked}}</view>
+            <block wx:else>
+              <view class="adm-row-sub">{{item.basis}}</view>
+              <view class="adm-row-sub">{{item.rangeText}}</view>
+            </block>
+          </view>
+          <view wx:if="{{item.amount}}" class="amt adm-num">¥{{item.amount}}</view>
+        </view>
+      </view>
+
+      <view wx:if="{{pickedIndex >= 0 && candidates[pickedIndex].early}}" class="adm-hint adm-error">
+        {{candidates[pickedIndex].early}}
+      </view>
+      <view wx:if="{{pickedIndex >= 0}}" class="adm-hint">
+        {{candidates[pickedIndex].periodText}} · 生成的是草稿,业主还看不到,下一步才发布。
+      </view>
+
+      <view
+        wx:if="{{pickedIndex >= 0}}"
+        class="adm-btn act {{generating ? 'adm-btn-busy' : ''}}"
+        bindtap="generate"
+      >{{generating ? '生成中…' : '生成这户的账单'}}</view>
+      <view wx:else class="adm-btn adm-btn-ghost act" bindtap="back">返回</view>
+    </block>
+
+    <!-- 已生成:待发布 -->
+    <block wx:else>
+      <view class="sum-card">
+        <view class="sum-num adm-num">¥{{result.amount}}</view>
+        <view class="sum-lab">{{result.title}}</view>
+        <view class="adm-pill {{result.published ? 'adm-pill-ok' : 'adm-pill-danger'}} sum-pill">{{result.published ? '已发布,业主可见' : '草稿,业主还看不到'}}</view>
+      </view>
+
+      <block wx:if="{{!result.published}}">
+        <!-- 批次里只有这一户:直接发 -->
+        <block wx:if="{{result.batchCount <= 1}}">
+          <view class="adm-btn act {{publishing ? 'adm-btn-busy' : ''}}" bindtap="publish">发布给这户业主</view>
+        </block>
+        <!-- 批次里还有别人:发布是整批发布,必须说清楚 -->
+        <block wx:else>
+          <view class="adm-card">
+            <view class="adm-hint">
+              这张账单进了草稿批次「{{result.batchTitle}}」,里面现在共 {{result.batchCount}} 户<text wx:if="{{result.batchTotal}}">、合计 ¥{{result.batchTotal}}</text>。
+              发布是整批一起发布 —— 点下面去核对整批,再一起发。
+            </view>
+          </view>
+          <view class="adm-btn act" bindtap="goBatches">去核对这一批({{result.batchCount}} 户)</view>
+        </block>
+      </block>
+      <view wx:else class="adm-hint">业主打开小程序就能看到这笔账单并缴费。</view>
+
+      <view class="adm-btn adm-btn-ghost act2" bindtap="back">返回这户</view>
+    </block>
+  </block>
+</view>

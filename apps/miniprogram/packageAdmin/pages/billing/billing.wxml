@@ -13,19 +13,20 @@
       </view>
     </view>
 
-    <view class="adm-sec">账期(按放户日在这个月的房屋出账)</view>
+    <view class="adm-sec">出账月份</view>
     <picker mode="date" fields="month" value="{{period}}" bindchange="onPeriod">
       <view class="adm-input pick-line">{{period}} ›</view>
     </picker>
+    <view class="adm-hint">按年收费:每户只在自己放户日那个月出账。所以这里选的是「扫哪个月」。</view>
 
     <view class="adm-sec">发给谁</view>
     <view class="scope-row">
       <view class="scope {{scope === 'all' ? 'scope-on' : ''}}" data-s="all" bindtap="pickScope">全部</view>
       <view class="scope {{scope === 'building' ? 'scope-on' : ''}}" data-s="building" bindtap="pickScope">按楼栋</view>
-      <view class="scope {{scope === 'house' ? 'scope-on' : ''}}" data-s="house" bindtap="pickScope">某一户</view>
     </view>
+    <view class="adm-hint">只给某一户出账,请在楼盘图上点那个房间,里面有「给这户发账单」。</view>
 
-    <view wx:if="{{scope === 'all'}}" class="adm-hint">本月该出账的全部房屋(挂了这条标准、且放户日在 {{period}} 的)</view>
+    <view wx:if="{{scope === 'all'}}" class="adm-hint">范围:挂了这条标准、且放户日在 {{period}} 的全部房屋</view>
 
     <block wx:if="{{scope === 'building'}}">
       <scroll-view scroll-x class="b-strip" enhanced show-scrollbar="{{false}}">
@@ -42,20 +43,6 @@
       </scroll-view>
     </block>
 
-    <block wx:if="{{scope === 'house'}}">
-      <input class="adm-input full" placeholder="输房号搜索,如 B-5-1602" value="{{keyword}}" bindinput="onKeyword" />
-      <view class="adm-card" wx:if="{{houses.length > 0}}">
-        <view class="adm-row" wx:for="{{houses}}" wx:key="id" data-i="{{index}}" bindtap="pickHouse" hover-class="adm-row-hover">
-          <view class="adm-row-main">
-            <view class="adm-row-title">{{item.displayName}}</view>
-            <view class="adm-row-sub">{{item.code}}</view>
-          </view>
-          <view class="adm-arrow">›</view>
-        </view>
-      </view>
-      <view wx:if="{{pickedHouse}}" class="adm-hint">已选:{{pickedHouse.displayName}}</view>
-    </block>
-
     <view class="adm-btn step-btn {{previewing ? 'adm-btn-busy' : ''}}" bindtap="preview">
       {{previewing ? '计算中…' : '下一步:预览金额'}}
     </view>
@@ -65,14 +52,17 @@
   <block wx:elif="{{step === 2}}">
     <view class="sum-card">
       <view class="sum-main">
-        <view class="sum-num adm-num">¥{{total}}</view>
-        <view class="sum-lab">{{payable.length}} 户可出账 · {{ruleName}} · {{period}}</view>
+        <view class="sum-num adm-num">¥{{willTotal}}</view>
+        <view class="sum-lab">本次出账 {{willCount}} 户 · {{ruleName}} · {{period}}</view>
       </view>
-      <view wx:if="{{excluded.length > 0}}" class="sum-ex">已勾掉 {{excluded.length}} 户</view>
+      <view wx:if="{{excluded.length > 0}}" class="sum-ex">
+        <view>已去掉 {{excluded.length}} 户</view>
+        <view class="adm-num">−¥{{exTotal}}</view>
+      </view>
     </view>
 
-    <view class="adm-sec">逐户核对(点一行 = 本次不给这户出)</view>
-    <view class="adm-card">
+    <view wx:if="{{payable.length > 0}}" class="adm-sec">共 {{payable.length}} 户可出账,默认全出;点掉不该出的(比如线下已经收过)</view>
+    <view class="adm-card" wx:if="{{payable.length > 0}}">
       <view
         class="adm-row {{excluded.indexOf(item.houseId) >= 0 ? 'row-ex' : ''}}"
         wx:for="{{payable}}"
@@ -83,12 +73,23 @@
       >
         <view class="tick {{excluded.indexOf(item.houseId) >= 0 ? '' : 'tick-on'}}">{{excluded.indexOf(item.houseId) >= 0 ? '' : '✓'}}</view>
         <view class="adm-row-main">
-          <view class="adm-row-title">{{item.displayName || item.code}}</view>
+          <view class="adm-row-title">
+            {{item.displayName || item.code}}
+            <text wx:if="{{excluded.indexOf(item.houseId) >= 0}}" class="tag-ex">本次不出</text>
+          </view>
           <view class="adm-row-sub">{{item.basis}}<text wx:if="{{item.periodRange}}"> · {{item.periodRange.start}} 起</text></view>
         </view>
         <view class="adm-row-title adm-num">¥{{item.amount}}</view>
       </view>
-      <view wx:if="{{payable.length === 0}}" class="adm-hint">这个范围本月没有该出账的房屋</view>
+    </view>
+
+    <!-- 一户都没有:说清为什么,而不是摆一个 ¥0.00 让人猜 -->
+    <view wx:if="{{payable.length === 0}}" class="adm-card">
+      <view class="adm-row-title">{{period}} 没有该出账的房屋</view>
+      <view class="adm-hint">
+        按年收费只在每户放户日那个月出账。可能是:①这个月确实没有到期的户 ②这些户没挂「{{ruleName}}」这条标准 ③放户日期没填。
+        换个月份试试,或者在楼盘图上点开某一户看它的放户日期。
+      </view>
     </view>
 
     <block wx:if="{{skipped.length > 0}}">

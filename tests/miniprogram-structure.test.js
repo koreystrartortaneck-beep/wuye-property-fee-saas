@@ -192,7 +192,14 @@ test('社区内容仍然可达：首页「查看全部」→ community，且带�
 });
 
 test('删掉的冗余页面不再被任何地方引用', () => {
+  /*
+   * 跳过点文件:miniprogram-hang-and-scope 会在 utils/ 下临时落一个探针
+   * (utils/.upload-timeout-probe.js)再删掉,而 node --test 是并行跑文件的 ——
+   * 走到它时文件可能已经消失,readFileSync 抛 ENOENT,这一条就随机变红。
+   * build-stamp 与 terminology 两个用例早就各自躲过它了,这里补齐。
+   */
   const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    if (e.name.startsWith('.')) return [];
     const p = path.join(dir, e.name);
     return e.isDirectory() ? walk(p) : [p];
   });

@@ -1,0 +1,43 @@
+@import "../../adm.wxss";
+
+.bt-card {
+  margin-bottom: 26rpx;
+  border-radius: 32rpx;
+  background: rgba(253, 251, 247, 0.94);
+  border: 1rpx solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 20rpx 50rpx rgba(70, 52, 29, 0.08);
+  padding: 28rpx 26rpx 22rpx;
+}
+.bt-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+.bt-main { flex: 1; min-width: 0; }
+.bt-title {
+  font-size: 32rpx;
+  font-weight: 900;
+  color: var(--text, #251c38);
+}
+.bt-sub {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: var(--text-3, #7c7288);
+  font-variant-numeric: tabular-nums;
+}
+.bt-acts {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}
+.bt-btn { flex: 1; }
+.bt-rows {
+  margin-top: 8rpx;
+  border-top: 1rpx solid rgba(37, 28, 56, 0.06);
+}
+.bt-amt { flex-shrink: 0; }
+.bt-kill {
+  margin-top: 6rpx;
+  color: var(--danger, #c45656);
+  font-size: 25rpx;
+}

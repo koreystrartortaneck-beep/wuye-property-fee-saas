@@ -1,15 +1,15 @@
 const { adminRequest } = require('../../../utils/admin');
 
 /*
- * 发账单(手机端)。
+ * 发账单(手机端)—— 批量:全部 / 按楼栋。
  *
- * 三种范围,一套流程:
- *   全部    —— 这条标准这个月该出的全部房屋(周年方案里就是「放户日在本月的」)
- *   某一群  —— 按楼栋圈选
- *   某一户  —— 单选一户补账单
+ * 单独一户不走这里:从楼盘图点进那一户,页面底部「给这户发账单」直达
+ * bill-one,标准和月份都替他算好。实测反馈是「点进去只想管这一户,
+ * 现在非常混乱」—— 混乱的根源就是把单户塞进了批量流程,
+ * 让人为了一户去选标准、选月份、选范围,选错一个就是「0 户可出账」。
  *
  * 流程是「先看后发」,一步都不省:
- *   选标准+月份 → 预览逐行金额与依据 → 勾掉不该出的 → 生成草稿(业主看不见)
+ *   选标准+月份 → 预览逐行金额与依据 → 点掉不该出的 → 生成草稿(业主看不见)
  *   → 核对合计 → 发布(业主可见 + 推送)
  *
  * 「发布」永远是人点的最后一下 —— 这是钱,自动化只做准备工作。
@@ -31,22 +31,21 @@ Page({
     ruleId: '',
     ruleName: '',
     period: '',
-    /** 范围:all / building / house */
+    /** 范围:all(全部) / building(按楼栋);单户走 bill-one 页 */
     scope: 'all',
     buildings: [],
     pickedBuilding: '',
-    /** 单户模式的搜索 */
-    keyword: '',
-    houses: [],
-    pickedHouse: null,
     /** 预览 */
     previewing: false,
     rows: [],
     payable: [],
     skipped: [],
-    total: '0.00',
-    /** 勾掉的户(houseId 数组) */
+    /** 点掉的户(houseId 数组) */
     excluded: [],
+    /** 实时口径:本次真会出账的户数与合计(随剔除变动) */
+    willCount: 0,
+    willTotal: '0.00',
+    exTotal: '0.00',
     /** 草稿 */
     generating: false,
     batch: null,
@@ -55,17 +54,10 @@ Page({
 
   onLoad(q) {
     const now = new Date();
-    const patch = {
+    this.setData({
       communityId: q.communityId || '',
       period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
-    };
-    // 从房屋详情进来:范围直接预置成这一户,省掉再搜一次
-    if (q.houseId) {
-      patch.scope = 'house';
-      patch.pickedHouse = { id: q.houseId, displayName: decodeURIComponent(q.houseName || '') };
-      patch.keyword = decodeURIComponent(q.houseName || '');
-    }
-    this.setData(patch);
+    });
     void this.loadRules();
   },
 
@@ -97,9 +89,6 @@ Page({
     this.setData({
       scope: e.currentTarget.dataset.s,
       pickedBuilding: '',
-      pickedHouse: null,
-      keyword: '',
-      houses: [],
       rows: [],
       batch: null,
       step: 1,
@@ -110,27 +99,8 @@ Page({
     this.setData({ pickedBuilding: e.currentTarget.dataset.b, rows: [], batch: null, step: 1 });
   },
 
-  onKeyword(e) {
-    this.setData({ keyword: e.detail.value });
-    clearTimeout(this._t);
-    if (!e.detail.value.trim()) return this.setData({ houses: [] });
-    this._t = setTimeout(async () => {
-      const d = await adminRequest(
-        `/admin/houses?communityId=${this.data.communityId}&keyword=${encodeURIComponent(this.data.keyword.trim())}&page=1&pageSize=20`,
-        { silent: true },
-      );
-      this.setData({ houses: d.list || [] });
-    }, 300);
-  },
-
-  pickHouse(e) {
-    const h = this.data.houses[e.currentTarget.dataset.i];
-    this.setData({ pickedHouse: h, keyword: h.displayName, houses: [], rows: [], batch: null, step: 1 });
-  },
-
   /** 当前范围对应的房屋 id 列表;全部 = undefined(不定向) */
   scopeHouseIds() {
-    if (this.data.scope === 'house') return this.data.pickedHouse ? [this.data.pickedHouse.id] : [];
     if (this.data.scope === 'building') {
       const b = (this._grid || []).find((x) => x.building === this.data.pickedBuilding);
       if (!b) return [];
@@ -142,9 +112,7 @@ Page({
   async preview() {
     if (!this.data.ruleId) return wx.showToast({ title: '请先选收费标准', icon: 'none' });
     const ids = this.scopeHouseIds();
-    if (ids && ids.length === 0) {
-      return wx.showToast({ title: this.data.scope === 'house' ? '请先选一户' : '请先选楼栋', icon: 'none' });
-    }
+    if (ids && ids.length === 0) return wx.showToast({ title: '请先选楼栋', icon: 'none' });
     this.setData({ previewing: true });
     try {
       const q = [`ruleId=${this.data.ruleId}`, `period=${this.data.period}`];
@@ -161,14 +129,16 @@ Page({
               : ''
           : '',
       }));
-      this.setData({
-        rows,
-        payable: rows.filter((x) => !x.skipReason),
-        skipped: rows.filter((x) => x.skipReason),
-        total: r.total,
-        excluded: [],
-        step: 2,
-      });
+      this.setData(
+        {
+          rows,
+          payable: rows.filter((x) => !x.skipReason),
+          skipped: rows.filter((x) => x.skipReason),
+          excluded: [],
+          step: 2,
+        },
+        () => this.recompute(),
+      );
     } finally {
       this.setData({ previewing: false });
     }
@@ -179,10 +149,41 @@ Page({
     const ex = this.data.excluded.includes(id)
       ? this.data.excluded.filter((x) => x !== id)
       : [...this.data.excluded, id];
-    this.setData({ excluded: ex });
+    this.setData({ excluded: ex }, () => this.recompute());
+  },
+
+  /*
+   * 顶上那个大数字必须跟着剔除动。
+   *
+   * 原来它写死成预览返回的合计:剔掉 15 户之后仍然显示 ¥56758 ——
+   * 人核对的是屏幕上的数字,数字不动就等于告诉他「剔除没生效」。
+   * 分币整数相加再折算,不拿字符串金额做浮点累加。
+   */
+  recompute() {
+    const ex = this.data.excluded;
+    let cents = 0;
+    let exCents = 0;
+    let n = 0;
+    for (const r of this.data.payable) {
+      const c = r.amountCents || 0;
+      if (ex.indexOf(r.houseId) >= 0) {
+        exCents += c;
+        continue;
+      }
+      cents += c;
+      n += 1;
+    }
+    this.setData({
+      willCount: n,
+      willTotal: (cents / 100).toFixed(2),
+      exTotal: (exCents / 100).toFixed(2),
+    });
   },
 
   async generate() {
+    if (this.data.willCount === 0) {
+      return wx.showToast({ title: '这次一户都没选,没什么可生成', icon: 'none' });
+    }
     const ids = this.scopeHouseIds();
     this.setData({ generating: true });
     try {
@@ -245,9 +246,5 @@ Page({
 
   backToScope() {
     this.setData({ step: 1, rows: [], batch: null });
-  },
-
-  onUnload() {
-    clearTimeout(this._t);
   },
 });

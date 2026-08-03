@@ -73,8 +73,20 @@
 }
 .sum-ex {
   flex-shrink: 0;
+  text-align: right;
   font-size: 22rpx;
+  line-height: 1.5;
   color: #f0b9b8;
+  font-weight: 700;
+}
+/* 被点掉的行:除了变灰,还要有字说明 —— 只靠透明度,人会以为是加载中 */
+.tag-ex {
+  margin-left: 10rpx;
+  padding: 2rpx 14rpx;
+  border-radius: 999rpx;
+  background: rgba(196, 86, 86, 0.12);
+  color: var(--danger, #c45656);
+  font-size: 20rpx;
   font-weight: 700;
 }
 

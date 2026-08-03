@@ -13,6 +13,18 @@ const { ensureAdmin, adminRequest } = require('../../../utils/admin');
 
 const DEBOUNCE_MS = 300;
 
+/*
+ * 列数由「这个单元最宽的一层有几户」定,上限 4。
+ *
+ * 原来格子是 flex:1 撑满整行:住宅一层两户时很好看,但门市一层 11 户就被压成
+ * 60rpx 宽 —— 实测截图里 001~011 挤成了「001002003…」,一个房号都读不出来。
+ * 定列数还带来一个真正的好处:每层同一列 = 同一个位置,和纸质楼盘表对得上。
+ */
+function withColumns(unit) {
+  const widest = (unit.floors || []).reduce((m, f) => Math.max(m, (f.cells || []).length), 0);
+  return { ...unit, cols: Math.min(4, Math.max(2, widest)) };
+}
+
 Page({
   _timer: null,
   _ticket: 0,
@@ -56,7 +68,12 @@ Page({
   async loadTodos() {
     try {
       const d = await adminRequest('/admin/today', { silent: true });
-      const ACTIONABLE = { bindings: '/packageAdmin/pages/approvals/approvals' };
+      const ACTIONABLE = {
+        bindings: '/packageAdmin/pages/approvals/approvals',
+        // 「本月账单已生成待发布」以前点了只弹「请在电脑后台处理」——
+        // 手机端现在能发布,这条必须能点进去,否则待办等于在通知你回办公室
+        draftBatch: '/packageAdmin/pages/batches/batches',
+      };
       this.setData({
         todos: (d.todos || [])
           .filter((t) => t.count > 0)
@@ -108,7 +125,7 @@ Page({
   pickBuildingByName(name) {
     const b = (this._grid || []).find((x) => x.building === name);
     if (!b) return;
-    this.setData({ picked: name, units: b.units });
+    this.setData({ picked: name, units: b.units.map(withColumns) });
   },
 
   goHouse(e) {

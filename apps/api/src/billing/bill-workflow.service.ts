@@ -32,6 +32,14 @@ interface CancelBillInput {
 
 interface ReissueBillInput extends CancelBillInput {}
 
+interface CancelBatchInput {
+  batchId: string;
+  adminId: string;
+  actingTenantId: string | null;
+  reason: string;
+  requestId: string;
+}
+
 /** 账单发布 / 作废 / 重开：全部落幂等事务，事务内写审计与 Outbox。 */
 @Injectable()
 export class BillWorkflowService {
@@ -196,6 +204,99 @@ export class BillWorkflowService {
           tenantId,
           recordId: reservation.recordId,
           errorCode: error instanceof BizException ? String(error.code) : 'PUBLISH_FAILED',
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    });
+  }
+
+  /**
+   * 作废整批草稿：这一批不该发。
+   *
+   * 为什么必须有这个动作：草稿批次原先只有一条出路 —— 发布。于是一个不该发的
+   * 草稿（历史遗留的测试规则每月自动生成的那种）会永久占着「本月账单已生成待发布」
+   * 这条待办，点进去只能发布或者退出。红点永远消不掉，人最终会去点发布。
+   *
+   * 只允许作废未发布的批次。已发布的要撤只能逐户作废（那时候业主已经看到了，
+   * 逐户作废才能留下每一户的原因），整批一键撤销发出去的账单不该存在。
+   */
+  async cancelBatch(input: CancelBatchInput): Promise<{
+    batchId: string;
+    status: string;
+    canceledCount: number;
+  }> {
+    this.assertReason(input.reason);
+    const batch = await this.prisma.raw.billBatch.findUnique({ where: { id: input.batchId } });
+    if (!batch) throw new BizException(ErrorCode.NOT_FOUND, '批次不存在');
+    this.assertTenant(input.actingTenantId, batch.tenantId);
+    if (batch.status === 'CANCELED') {
+      const canceledCount = await this.prisma.raw.bill.count({
+        where: { batchId: batch.id, status: 'CANCELED' },
+      });
+      return { batchId: batch.id, status: 'CANCELED', canceledCount };
+    }
+    if (batch.status === 'PUBLISHED') {
+      throw new BizException(ErrorCode.BILL_NOT_PAYABLE, '批次已发布，业主已看到；要撤销请逐户作废');
+    }
+
+    const tenantId = batch.tenantId;
+    const communityId = batch.communityId;
+    return runWithTenant(tenantId, async () => {
+      const reservation = await this.idempotency.reserve({
+        tenantId,
+        communityId,
+        actorKey: input.adminId,
+        action: 'admin.bill.batch-cancel',
+        requestId: input.requestId,
+        payload: { batchId: input.batchId },
+      });
+      if (reservation.outcome === 'REPLAY') {
+        return reservation.responseBody as { batchId: string; status: string; canceledCount: number };
+      }
+      if (reservation.outcome === 'IN_PROGRESS') throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '作废处理中，请稍候');
+      if (reservation.outcome === 'FAILED') throw new BizException(ErrorCode.VALIDATION, reservation.errorMessage);
+
+      try {
+        const now = new Date();
+        const canceledCount = await this.prisma.raw.$transaction(async (tx) => {
+          const b = await tx.billBatch.updateMany({
+            where: { id: input.batchId, tenantId, status: { in: ['DRAFT', 'GENERATING', 'READY'] } },
+            data: { status: 'CANCELED', canceledAt: now, canceledBy: input.adminId, cancelReason: input.reason },
+          });
+          // 条件更新只认未发布态：与「生成过程中被发布」竞态时宁可报错也不撤掉已发的账
+          if (b.count !== 1) throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '批次状态已变更');
+          const upd = await tx.bill.updateMany({
+            where: { batchId: input.batchId, tenantId, status: 'DRAFT', paymentId: null },
+            data: { status: 'CANCELED', canceledAt: now, canceledBy: input.adminId, cancelReason: input.reason },
+          });
+          await this.audit.append(
+            {
+              tenantId,
+              communityId,
+              actorType: 'ADMIN',
+              actorId: input.adminId,
+              action: 'CANCEL',
+              resourceType: 'BillBatch',
+              resourceId: input.batchId,
+              reason: input.reason,
+              requestId: input.requestId,
+              beforeSummary: { status: batch.status, batchNo: batch.batchNo },
+              afterSummary: { status: 'CANCELED', canceledCount: upd.count },
+            },
+            tx,
+          );
+          return upd.count;
+        });
+        const response = { batchId: input.batchId, status: 'CANCELED', canceledCount };
+        await this.idempotency.complete({ tenantId, recordId: reservation.recordId, responseCode: 0, responseBody: response });
+        this.logger.log(`整批作废 batch=${input.batchId} 账单=${canceledCount} by=${input.adminId}`);
+        return response;
+      } catch (error) {
+        await this.idempotency.fail({
+          tenantId,
+          recordId: reservation.recordId,
+          errorCode: error instanceof BizException ? String(error.code) : 'BATCH_CANCEL_FAILED',
           errorMessage: error instanceof Error ? error.message : String(error),
         });
         throw error;

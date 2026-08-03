@@ -74,7 +74,9 @@
         "pages/house/house",
         "pages/approvals/approvals",
         "pages/billing/billing",
-        "pages/announce/announce"
+        "pages/announce/announce",
+        "pages/bill-one/bill-one",
+        "pages/batches/batches"
       ]
     }
   ]

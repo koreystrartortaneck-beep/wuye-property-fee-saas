@@ -1,0 +1,54 @@
+<view class="page adm-page">
+  <view wx:if="{{loading}}" class="adm-hint">加载中…</view>
+  <view wx:elif="{{loadError}}" class="adm-denied">
+    <view class="adm-denied-title">加载失败</view>
+    <view class="adm-denied-desc">请检查网络后重试</view>
+    <view class="adm-btn adm-retry" bindtap="load">重试</view>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{batches.length === 0}}" class="adm-denied">
+      <view class="adm-denied-title">没有待发布的账单</view>
+      <view class="adm-denied-desc">生成草稿后会出现在这里,核对完再发布给业主。</view>
+    </view>
+
+    <view class="bt-card" wx:for="{{batches}}" wx:key="id" wx:for-item="b" wx:for-index="i">
+      <view class="bt-head">
+        <view class="bt-main">
+          <view class="bt-title">{{b.title}}</view>
+          <view class="bt-sub">
+            {{b.count}} 户待发<text wx:if="{{b.amount}}"> · 原合计 ¥{{b.amount}}</text><text wx:if="{{b.removed > 0}}"> · 已剔除 {{b.removed}} 户</text>
+          </view>
+        </view>
+        <view class="adm-pill adm-pill-danger">业主看不到</view>
+      </view>
+
+      <view class="bt-acts">
+        <view class="adm-btn adm-btn-ghost bt-btn" data-i="{{i}}" bindtap="toggle">{{b.expanded ? '收起明细' : '逐户核对'}}</view>
+        <view class="adm-btn bt-btn {{busy === b.id ? 'adm-btn-busy' : ''}}" data-i="{{i}}" bindtap="publish">发布({{b.count}} 户)</view>
+      </view>
+
+      <block wx:if="{{b.expanded}}">
+        <view class="adm-hint">点「剔除」= 这户本期不发账单(线下已收 / 不该出)。</view>
+        <view class="bt-rows">
+          <view class="adm-row" wx:for="{{b.rows}}" wx:key="id" wx:for-item="r" wx:for-index="j">
+            <view class="adm-row-main">
+              <view class="adm-row-title">{{r.name}}</view>
+              <view class="adm-row-sub">{{r.title}}</view>
+            </view>
+            <view class="adm-row-title adm-num bt-amt">¥{{r.amount}}</view>
+            <view
+              class="adm-pill adm-pill-danger {{busy === r.id ? 'adm-btn-busy' : ''}}"
+              data-i="{{i}}"
+              data-j="{{j}}"
+              bindtap="removeBill"
+            >剔除</view>
+          </view>
+          <view wx:if="{{b.rows.length === 0}}" class="adm-hint">这批已经没有待发的户了</view>
+          <view wx:if="{{b.truncated}}" class="adm-hint adm-error">共 {{b.truncated}} 户,这里只列出前 200 户;其余请在电脑后台核对。</view>
+        </view>
+        <view class="adm-link bt-kill" data-i="{{i}}" bindtap="cancelBatch">这批整个不发(作废草稿)</view>
+      </block>
+    </view>
+  </block>
+</view>

@@ -123,20 +123,31 @@ export class BillRunService {
 
     const batchNo = `RULE-${period}-${ruleId}`;
     const existingBatch = await this.prisma.t.billBatch.findFirst({ where: { batchNo } });
+    let batch = existingBatch;
     if (existingBatch && existingBatch.status === 'PUBLISHED') {
-      // 已发布批次不可再追加：调用方需据 alreadyPublished 给出正确提示，
-      // 否则会把「无法补账」显示成「已生成 0 户，请核对后发布」。
-      return {
-        batchId: existingBatch.id,
-        status: 'PUBLISHED' as const,
-        generated: 0,
-        skipped: 0,
-        alreadyPublished: true,
-      };
+      if (!opts?.onlyHouseIds?.length) {
+        // 全量重跑撞上已发布批次：调用方需据 alreadyPublished 给出正确提示，
+        // 否则会把「无法补账」显示成「已生成 0 户，请核对后发布」。
+        return {
+          batchId: existingBatch.id,
+          status: 'PUBLISHED' as const,
+          generated: 0,
+          skipped: 0,
+          alreadyPublished: true,
+        };
+      }
+      /*
+       * 定向补账撞上已发布批次 → 开一个补充批次，而不是把人堵在这。
+       *
+       * 这是真实的日常：3 月该收的那户当时漏了，8 月新住户上门要交钱。主批次
+       * 早已发布不可追加（发布过的批次金额必须钉死），但「这户今年的账」还没出过。
+       * 双出账的防线不在批次上而在 Bill @@unique([ruleId, houseId, period])
+       * 与周年区间查重 —— 换个批次装同一户同一期的账单依然写不进去。
+       */
+      batch = await this.openSupplementaryBatch(rule, period, ruleId);
     }
-    const batch =
-      existingBatch ??
-      (await this.prisma.t.billBatch.create({
+    if (!batch) {
+      batch = await this.prisma.t.billBatch.create({
         data: {
           communityId: rule.communityId,
           batchNo,
@@ -148,7 +159,8 @@ export class BillRunService {
           // 不整体转 never：tenantId 由租户扩展注入，只需把它从类型里 Omit 掉，
           // 其余字段的校验必须留着 —— 这里写的是账单批次，字段错就是钱错。
         } as Omit<Prisma.BillBatchUncheckedCreateInput, 'tenantId'> as Prisma.BillBatchUncheckedCreateInput,
-      }));
+      });
+    }
 
     const run = await this.prisma.t.billRun.upsert({
       where: { ruleId_period: { ruleId, period } },
@@ -425,6 +437,52 @@ export class BillRunService {
     });
     this.logger.log(`草稿出账 rule=${rule.name} period=${period} batch=${batch.id} generated=${generated} skipped=${skipped}`);
     return { batchId: batch.id, status: 'DRAFT', generated, skipped, skippedDetail };
+  }
+
+  /**
+   * 补充批次:主批次已发布后,定向补账的落脚处。
+   *
+   * 批次号 `RULE-<期>-<规则>-B2`、`-B3`…… 依次找第一个「不存在或还是草稿」的位置:
+   *   · 还是草稿 → 复用它。一天里补三户不该产生三个批次、要点三次发布。
+   *   · 不存在 → 建一个。
+   * 并发下两个补账同时建同一个号 → P2002,重扫一遍即可命中对方刚建的草稿。
+   * 20 个补充批次仍全部发布完 = 这个账期被人反复补了 20 次,该去查数据而不是继续补。
+   */
+  private async openSupplementaryBatch(
+    rule: { communityId: string; name: string },
+    period: string,
+    ruleId: string,
+  ) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      for (let n = 2; n <= 20; n++) {
+        const batchNo = `RULE-${period}-${ruleId}-B${n}`;
+        const found = await this.prisma.t.billBatch.findFirst({ where: { batchNo } });
+        if (found) {
+          if (found.status === 'DRAFT' || found.status === 'GENERATING') return found;
+          continue;
+        }
+        try {
+          return await this.prisma.t.billBatch.create({
+            data: {
+              communityId: rule.communityId,
+              batchNo,
+              period,
+              title: `${rule.name} ${period} 补第 ${n - 1} 批`,
+              source: 'RULE',
+              ruleId,
+              status: 'DRAFT',
+            } as Omit<Prisma.BillBatchUncheckedCreateInput, 'tenantId'> as Prisma.BillBatchUncheckedCreateInput,
+          });
+        } catch (e) {
+          if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002') break;
+          throw e;
+        }
+      }
+    }
+    throw new BizException(
+      ErrorCode.VALIDATION,
+      '这个账期的补充批次已经用满，请先在电脑后台核对已发布的账单,确认这户到底该不该补',
+    );
   }
 
   /** SHARE/METER 不支持周年账期(v1 明确不做,而不是静默出错账) */

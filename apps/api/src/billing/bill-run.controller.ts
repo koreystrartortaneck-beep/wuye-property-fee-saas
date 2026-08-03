@@ -218,6 +218,21 @@ export class BillRunController {
     });
   }
 
+  /*
+   * 整批作废 —— 「这一批不该发」的出路。
+   * 只作废未发布的批次;已发布的要撤只能逐户作废(那时业主已经看到了)。
+   */
+  @Post('bill-batches/:id/cancel')
+  cancelBatch(@Current() cur: CurrentAdmin, @Param('id') id: string, @Body() dto: CancelBillDto) {
+    return this.workflow.cancelBatch({
+      batchId: id,
+      adminId: cur.adminId,
+      actingTenantId: cur.tenantId,
+      reason: dto.reason,
+      requestId: dto.requestId,
+    });
+  }
+
   @Get('bills')
   listBills(@Query() q: ListBillsQuery) {
     return this.bills.list(q);

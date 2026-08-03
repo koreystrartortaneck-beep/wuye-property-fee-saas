@@ -300,4 +300,68 @@ describe('BillWorkflowService 草稿发布 / 作废 / 重开', () => {
     expect(res).toMatchObject({ status: 'UNPAID' });
     expect(tx.bill.create).toHaveBeenCalled();
   });
+
+  /*
+   * 整批作废 —— 草稿批次原先只有一条出路（发布）。历史遗留的测试规则每月自动
+   * 生成一个草稿，就会永久占住「本月账单已生成待发布」这条待办:点进去只能发布
+   * 或者退出，红点永远消不掉，人最后会去点发布 —— 于是错价的测试账单进了业主手机。
+   */
+  const cancelBatchInput = {
+    batchId: 'batch-1', adminId: 'admin-1', actingTenantId: 'tenant-1',
+    reason: '历史测试规则生成的,不该发', requestId: 'req-bc-1',
+  };
+
+  it('整批作废:批次转 CANCELED,批内草稿账单一起作废,审计记原因', async () => {
+    const tx = makeTx();
+    const prisma = makePrisma(tx);
+    const service = makeService(prisma);
+
+    const res = await service.cancelBatch(cancelBatchInput);
+    expect(res).toMatchObject({ batchId: 'batch-1', status: 'CANCELED', canceledCount: 1 });
+    expect(tx.billBatch.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 'batch-1', status: { in: ['DRAFT', 'GENERATING', 'READY'] } }),
+      data: expect.objectContaining({ status: 'CANCELED', canceledBy: 'admin-1' }),
+    }));
+    expect(tx.bill.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      // paymentId: null —— 被进行中支付占用的行不许静默撤掉
+      where: expect.objectContaining({ batchId: 'batch-1', status: 'DRAFT', paymentId: null }),
+      data: expect.objectContaining({ status: 'CANCELED' }),
+    }));
+    expect(audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'CANCEL', resourceType: 'BillBatch', reason: cancelBatchInput.reason }),
+      tx,
+    );
+  });
+
+  it('已发布的批次不许整批撤销:业主已经看到了,要撤只能逐户作废', async () => {
+    const tx = makeTx();
+    const prisma = makePrisma(tx);
+    prisma.raw.billBatch.findUnique = jest.fn().mockResolvedValue({ ...draftBatch, status: 'PUBLISHED' });
+    const service = makeService(prisma);
+
+    await expect(service.cancelBatch(cancelBatchInput)).rejects.toThrow(/逐户作废/);
+    expect(tx.billBatch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('已作废的批次重复作废是幂等的,不再写一遍', async () => {
+    const tx = makeTx();
+    const prisma = makePrisma(tx);
+    prisma.raw.billBatch.findUnique = jest.fn().mockResolvedValue({ ...draftBatch, status: 'CANCELED' });
+    const service = makeService(prisma);
+
+    const res = await service.cancelBatch(cancelBatchInput);
+    expect(res).toMatchObject({ status: 'CANCELED' });
+    expect(tx.billBatch.updateMany).not.toHaveBeenCalled();
+    expect(audit.append).not.toHaveBeenCalled();
+  });
+
+  it('整批作废必须填原因——「这批为什么没发」下个月只能靠它回答', async () => {
+    const service = makeService(makePrisma(makeTx()));
+    await expect(service.cancelBatch({ ...cancelBatchInput, reason: '  ' })).rejects.toThrow(/原因/);
+  });
+
+  it('跨租户不许作废别家的批次', async () => {
+    const service = makeService(makePrisma(makeTx()));
+    await expect(service.cancelBatch({ ...cancelBatchInput, actingTenantId: 'tenant-9' })).rejects.toThrow(/无权/);
+  });
 });

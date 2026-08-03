@@ -1,0 +1,71 @@
+@import "../../adm.wxss";
+
+/* 给谁出账:一行姓名一行房号,不用大头卡抢走金额的注意力 */
+.who {
+  padding: 6rpx 8rpx 20rpx;
+}
+.who-name {
+  font-size: 40rpx;
+  font-weight: 900;
+  color: var(--text, #251c38);
+}
+.who-meta {
+  margin-top: 4rpx;
+  font-size: 24rpx;
+  color: var(--text-3, #7c7288);
+}
+
+/* 勾选:选中才是深紫实心 */
+.tick {
+  flex-shrink: 0;
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 14rpx;
+  border: 2rpx solid rgba(37, 28, 56, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  font-weight: 900;
+  color: transparent;
+}
+.tick-on {
+  background: linear-gradient(145deg, var(--plum, #3b2b57), var(--text, #251c38));
+  border-color: transparent;
+  color: #fff;
+}
+.row-off { opacity: 0.55; }
+.amt {
+  flex-shrink: 0;
+  font-size: 32rpx;
+  font-weight: 900;
+  color: var(--text, #251c38);
+}
+
+/* 生成后的金额卡 */
+.sum-card {
+  border-radius: 34rpx;
+  padding: 36rpx 32rpx;
+  background: linear-gradient(135deg, var(--plum, #3b2b57), var(--text, #251c38) 70%);
+  box-shadow: 0 24rpx 60rpx rgba(37, 28, 56, 0.26);
+}
+.sum-num {
+  font-size: 62rpx;
+  font-weight: 900;
+  line-height: 1.1;
+  color: var(--cream-2, #fdfbf7);
+}
+.sum-lab {
+  margin-top: 6rpx;
+  font-size: 25rpx;
+  color: rgba(253, 251, 247, 0.62);
+}
+.sum-pill {
+  display: inline-flex;
+  margin-top: 22rpx;
+  background: rgba(253, 251, 247, 0.14);
+  color: var(--cream-2, #fdfbf7);
+}
+
+.act { margin-top: 30rpx; }
+.act2 { margin-top: 18rpx; }

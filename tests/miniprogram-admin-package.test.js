@@ -83,6 +83,21 @@ test('业主端主包没有任何文件引用 packageAdmin 之外的管理逻辑
   assert.deepEqual(offenders, ['pages/mine/mine.js'], `管理逻辑泄出分包:${offenders.join(', ')}`);
 });
 
+test('房屋详情是单户作业台:这一户的信息可改、标准可换、只给这户发账单', () => {
+  /*
+   * 实测反馈:「我选中某一个,点进去之后应该是只给这一户编辑+发账单」。
+   * 这一页必须自带编辑(面积/放户日期直接决定金额与出账月)和挂标准,
+   * 而「发账单」必须落到单户页,不能再把人扔回批量流程里选范围。
+   */
+  const js = stripJs(read('packageAdmin/pages/house/house.js'));
+  assert.match(js, /method: 'PATCH'/, '房屋信息不能在这一页改');
+  assert.match(js, /handoverDate/, '没法改放户日期——那是出账月份的唯一依据');
+  assert.match(js, /houses\/\$\{this\.data\.id\}\/standards/, '不能在这一页挂/摘收费标准');
+  assert.match(js, /pages\/bill-one\/bill-one\?id=/, '「给这户发账单」没有落到单户页');
+  // 改面积/放户日期会改钱和出账月,必须先说清后果
+  assert.match(js, /showModal[\s\S]{0,400}放户日期改为/, '改放户日期没有讲清后果');
+});
+
 test('首页是楼盘图:楼栋条 → 层格子,欠费格标金额,点格进房', () => {
   /*
    * 实测反馈:「操作特别不方便,能不能做成楼盘表格那样」。
@@ -149,20 +164,98 @@ test('「没有管理权限」只允许由身份换发失败触发', () => {
   assert.match(src, /gridError/, '楼盘图加载失败没有独立的错误态');
 });
 
-test('发账单支持三种范围,且预览与出账同口径', () => {
+test('发账单三种范围:批量页管全部/楼栋,单户走 bill-one,都用 onlyHouseIds', () => {
   /*
-   * 「某一户 / 某一群 / 所有」是明确需求。三者共用 onlyHouseIds:
-   * 全部 = 不传(undefined),楼栋 = 该栋全部格子,单户 = 一个 id。
+   * 「某一户 / 某一群 / 所有」是明确需求,但**入口分开**:
+   * 实测反馈「点进一户之后应该只给这一户编辑+发账单,现在非常混乱」——
+   * 混乱来自把单户塞进批量流程,为了一户要选标准、选月份、选范围。
+   * 三者仍共用 onlyHouseIds:全部 = 不传,楼栋 = 该栋全部格子,单户 = 一个 id。
    * 预览必须带同样的定向 —— 否则「选了 3 户」却预览全量,人核对的是另一批账。
    */
   const js = stripJs(read('packageAdmin/pages/billing/billing.js'));
   assert.match(js, /scope: 'all'/, '缺少「全部」范围');
-  assert.match(js, /data-s="?building|'building'/, '缺少「按楼栋」范围');
-  assert.match(js, /'house'/, '缺少「某一户」范围');
-  // scopeHouseIds:全部返回 undefined(不定向),其余返回 id 列表
+  assert.match(js, /'building'/, '缺少「按楼栋」范围');
   assert.match(js, /scopeHouseIds\(\)[\s\S]{0,400}return undefined/, '「全部」没有走不定向路径');
   assert.match(js, /onlyHouseIds=\$\{ids\.join\(','\)\}/, '预览没有带定向参数');
   assert.match(js, /body\.onlyHouseIds = ids/, '出账没有带定向参数');
+  // 批量页不许再长出「某一户」:那正是被判定为混乱的东西
+  const wxml = read('packageAdmin/pages/billing/billing.wxml').replace(/<!--[\s\S]*?-->/g, '');
+  assert.ok(!/data-s="house"/.test(wxml), '批量页又出现了「某一户」范围选择');
+
+  const one = stripJs(read('packageAdmin/pages/bill-one/bill-one.js'));
+  assert.match(one, /onlyHouseIds: \[this\.data\.id\]/, '单户页出账没有定向到这一户');
+  assert.match(one, /onlyHouseIds=\$\{this\.data\.id\}|onlyHouseIds=\$\{[^}]*id\}/, '单户页预览没有定向到这一户');
+});
+
+test('单户出账不给人做选择:月份由放户日推导,标准取这户挂着的', () => {
+  /*
+   * 实测:从房屋详情进发账单,默认月份是「当前月」,而这户的收费月是 3 月
+   * → 页面显示「0 户可出账 ¥0.00」。人没做错任何事,却看到一个空白结果。
+   * 单户页必须自己算出月份(锚点月 = 放户日的月),并且只列这户挂着的标准。
+   */
+  const js = stripJs(read('packageAdmin/pages/bill-one/bill-one.js'));
+  assert.match(js, /houses\/\$\{this\.data\.id\}\/standards/, '没有读这户挂着的收费标准');
+  assert.match(js, /anchor\.slice\(5, 7\)/, '月份不是从放户日期推导的');
+  assert.ok(!/scope/.test(js), '单户页出现了「范围」这种概念');
+  // 提前收费要说出来,不能默默生成一张还没到期的账单
+  assert.match(js, /提前/, '收费月还没到时没有提示这是提前收');
+});
+
+test('剔除之后顶上的合计必须跟着变——数字不动等于说剔除没生效', () => {
+  /*
+   * 原来大数字写死成预览返回的合计:剔掉 15 户后仍显示 ¥56758。
+   * 8 月那批 34 户里有 15 户线下已交,这个数字错了就直接错在钱上。
+   */
+  const js = stripJs(read('packageAdmin/pages/billing/billing.js'));
+  assert.match(js, /recompute\(\)/, '没有按剔除重算合计');
+  assert.match(js, /amountCents/, '合计不是按分币整数累加的');
+  const wxml = read('packageAdmin/pages/billing/billing.wxml').replace(/<!--[\s\S]*?-->/g, '');
+  assert.match(wxml, /sum-num[^>]*>¥\{\{willTotal\}\}/, '大数字没有绑到实时合计 willTotal');
+  assert.ok(!/¥\{\{total\}\}/.test(wxml), '页面上还留着不随剔除变化的预览合计');
+});
+
+test('楼盘图格子定列数:房号必须读得出来', () => {
+  /*
+   * 实测截图:门市一层 11 户,格子 flex:1 撑满整行 → 每格约 60rpx,
+   * 001~011 挤成「001002003…」,一个房号都读不出来。
+   * 定列数(≤4)顺带把每层同一列对齐,和纸质楼盘表一致。
+   */
+  const js = stripJs(read('packageAdmin/pages/home/home.js'));
+  assert.match(js, /Math\.min\(4/, '列数没有上限');
+  const wxss = read('packageAdmin/pages/home/home.wxss');
+  assert.match(wxss, /\.cols-4 \.cell/, '缺少定列数的宽度规则');
+  assert.ok(!/\.cell \{[^}]*flex: 1;/.test(wxss), '格子又回到了 flex:1 撑满整行');
+});
+
+test('待办「已生成待发布」必须能点进去发布,不许再劝人回电脑', () => {
+  /*
+   * 待办的意义是「这里有事要做」。点下去弹「这类事项请在电脑后台处理」,
+   * 等于用一条通知提醒你去办公室 —— 手机端已经能发布了。
+   */
+  const js = stripJs(read('packageAdmin/pages/home/home.js'));
+  assert.match(js, /draftBatch: '\/packageAdmin\/pages\/batches\/batches'/, '待发布待办没有路由到发布页');
+});
+
+test('整批发布:户数取库里的草稿条数,剔除要留原因', () => {
+  /*
+   * ① 发布按钮上的户数不能用批次生成时写下的 validRows —— 剔除过就偏大,
+   *    写错就是当着人说谎。
+   * ② 剔除 = 作废这一行草稿账单,必须问原因(线下已收 / 不该出),
+   *    下个月有人问「这户为什么没账单」时,审计里那句话是唯一答案。
+   */
+  const js = stripJs(read('packageAdmin/pages/batches/batches.js'));
+  assert.match(js, /status=DRAFT&pageSize=1/, '户数没有从库里的草稿条数取');
+  assert.ok(!/validRows/.test(js), '户数用了批次上可能过期的 validRows');
+  assert.match(js, /showActionSheet[\s\S]{0,300}线下已/, '剔除没有问原因');
+  assert.match(js, /bills\/\$\{row\.id\}\/cancel/, '剔除没有走作废接口');
+  assert.match(js, /showModal[\s\S]{0,300}b\.count[\s\S]{0,200}发布/, '发布前没有带户数的二次确认');
+  /*
+   * ③ 草稿必须有第二条出路。只有「发布」一条路时,一个不该发的草稿
+   *    (历史遗留规则每月自动生成的那种)会永久占着待办红点,人最后会去点发布 ——
+   *    错价的测试账单就这样进了业主手机。
+   */
+  assert.match(js, /bill-batches\/\$\{b\.id\}\/cancel/, '草稿批次没有「整批不发」的出路');
+  assert.match(js, /整批作废/, '整批作废没有说清后果');
 });
 
 test('发布是人点的最后一下,且发布前必须确认户数', () => {
