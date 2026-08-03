@@ -7,58 +7,92 @@
   </block>
 
   <block wx:else>
-    <view class="adm-hello">物业管理 · {{adminName}}</view>
-
-    <!-- 大搜索框:接电话查户是最高频动作,永远在最上面 -->
+    <!-- 顶部:身份 + 搜索(接电话查户仍是它最快) -->
+    <view class="hd">
+      <view class="hd-title">物业管理</view>
+      <view class="hd-sub">{{adminName}}</view>
+    </view>
     <input
       class="adm-search"
-      placeholder="输房号 / 业主姓名 / 手机号,直达那套房"
+      placeholder="搜房号 / 业主 / 手机号"
       value="{{keyword}}"
       confirm-type="search"
       bindinput="onKeywordInput"
     />
 
-    <view wx:if="{{searching}}" class="adm-hint">搜索中…</view>
-    <view wx:if="{{houses.length > 0}}" class="adm-card">
-      <view class="adm-row" wx:for="{{houses}}" wx:key="id" data-id="{{item.id}}" bindtap="goHouse" hover-class="adm-row-hover">
-        <view class="adm-row-main">
-          <view class="adm-row-title">{{item.displayName}}</view>
-          <view class="adm-row-sub">{{item.code}}<text wx:if="{{item.ownerName}}"> · {{item.ownerName}}</text></view>
-        </view>
-        <view class="adm-arrow">›</view>
-      </view>
-      <view wx:if="{{houseTotal > houses.length}}" class="adm-hint">共 {{houseTotal}} 套,只显示前 {{houses.length}},请输入更完整的房号</view>
-    </view>
-    <view wx:elif="{{keyword && !searching}}" class="adm-hint">没有找到,试试房号的其他写法(如 B-5-1602 / 2-1-1-701)</view>
-
-    <!-- 待办卡:今天该干什么 -->
-    <block wx:if="{{!keyword}}">
-      <view class="adm-section">今日待办</view>
-      <view wx:if="{{loading}}" class="adm-hint">加载中…</view>
-      <view wx:elif="{{todos.length === 0}}" class="adm-hint">没有待办事项 ✓</view>
-      <view class="adm-card" wx:if="{{todos.length > 0}}">
-        <view class="adm-row" wx:for="{{todos}}" wx:key="key" data-url="{{item.url}}" bindtap="onTodoTap" hover-class="adm-row-hover">
+    <!-- 搜索态:结果列表替换楼盘图 -->
+    <block wx:if="{{keyword}}">
+      <view wx:if="{{searching}}" class="adm-hint">搜索中…</view>
+      <view wx:elif="{{houses.length === 0}}" class="adm-hint">没有找到,试试房号其他写法(B-5-1602 / 2-1-1-701)</view>
+      <view class="adm-card" wx:if="{{houses.length > 0}}">
+        <view class="adm-row" wx:for="{{houses}}" wx:key="id" data-id="{{item.id}}" bindtap="goHouse" hover-class="adm-row-hover">
           <view class="adm-row-main">
-            <view class="adm-row-title">{{item.label}}</view>
-            <view wx:if="{{!item.url}}" class="adm-row-sub">在电脑后台处理</view>
+            <view class="adm-row-title">{{item.displayName}}</view>
+            <view class="adm-row-sub">{{item.code}}<text wx:if="{{item.ownerName}}"> · {{item.ownerName}}</text></view>
           </view>
-          <view class="adm-badge">{{item.count}}</view>
+          <view class="adm-arrow">›</view>
         </view>
+        <view wx:if="{{houseTotal > houses.length}}" class="adm-hint">共 {{houseTotal}} 套,输入更完整的房号缩小范围</view>
       </view>
+    </block>
 
-      <block wx:if="{{arrears}}">
-        <view class="adm-section">收缴一览</view>
-        <view class="adm-card adm-stats">
-          <view class="adm-stat">
-            <view class="adm-stat-num">¥{{arrears.amount}}</view>
-            <view class="adm-stat-label">欠费合计 · {{arrears.houses}} 户</view>
+    <block wx:else>
+      <!-- 待办条:紧凑横排,有事才出现 -->
+      <scroll-view wx:if="{{todos.length > 0}}" scroll-x class="todo-strip" enhanced show-scrollbar="{{false}}">
+        <view class="todo-chip" wx:for="{{todos}}" wx:key="key" data-url="{{item.url}}" bindtap="onTodoTap">
+          <text class="todo-count">{{item.count}}</text>
+          <text class="todo-label">{{item.label}}</text>
+        </view>
+      </scroll-view>
+
+      <!-- 楼栋条 -->
+      <view wx:if="{{loading}}" class="adm-hint">加载楼盘图…</view>
+      <scroll-view wx:if="{{buildings.length > 0}}" scroll-x class="b-strip" enhanced show-scrollbar="{{false}}">
+        <view
+          class="b-chip {{picked === item.building ? 'b-chip-on' : ''}}"
+          wx:for="{{buildings}}"
+          wx:key="building"
+          data-b="{{item.building}}"
+          bindtap="pickBuilding"
+        >
+          <view class="b-chip-name">{{item.building}}</view>
+          <view class="b-chip-sub">
+            <text wx:if="{{item.unpaidHouses > 0}}" class="b-chip-warn">欠 {{item.unpaidHouses}} 户</text>
+            <text wx:else class="b-chip-ok">无欠费</text>
           </view>
-          <view class="adm-stat">
-            <view class="adm-stat-num adm-danger">¥{{arrears.overdueAmount}}</view>
-            <view class="adm-stat-label">其中已逾期 · {{arrears.overdueHouses}} 户</view>
+        </view>
+      </scroll-view>
+
+      <!-- 楼盘图:层从高到低,格子颜色即状态 -->
+      <block wx:for="{{units}}" wx:key="unit" wx:for-item="u">
+        <view wx:if="{{u.unit}}" class="unit-title">{{u.unit}}</view>
+        <view class="grid-card">
+          <view class="floor-row" wx:for="{{u.floors}}" wx:key="floor" wx:for-item="f">
+            <view class="floor-tag">{{f.floor > 0 ? f.floor + '层' : ''}}</view>
+            <view class="cells">
+              <view
+                class="cell {{item.unpaidCount > 0 ? 'cell-unpaid' : ''}} {{item.disabled ? 'cell-off' : ''}}"
+                wx:for="{{f.cells}}"
+                wx:key="id"
+                data-id="{{item.id}}"
+                bindtap="goHouse"
+                hover-class="cell-hover"
+              >
+                <view class="cell-no">{{item.label}}</view>
+                <view wx:if="{{item.unpaidCount > 0}}" class="cell-amt">¥{{item.unpaidAmount}}</view>
+              </view>
+            </view>
           </view>
         </view>
       </block>
+
+      <!-- 图例 -->
+      <view class="legend" wx:if="{{buildings.length > 0}}">
+        <view class="legend-item"><view class="legend-dot"></view>正常</view>
+        <view class="legend-item"><view class="legend-dot legend-dot-unpaid"></view>有待缴</view>
+        <view class="legend-item"><view class="legend-dot legend-dot-off"></view>停用</view>
+        <text class="legend-tip">点任意房间进详情</text>
+      </view>
     </block>
   </block>
 </view>

@@ -3,6 +3,7 @@ import { BindingModule } from '../binding/binding.module';
 import { AdminAuthController, AdminAuthService } from './admin-auth.controller';
 import { BindingConfigController, BindingConfigService } from './binding-config.controller';
 import { HouseContactsController, HouseContactsService } from './house-contacts.controller';
+import { HouseGridController, HouseGridService } from './house-grid.controller';
 import { BindingsController, BindingsService } from './bindings.controller';
 import { CommunitiesController, CommunitiesService } from './communities.controller';
 import { HousesController, HousesService } from './houses.controller';
@@ -22,6 +23,7 @@ import { TodayController, TodayService } from './today.controller';
     CommunitiesController,
     HousesController,
     HouseContactsController,
+    HouseGridController,
     BindingConfigController,
     BindingsController,
     StatsController,
@@ -35,6 +37,7 @@ import { TodayController, TodayService } from './today.controller';
     CommunitiesService,
     HousesService,
     HouseContactsService,
+    HouseGridService,
     BindingConfigService,
     BindingsService,
   ],

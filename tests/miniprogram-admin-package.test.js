@@ -82,3 +82,18 @@ test('业主端主包没有任何文件引用 packageAdmin 之外的管理逻辑
   walk('pages');
   assert.deepEqual(offenders, ['pages/mine/mine.js'], `管理逻辑泄出分包:${offenders.join(', ')}`);
 });
+
+test('首页是楼盘图:楼栋条 → 层格子,欠费格标金额,点格进房', () => {
+  /*
+   * 实测反馈:「操作特别不方便,能不能做成楼盘表格那样」。
+   * 搜索是接电话用的;日常巡查靠空间视图 —— 这条钉住别退回纯搜索。
+   */
+  const wxml = read('packageAdmin/pages/home/home.wxml').replace(/<!--[\s\S]*?-->/g, '');
+  assert.match(wxml, /pickBuilding/, '没有楼栋切换');
+  assert.match(wxml, /wx:for="\{\{u\.floors\}\}"/, '没有按层铺格子');
+  assert.match(wxml, /cell-unpaid/, '欠费格没有红色状态类');
+  assert.match(wxml, /\{\{item\.unpaidAmount\}\}/, '欠费格没有金额');
+  assert.match(wxml, /data-id="\{\{item\.id\}\}" bindtap="goHouse"/, '格子点不进房屋详情');
+  // 搜索保留:接电话查户仍是它最快
+  assert.match(wxml, /bindinput="onKeywordInput"/, '搜索框被删掉了');
+});
