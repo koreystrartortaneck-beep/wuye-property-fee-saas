@@ -1,4 +1,7 @@
 {
   "navigationBarTitleText": "绑定审批",
-  "usingComponents": {}
+  "usingComponents": {},
+  "navigationStyle": "default",
+  "navigationBarBackgroundColor": "#f6f0e7",
+  "navigationBarTextStyle": "black"
 }

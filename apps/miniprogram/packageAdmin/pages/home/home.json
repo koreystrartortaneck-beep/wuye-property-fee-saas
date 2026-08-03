@@ -1,4 +1,7 @@
 {
   "navigationBarTitleText": "物业管理",
-  "usingComponents": {}
+  "usingComponents": {},
+  "navigationStyle": "default",
+  "navigationBarBackgroundColor": "#f6f0e7",
+  "navigationBarTextStyle": "black"
 }
