@@ -48,6 +48,7 @@
 
       <!-- 楼栋条 -->
       <view wx:if="{{loading}}" class="adm-hint">加载楼盘图…</view>
+      <view wx:if="{{gridError}}" class="adm-hint adm-error" bindtap="retryGrid">{{gridError}}</view>
       <scroll-view wx:if="{{buildings.length > 0}}" scroll-x class="b-strip" enhanced show-scrollbar="{{false}}">
         <view
           class="b-chip {{picked === item.building ? 'b-chip-on' : ''}}"

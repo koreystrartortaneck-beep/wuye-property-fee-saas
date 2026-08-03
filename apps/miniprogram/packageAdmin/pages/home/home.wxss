@@ -198,3 +198,8 @@
   margin: 40rpx auto 0;
   width: 320rpx;
 }
+
+.adm-error {
+  color: var(--danger, #c45656);
+  font-weight: 700;
+}

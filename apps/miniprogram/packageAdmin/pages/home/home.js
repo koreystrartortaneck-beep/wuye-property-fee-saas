@@ -23,6 +23,7 @@ Page({
     denied: false,
     loading: true,
     todos: [],
+    gridError: '',
     /** 楼栋条:[{building, houses, unpaidHouses}] */
     buildings: [],
     picked: '',
@@ -36,13 +37,20 @@ Page({
   },
 
   async onShow() {
+    let s;
     try {
-      const s = await ensureAdmin();
-      this.setData({ adminName: s.name, denied: false });
-      await Promise.all([this.loadTodos(), this.loadGrid()]);
+      s = await ensureAdmin();
     } catch (e) {
+      /*
+       * 只有身份换发失败才是「没有管理权限」。
+       * 数据加载失败(网络/接口)是另一码事,必须分开渲染 ——
+       * 把一切失败都塞进权限错误页,等于对着有权限的人说「你没权限」。
+       */
       this.setData({ denied: true, loading: false });
+      return;
     }
+    this.setData({ adminName: s.name, denied: false, gridError: '' });
+    await Promise.all([this.loadTodos(), this.loadGrid()]);
   },
 
   async loadTodos() {
@@ -62,19 +70,35 @@ Page({
   async loadGrid() {
     this.setData({ loading: true });
     try {
-      // 单租户单在营小区;将来多小区在这里加切换条
-      const cs = await adminRequest('/owner/communities', { silent: true });
-      const community = (cs.items || [])[0];
-      if (!community) return;
+      /*
+       * 小区列表必须走 /admin/communities —— 管理员令牌配管理端的门。
+       * 2026-08-03 实测:这里原来调的是业主端的 /owner/communities,
+       * 管理员令牌被 OwnerGuard 拒掉 → 异常抛到外层 → 被渲染成
+       * 「没有管理权限」。用户明明有权限(审计里躺着成功换发),
+       * 界面却说他没有 —— 错误页说谎比报错本身严重。
+       */
+      const cs = await adminRequest('/admin/communities?page=1&pageSize=100', { silent: true });
+      const community = (cs.list || []).find((c) => c.status === 'ACTIVE');
+      if (!community) {
+        this.setData({ gridError: '还没有在营小区' });
+        return;
+      }
       const grid = await adminRequest(`/admin/houses-grid?communityId=${community.id}`, { silent: true });
       this._grid = grid.buildings || [];
       const buildings = this._grid.map((b) => ({ building: b.building, houses: b.houses, unpaidHouses: b.unpaidHouses }));
       this.setData({ communityId: community.id, buildings });
       // 默认展开第一栋:进来就有东西看,而不是一排按钮等人猜
       if (this._grid.length > 0 && !this.data.picked) this.pickBuildingByName(this._grid[0].building);
+    } catch (e) {
+      this.setData({ gridError: '楼盘图加载失败,请检查网络后点此重试' });
     } finally {
       this.setData({ loading: false });
     }
+  },
+
+  retryGrid() {
+    this.setData({ gridError: '' });
+    void this.loadGrid();
   },
 
   pickBuilding(e) {

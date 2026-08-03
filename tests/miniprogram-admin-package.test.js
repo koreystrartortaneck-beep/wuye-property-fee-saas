@@ -108,3 +108,43 @@ test('探测必须等业主登录完成——竞态会把管理员误判成普�
   const body = src.slice(i, src.indexOf('admin-exchange', i));
   assert.match(body, /await getApp\(\)\.loginReady/, 'exchangeAdmin 没有先等 loginReady');
 });
+
+test('adminRequest 绝不许调 /owner/ 接口——令牌与门不匹配', () => {
+  /*
+   * 2026-08-03 实测:楼盘图拿小区列表调了 /owner/communities,
+   * 管理员令牌被 OwnerGuard 拒 → 异常抛到外层 → 被渲染成「没有管理权限」。
+   * 用户明明有权限(审计里躺着成功换发),界面却说他没有。
+   * 这类错编译期查不出来,只能在这里全量扫。
+   */
+  const offenders = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(path.join(MP, dir), { withFileTypes: true })) {
+      if (e.name.startsWith('.')) continue;
+      const rel = path.join(dir, e.name);
+      if (e.isDirectory()) walk(rel);
+      else if (e.name.endsWith('.js')) {
+        const src = stripJs(read(rel));
+        for (const m of src.matchAll(/adminRequest\(\s*[`'"](\/owner\/[^`'"]*)/g)) {
+          offenders.push(`${rel} → ${m[1]}`);
+        }
+      }
+    }
+  };
+  walk('packageAdmin');
+  assert.deepEqual(offenders, [], `管理员令牌开不了业主端的门:\n  ${offenders.join('\n  ')}`);
+});
+
+test('「没有管理权限」只允许由身份换发失败触发', () => {
+  /*
+   * denied 状态若被数据加载失败也能置上,错误页就在说谎 ——
+   * 对着有权限的人说「你没权限」,他只会去反复检查一个没坏的登记。
+   */
+  const src = stripJs(read('packageAdmin/pages/home/home.js'));
+  const sets = [...src.matchAll(/denied: true/g)];
+  assert.equal(sets.length, 1, 'denied:true 出现了多于一处——检查是否有别的失败也在冒充权限错误');
+  const i = src.indexOf('denied: true');
+  const before = src.slice(Math.max(0, i - 300), i);
+  assert.match(before, /ensureAdmin/, 'denied 不是由 ensureAdmin 的失败触发的');
+  // 楼盘图有自己的失败态与重试
+  assert.match(src, /gridError/, '楼盘图加载失败没有独立的错误态');
+});
