@@ -47,9 +47,28 @@ test('探测失败 = 不是管理员,静默,不打扰业主', () => {
   assert.match(mine, /exchangeAdmin\(\)\.then/, '「我的」页没有静默探测');
 });
 
-test('入口按 adminName 显隐;界面显隐只是引导,门在服务端', () => {
+test('「物业工作」整段按管理员身份显隐——标题和卡片都要各自挂条件', () => {
+  /*
+   * 业主不该看到这一段。它由「微信授权手机号是否在管理员名单里」决定
+   * (服务端 /auth/admin-exchange 判定,探测失败一律按「不是」)。
+   *
+   * 这里逐个检查而不是只看一处:标题和卡片是**两个并列的 view**,
+   * 各自挂着 wx:if。少挂一个,业主就会看到一个孤零零的「物业工作」标题 ——
+   * 那既是信息泄露(告诉他这里有管理功能),也会让他以为自己该有这个入口。
+   * 将来往这一段里再加东西,这条会立刻变红。
+   */
   const wxml = read('pages/mine/mine.wxml').replace(/<!--[\s\S]*?-->/g, '');
-  assert.match(wxml, /wx:if="\{\{adminName\}\}"[\s\S]{0,200}物业管理/, '「物业管理」入口没有按管理员身份显隐');
+  const start = wxml.indexOf('物业工作');
+  assert.ok(start > 0, '「物业工作」整段不见了');
+  const block = wxml.slice(wxml.lastIndexOf('<view', start), wxml.indexOf('build-stamp'));
+  const openers = block.match(/<view[^>]*class="(?:section-title|menu-card)[^"]*"[^>]*>/g) || [];
+  assert.ok(openers.length >= 2, `没找到「物业工作」的标题与卡片(找到 ${openers.length} 个)`);
+  for (const o of openers) {
+    assert.match(o, /wx:if="\{\{adminName\}\}"/, `这一段里有没挂条件的元素,业主会看见:${o}`);
+  }
+  // adminName 只能来自静默探测的结果,失败必须落回空串(否则会「默认显示」)
+  const js = stripJs(read('pages/mine/mine.js'));
+  assert.match(js, /adminName: admin \? admin\.name : ''/, '探测失败没有把入口收回去');
 });
 
 test('管理端请求走令牌覆盖;管理令牌 40100 不触发业主重登', () => {
