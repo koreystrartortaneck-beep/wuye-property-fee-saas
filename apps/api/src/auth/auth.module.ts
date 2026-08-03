@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { BindingModule } from '../binding/binding.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { OwnerAccountController } from './owner-account.controller';
@@ -25,6 +26,7 @@ export function resolveJwtSecret(): string {
       global: true,
       secret: resolveJwtSecret(),
     }),
+    BindingModule,
   ],
   controllers: [AuthController, OwnerAccountController],
   providers: [AuthService, OwnerGuard, OwnerAccountService],

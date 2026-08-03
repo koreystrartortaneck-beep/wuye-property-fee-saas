@@ -4,6 +4,8 @@ import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
 import { ErrorCode, HOUSE_TYPES, HouseType } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
+import { normalizePhone } from '../auth/auth.service';
+import { BindingSyncService } from '../binding/binding-sync.service';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { Roles, RolesGuard } from '../auth/roles.decorator';
 import { BizException } from '../common/biz.exception';
@@ -55,6 +57,18 @@ class HouseRowDto {
   @IsString()
   @MaxLength(64)
   ownerPhone?: string;
+
+  /*
+   * 授权手机号列表,分号分隔("13800001111;13900002222")。
+   * 与 ownerPhone 合并后统一写进 HouseContact —— legacy 单号列继续可用,
+   * 新表格可以一行导入多个授权人(业主+租客)。
+   * 191 上限≈15 个号:这不是数据库列(拆开落 HouseContact),
+   * 但 input-limits 守卫按「所有 DTO 字段≤191」统一钉,遵守它比开豁免干净。
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(191)
+  contactPhones?: string;
 }
 
 class ImportHousesDto {
@@ -119,6 +133,7 @@ export class HousesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly bindingSync: BindingSyncService,
   ) {}
 
   /** 单行业务校验：住宅必须有面积 */
@@ -130,7 +145,7 @@ export class HousesService {
   }
 
   /** 批量导入：唯一键 (communityId, code) upsert，逐行汇报结果 */
-  async import(dto: ImportHousesDto) {
+  async import(dto: ImportHousesDto, adminId: string) {
     /*
      * 先确认小区属于本公司再导入。
      *
@@ -176,7 +191,7 @@ export class HousesService {
          * 不用 `as never`：那会让 Prisma 对**其余所有字段**的校验一并失效，
          * 而 createMany 是批量写，错一个字段名就是几千行脏数据。
          */
-        data: toCreate.map((r) => ({ ...r, communityId: dto.communityId })) as Prisma.HouseCreateManyInput[],
+        data: toCreate.map(({ contactPhones: _cp, ...r }) => ({ ...r, communityId: dto.communityId })) as Prisma.HouseCreateManyInput[],
         // 兜住 @@unique([communityId, code])：同一次导入里文件内重复的房号
         skipDuplicates: true,
       });
@@ -187,7 +202,8 @@ export class HousesService {
       const id = idByCode.get(row.code);
       if (!id) continue;
       try {
-        await this.prisma.t.house.update({ where: { id }, data: { ...row } });
+        const { contactPhones: _cp, ...data } = row;
+        await this.prisma.t.house.update({ where: { id }, data });
         updated++;
       } catch (e) {
         failed.push({
@@ -196,7 +212,75 @@ export class HousesService {
         });
       }
     }
-    return { created, updated, failed };
+
+    const contacts = await this.importContacts(dto.communityId, valid, adminId);
+    return { created, updated, failed, contacts };
+  }
+
+  /**
+   * 导入的联系人落库 + 已授权用户即时绑定。
+   *
+   * 往返有界:重查一次房号→id 映射、一次 createMany、一次按号找用户,
+   * 只有「号主已在用小程序」的少数情况才逐一 applyPhoneMatch —— 2000 行也扛得住。
+   * 非法号计入 skipped 并如实返回,不静默丢(否则「导入成功」又是一句假话)。
+   */
+  private async importContacts(communityId: string, rows: HouseRowDto[], adminId: string) {
+    const wanted: Array<{ code: string; phone: string; name: string | null }> = [];
+    let invalidPhones = 0;
+    for (const row of rows) {
+      const raw = [row.ownerPhone ?? '', ...(row.contactPhones ?? '').split(/[;；]/)];
+      for (const p of raw) {
+        const phone = normalizePhone(p.trim());
+        if (!phone) continue;
+        if (!/^1[3-9]\d{9}$/.test(phone)) {
+          invalidPhones += 1;
+          continue;
+        }
+        wanted.push({ code: row.code, phone, name: row.ownerName ?? null });
+      }
+    }
+    if (wanted.length === 0) return { added: 0, activatedBindings: 0, invalidPhones };
+
+    const houses = await this.prisma.t.house.findMany({
+      where: { communityId, code: { in: [...new Set(wanted.map((c) => c.code))] } },
+      select: { id: true, tenantId: true, communityId: true, code: true },
+    });
+    const houseByCode = new Map(houses.map((h) => [h.code, h]));
+
+    const data = wanted
+      .map((c) => {
+        const house = houseByCode.get(c.code);
+        return house ? { houseId: house.id, phone: c.phone, name: c.name, source: 'IMPORT' as const, createdBy: adminId } : null;
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+    const res = await this.prisma.t.houseContact.createMany({
+      data: data as Prisma.HouseContactCreateManyInput[],
+      skipDuplicates: true, // (houseId, phone) 已存在 → 幂等跳过,重复导入不炸
+    });
+
+    // 已在用小程序的号主当场绑上;没用过的等他授权那刻由 bindPhone 兜住
+    const phones = [...new Set(data.map((d) => d.phone))];
+    const users = await this.prisma.raw.wxUser.findMany({
+      where: { phone: { in: phones }, deletedAt: null },
+      select: { id: true, phone: true },
+    });
+    let activated = 0;
+    const now = new Date();
+    const houseById = new Map(houses.map((h) => [h.id, h]));
+    const housesByPhone = new Map<string, typeof houses>();
+    for (const d of data) {
+      const house = houseById.get(d.houseId);
+      if (!house) continue;
+      const list = housesByPhone.get(d.phone) ?? [];
+      if (!list.some((h) => h.id === house.id)) list.push(house);
+      housesByPhone.set(d.phone, list);
+    }
+    for (const u of users) {
+      const hs = housesByPhone.get(u.phone!) ?? [];
+      if (hs.length === 0) continue;
+      activated += await this.bindingSync.applyPhoneMatch(this.prisma.raw, u.id, hs, now, { type: 'ADMIN', id: adminId });
+    }
+    return { added: res.count, activatedBindings: activated, invalidPhones };
   }
 
   async list(q: ListHousesQuery) {
@@ -214,8 +298,40 @@ export class HousesService {
     return pageResult(list, total, q);
   }
 
-  update(id: string, dto: UpdateHouseDto) {
-    return this.prisma.t.house.update({ where: { id }, data: dto });
+  async update(id: string, dto: UpdateHouseDto, adminId: string) {
+    /*
+     * ownerPhone 的变更必须联动绑定 —— 这正是本次重构修的核心 bug:
+     * 原来这里是一行裸 update,后台把手机号从旧住户改成新住户,
+     * 旧住户的绑定原封不动,换租后他继续看得到新住户的账单。
+     *
+     * 语义:改号 = 删旧号 + 加新号(与联系人操作同一份实现);
+     * 旧号的绑定立即撤销,新号的用户立即绑上。
+     * ownerPhone 列处于冻结期,仍随之同步,保证欠费导出等旧读路径的数据不断档;
+     * P4 后台改用联系人列表后,这条桥保持兼容直至删列。
+     */
+    if (dto.ownerPhone === undefined) {
+      return this.prisma.t.house.update({ where: { id }, data: dto });
+    }
+    const house = await this.prisma.t.house.findFirst({
+      where: { id },
+      select: { id: true, tenantId: true, communityId: true, code: true, ownerPhone: true },
+    });
+    if (!house) throw new BizException(ErrorCode.NOT_FOUND, '房屋不存在或不属于当前物业公司');
+
+    const newPhone = dto.ownerPhone ? normalizePhone(dto.ownerPhone) : null;
+    if (newPhone) this.bindingSync.assertMobile(newPhone);
+    const oldPhone = house.ownerPhone ? normalizePhone(house.ownerPhone) : null;
+    const actor = { type: 'ADMIN' as const, id: adminId };
+
+    return this.prisma.raw.$transaction(async (tx) => {
+      if (oldPhone && oldPhone !== newPhone) {
+        await this.bindingSync.revokeContact(tx, house, oldPhone, '物业已变更房屋登记手机号', actor);
+      }
+      if (newPhone && newPhone !== oldPhone) {
+        await this.bindingSync.grantContact(tx, house, newPhone, dto.ownerName ?? null, 'ADMIN', actor);
+      }
+      return tx.house.update({ where: { id }, data: { ...dto, ownerPhone: newPhone } });
+    });
   }
 
   /*
@@ -261,6 +377,14 @@ export class HousesService {
       );
     }
 
+    /*
+     * 联系人随房删除,不进挡板清单 —— 深思后的取舍:
+     * 联系人是「授权配置」不是业务历史(账单/绑定才是),把它加进挡板
+     * 会让「导错一批带手机号的房」变成删不掉的垃圾 —— 正是前天刚修过的那种死结。
+     * 加号/删号的审计留着,删了多少条也写进本次审计。
+     * (绑定仍然挡:有人绑着说明有人在用,那不是配置是状态。)
+     */
+    const removedContacts = await this.prisma.t.houseContact.deleteMany({ where: { houseId: id } });
     await this.prisma.t.house.delete({ where: { id } });
     /*
      * 删除必须留痕。房屋是计费的根，删掉之后再想追「这户去哪了」，
@@ -276,7 +400,7 @@ export class HousesService {
       resourceId: id,
       // 房号比 cuid 有用：查审计的人认得房号
       beforeSummary: { code: house.code, displayName: house.displayName },
-      afterSummary: { event: 'HOUSE_DELETE' },
+      afterSummary: { event: 'HOUSE_DELETE', removedContacts: removedContacts.count },
     });
     return { deleted: true, code: house.code };
   }
@@ -288,8 +412,8 @@ export class HousesController {
   constructor(private readonly service: HousesService) {}
 
   @Post('import')
-  import(@Body() dto: ImportHousesDto) {
-    return this.service.import(dto);
+  import(@Current() cur: CurrentAdmin, @Body() dto: ImportHousesDto) {
+    return this.service.import(dto, cur.adminId);
   }
 
   @Get()
@@ -298,8 +422,8 @@ export class HousesController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateHouseDto) {
-    return this.service.update(id, dto);
+  update(@Current() cur: CurrentAdmin, @Param('id') id: string, @Body() dto: UpdateHouseDto) {
+    return this.service.update(id, dto, cur.adminId);
   }
 
   /*

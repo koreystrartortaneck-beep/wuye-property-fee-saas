@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
+import { BindingModule } from '../binding/binding.module';
 import { AdminAuthController, AdminAuthService } from './admin-auth.controller';
+import { BindingConfigController, BindingConfigService } from './binding-config.controller';
+import { HouseContactsController, HouseContactsService } from './house-contacts.controller';
 import { BindingsController, BindingsService } from './bindings.controller';
 import { CommunitiesController, CommunitiesService } from './communities.controller';
 import { HousesController, HousesService } from './houses.controller';
@@ -10,6 +13,7 @@ import { HouseProfileController, HouseProfileService } from './house-profile.con
 import { TodayController, TodayService } from './today.controller';
 
 @Module({
+  imports: [BindingModule],
   controllers: [
     TodayController,
     HouseProfileController,
@@ -17,10 +21,22 @@ import { TodayController, TodayService } from './today.controller';
     TenantsController,
     CommunitiesController,
     HousesController,
+    HouseContactsController,
+    BindingConfigController,
     BindingsController,
     StatsController,
     CloudFilesController,
   ],
-  providers: [TodayService, HouseProfileService, AdminAuthService, TenantsService, CommunitiesService, HousesService, BindingsService],
+  providers: [
+    TodayService,
+    HouseProfileService,
+    AdminAuthService,
+    TenantsService,
+    CommunitiesService,
+    HousesService,
+    HouseContactsService,
+    BindingConfigService,
+    BindingsService,
+  ],
 })
 export class AdminModule {}

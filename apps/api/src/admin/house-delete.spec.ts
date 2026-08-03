@@ -37,6 +37,10 @@ function makeService(house: unknown, counts: Counts = {}) {
           return Promise.resolve({});
         },
       },
+      houseContact: {
+        // 删房顺带清联系人(授权配置随房走);计数进审计
+        deleteMany: () => Promise.resolve({ count: 0 }),
+      },
       bill: model('bill'),
       houseBinding: model('houseBinding'),
       ticket: model('ticket'),
@@ -45,7 +49,8 @@ function makeService(house: unknown, counts: Counts = {}) {
     },
   };
   const audit = { append: (e: Record<string, unknown>) => { audits.push(e); return Promise.resolve(); } };
-  return { service: new HousesService(prisma as never, audit as never), deleted, audits };
+  const bindingSync = new Proxy({}, { get: () => { throw new Error('删除路径不应触碰 BindingSyncService'); } });
+  return { service: new HousesService(prisma as never, audit as never, bindingSync as never), deleted, audits };
 }
 
 const HOUSE = {

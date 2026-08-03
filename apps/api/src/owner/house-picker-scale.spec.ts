@@ -1,5 +1,15 @@
 import { OwnerHousesService, tokenize } from './owner-houses.controller';
 
+/*
+ * 这些用例只测选房/搜索,不走绑定联动:
+ * bindingSync 给默认全开配置,audit 给禁止触碰的哨兵 —— 误用当场炸,而不是静默吞。
+ */
+const FAKE_SYNC = {
+  getConfig: async () => ({ phoneMatch: true, selfApply: true, selfApplyNeedsApproval: true }),
+} as never;
+const FAKE_AUDIT = new Proxy({}, { get: () => { throw new Error('这些用例不应写审计'); } }) as never;
+
+
 /**
  * 2026-08-02 业主问：「如果有一两百户、好几个小区之后，这个怎么提交绑定？」
  *
@@ -46,7 +56,7 @@ function makeService(houseRows: unknown[], houseTotal: number, communityRows: un
       },
     },
   };
-  return { service: new OwnerHousesService(prisma as never), calls };
+  return { service: new OwnerHousesService(prisma as never, FAKE_SYNC, FAKE_AUDIT), calls };
 }
 
 const houses = (n: number) =>

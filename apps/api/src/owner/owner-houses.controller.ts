@@ -1,10 +1,13 @@
 import { Body, Controller, Get, Injectable, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { BINDING_RELATIONS, BindingRelation, ErrorCode } from '@pf/shared';
+import { AuditService } from '../audit/audit.service';
+import { BindingSyncService } from '../binding/binding-sync.service';
 import { Current, CurrentOwner } from '../auth/current.decorator';
 import { OwnerGuard } from '../auth/owner.guard';
 import { BizException } from '../common/biz.exception';
 import { PrismaService } from '../prisma/prisma.service';
+import { runWithTenant } from '../tenant/tenant-cls';
 
 class ApplyBindingDto {
   @IsString()
@@ -56,7 +59,11 @@ function matchWhole(keyword: string) {
  */
 @Injectable()
 export class OwnerHousesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly bindingSync: BindingSyncService,
+    private readonly audit: AuditService,
+  ) {}
 
   /** 断言业主对房屋有 ACTIVE 绑定，否则 41001（账单/支付复用） */
   async assertOwnerHouse(ownerId: string, houseId: string): Promise<void> {
@@ -114,14 +121,28 @@ export class OwnerHousesService {
     const [list, total] = await Promise.all([
       this.prisma.raw.community.findMany({
         where,
-        include: { tenant: { select: { name: true } } },
+        include: { tenant: { select: { name: true, bindingConfig: { select: { phoneMatch: true, selfApply: true } } } } },
         take: OwnerHousesService.PAGE_SIZE,
         orderBy: { createdAt: 'asc' },
       }),
       this.prisma.raw.community.count({ where }),
     ]);
     return {
-      items: list.map((c) => ({ id: c.id, name: c.name, address: c.address, tenantName: c.tenant.name })),
+      items: list.map((c) => ({
+        id: c.id,
+        name: c.name,
+        address: c.address,
+        tenantName: c.tenant.name,
+        /*
+         * 渠道开关随小区下发,小程序按它显隐两条绑定路径。
+         * 缺配置行 = 全默认(全开)。UI 只是跟着显隐 —— 真正的强制在服务端:
+         * phoneMatch 在 bindPhone 的匹配查询里过滤,selfApply 在 applyBinding 里拒绝。
+         */
+        binding: {
+          phoneMatch: c.tenant.bindingConfig?.phoneMatch ?? true,
+          selfApply: c.tenant.bindingConfig?.selfApply ?? true,
+        },
+      })),
       total,
     };
   }
@@ -186,6 +207,22 @@ export class OwnerHousesService {
     const house = await this.prisma.raw.house.findUnique({ where: { id: dto.houseId } });
     if (!house || house.status !== 'ACTIVE') throw new BizException(ErrorCode.NOT_FOUND);
 
+    /*
+     * 渠道门(服务端强制,UI 显隐只是提示):
+     * selfApply 关掉的物业公司不接受自助申请。绕过小程序直接调接口的也一样被拒。
+     */
+    const config = await this.bindingSync.getConfig(house.tenantId);
+    if (!config.selfApply) {
+      throw new BizException(ErrorCode.VALIDATION, '该小区未开放自助申请，请联系物业登记您的手机号');
+    }
+    /*
+     * 免审批模式:申请即生效。
+     * 与人工审批走同一条 grantContact 路径 —— 用户有手机号就自动进授权名单,
+     * 从此删号即解绑;区别只在没有审核人,审计事件标 BINDING_AUTO_APPROVE。
+     */
+    const autoApprove = !config.selfApplyNeedsApproval;
+    const initialStatus = autoApprove ? ('ACTIVE' as const) : ('PENDING' as const);
+
     const exists = await this.prisma.raw.houseBinding.findUnique({
       where: { wxUserId_houseId: { wxUserId: ownerId, houseId: dto.houseId } },
     });
@@ -201,10 +238,10 @@ export class OwnerHousesService {
        * 留着它的话，这次申请若被驳回，首页会错误地说「房屋绑定已解除」——
        * 而他这次根本没绑上过。
        */
-      return this.prisma.raw.houseBinding.update({
+      const updated = await this.prisma.raw.houseBinding.update({
         where: { id: exists.id },
         data: {
-          status: 'PENDING',
+          status: initialStatus,
           relation: dto.relation,
           applicantName: dto.applicantName,
           source: 'APPLY',
@@ -213,9 +250,11 @@ export class OwnerHousesService {
           revokeReason: null,
         },
       });
+      if (autoApprove) await this.afterAutoApprove(ownerId, house, updated.id, dto.applicantName);
+      return updated;
     }
     try {
-      return await this.prisma.raw.houseBinding.create({
+      const created = await this.prisma.raw.houseBinding.create({
         data: {
           tenantId: house.tenantId,
           wxUserId: ownerId,
@@ -223,9 +262,11 @@ export class OwnerHousesService {
           relation: dto.relation,
           applicantName: dto.applicantName,
           source: 'APPLY',
-          status: 'PENDING',
+          status: initialStatus,
         },
       });
+      if (autoApprove) await this.afterAutoApprove(ownerId, house, created.id, dto.applicantName);
+      return created;
     } catch (e) {
       /*
        * 唯一约束 (wxUserId, houseId) 已经保证不会真重复，所以这里不是补漏洞，
@@ -236,6 +277,40 @@ export class OwnerHousesService {
         throw new BizException(ErrorCode.BINDING_EXISTS);
       }
       throw e;
+    }
+  }
+
+  /** 免审批通过后的收尾:留痕 + 手机号进授权名单(与人工审批同一条路径) */
+  private async afterAutoApprove(
+    ownerId: string,
+    house: { id: string; tenantId: string; communityId: string; code: string },
+    bindingId: string,
+    applicantName: string,
+  ): Promise<void> {
+    await runWithTenant(house.tenantId, () =>
+      this.audit.append({
+        tenantId: house.tenantId,
+        communityId: house.communityId,
+        actorType: 'WX_USER',
+        actorId: ownerId,
+        action: 'UPDATE',
+        resourceType: 'HouseBinding',
+        resourceId: bindingId,
+        afterSummary: {
+          event: 'BINDING_AUTO_APPROVE',
+          status: 'ACTIVE',
+          houseCode: house.code,
+        },
+      }),
+    );
+    const user = await this.prisma.raw.wxUser.findUnique({ where: { id: ownerId }, select: { phone: true } });
+    if (user?.phone) {
+      await this.prisma.raw.$transaction((tx) =>
+        this.bindingSync.grantContact(tx, house, user.phone!, applicantName, 'APPLY_APPROVED', {
+          type: 'WX_USER',
+          id: ownerId,
+        }),
+      );
     }
   }
 

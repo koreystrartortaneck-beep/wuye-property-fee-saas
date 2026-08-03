@@ -1,4 +1,5 @@
 import { AuthService, maskPhone, normalizePhone } from './auth.service';
+import { BindingSyncService } from '../binding/binding-sync.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WxApi } from '../wx/wx.service';
 
@@ -9,7 +10,8 @@ describe('AuthService 云托管身份', () => {
     const jwt = { signAsync: jest.fn().mockResolvedValue('owner-token') };
     const wx = { code2session: jest.fn() } as unknown as WxApi;
     const audit = { append: jest.fn() };
-    const service = new AuthService(prisma, jwt as never, wx, audit as never);
+    const bindingSync = new BindingSyncService(prisma as never, audit as never);
+    const service = new AuthService(prisma, jwt as never, wx, audit as never, bindingSync);
 
     await expect(
       (service.wxLogin as unknown as (code: string, openid?: string) => Promise<unknown>)('unused-code', 'cloud-openid'),
@@ -49,21 +51,33 @@ describe('AuthService.bindPhone 证据感知绑定', () => {
     wx = { getPhoneNumber: jest.fn().mockResolvedValue({ phone: '13800001111' }) };
   });
 
-  function makeTx() {
+  function makeTx(existing: Array<{ houseId: string }>) {
     return {
       houseBinding: {
         create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'new-b', ...data })),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        // applyPhoneMatch 在事务内查「该用户在命中房屋上的既有绑定」——按 houseId 过滤,和真库一致
+        findMany: jest.fn(async ({ where }: { where: { houseId?: { in: string[] } } }) =>
+          existing.filter((b) => !where.houseId || where.houseId.in.includes(b.houseId)),
+        ),
       },
     };
   }
 
-  function makePrisma(houses: unknown[], existing: unknown[], tx = makeTx()) {
+  /*
+   * 匹配路径已换成 HouseContact:houses 参数在这里表达为「联系人行 + 所属房屋」。
+   * BindingSyncService 用真实现(不 mock)—— 这组测试钉的正是它的匹配规则。
+   */
+  function makePrisma(houses: Array<{ id: string; tenantId: string }>, existing: Array<{ houseId: string }>, tx = makeTx(existing)) {
     return {
       prisma: {
         raw: {
           wxUser: { update: jest.fn().mockResolvedValue({}) },
-          house: { findMany: jest.fn().mockResolvedValue(houses) },
+          houseContact: {
+            findMany: jest.fn().mockResolvedValue(
+              houses.map((h) => ({ house: { ...h, communityId: null, code: null } })),
+            ),
+          },
           houseBinding: { findMany: jest.fn().mockResolvedValue(existing) },
           $transaction: jest.fn(async (cb: (client: typeof tx) => unknown) => cb(tx)),
         },
@@ -73,7 +87,8 @@ describe('AuthService.bindPhone 证据感知绑定', () => {
   }
 
   function makeService(prisma: unknown): AuthService {
-    return new AuthService(prisma as never, { signAsync: jest.fn() } as never, wx as never, audit as never);
+    const bindingSync = new BindingSyncService(prisma as never, audit as never);
+    return new AuthService(prisma as never, { signAsync: jest.fn() } as never, wx as never, audit as never, bindingSync);
   }
 
   it('精确匹配房屋自动建立 PHONE_MATCH 绑定，返回掩码手机号', async () => {

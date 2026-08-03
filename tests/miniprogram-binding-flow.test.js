@@ -131,10 +131,15 @@ test('手机号匹配只认在营的物业公司', () => {
     path.join(__dirname, '..', 'apps/api/src/auth/auth.service.ts'),
     'utf8',
   );
-  const i = src.indexOf('const houses = await this.prisma.raw.house.findMany');
-  assert.ok(i > 0, '找不到手机号匹配的查询');
+  /*
+   * 匹配路径已从 House.ownerPhone 迁到 HouseContact(一房多授权号)。
+   * 守卫跟着迁,但钉的仍是同一件事:租户必须 ACTIVE 才参与匹配。
+   */
+  const i = src.indexOf('await this.prisma.raw.houseContact.findMany');
+  assert.ok(i > 0, '找不到手机号匹配的查询(应查 HouseContact)');
   const q = src.slice(i, src.indexOf('});', i));
-  assert.match(q, /community: \{ tenant: \{ status: 'ACTIVE' \} \}/, '没有排除已停用的物业公司');
+  assert.match(q, /status: 'ACTIVE'/, '没有排除已停用的物业公司');
+  assert.match(q, /tenant: \{\s*\n?\s*status: 'ACTIVE'/, '租户状态过滤丢了');
 });
 
 test('「我的」页与首页对同一件事说同一句话', () => {

@@ -2,6 +2,16 @@ import { ErrorCode } from '@pf/shared';
 import { BizException } from '../common/biz.exception';
 import { OwnerHousesService } from './owner-houses.controller';
 
+/*
+ * 这些用例只测选房/搜索,不走绑定联动:
+ * bindingSync 给默认全开配置,audit 给禁止触碰的哨兵 —— 误用当场炸,而不是静默吞。
+ */
+const FAKE_SYNC = {
+  getConfig: async () => ({ phoneMatch: true, selfApply: true, selfApplyNeedsApproval: true }),
+} as never;
+const FAKE_AUDIT = new Proxy({}, { get: () => { throw new Error('这些用例不应写审计'); } }) as never;
+
+
 /**
  * assertOwnerHouse 是业主端所有"按房屋"接口的统一入口（生活服务/优惠券/工单/账单等）。
  * 缺 houseId 必须显式 400：否则 Prisma 复合唯一键收到 undefined 会抛出，
@@ -12,7 +22,7 @@ describe('OwnerHousesService.assertOwnerHouse 缺参防护', () => {
     const prisma = {
       raw: { houseBinding: { findUnique: jest.fn().mockResolvedValue(binding) } },
     };
-    return { service: new OwnerHousesService(prisma as never), prisma };
+    return { service: new OwnerHousesService(prisma as never, FAKE_SYNC, FAKE_AUDIT), prisma };
   }
 
   it.each([undefined, null, ''])('houseId 为 %p 时抛参数错误，且不查库（避免 Prisma 抛出→500）', async (bad) => {
@@ -66,7 +76,7 @@ describe('停用的物业公司必须失去业主端访问权', () => {
     const findUnique = jest.fn().mockResolvedValue(binding);
     const findMany = jest.fn().mockResolvedValue([]);
     const prisma = { raw: { houseBinding: { findUnique, findMany } } };
-    return { service: new OwnerHousesService(prisma as never), findUnique, findMany };
+    return { service: new OwnerHousesService(prisma as never, FAKE_SYNC, FAKE_AUDIT), findUnique, findMany };
   }
 
   it('绑定有效但物业公司已停用 → 拒绝', async () => {

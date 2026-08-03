@@ -7,6 +7,7 @@ import { Roles, RolesGuard } from '../auth/roles.decorator';
 import { BizException } from '../common/biz.exception';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
 import { AuditService } from '../audit/audit.service';
+import { BindingSyncService } from '../binding/binding-sync.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 class ListBindingsQuery extends PageQuery {
@@ -37,6 +38,7 @@ export class BindingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly bindingSync: BindingSyncService,
   ) {}
 
   async list(q: ListBindingsQuery) {
@@ -126,7 +128,11 @@ export class BindingsService {
   }
 
   async review(id: string, adminId: string, dto: ReviewDto) {
-    const binding = await this.prisma.t.houseBinding.findUnique({ where: { id } });
+    const binding = await this.prisma.t.houseBinding.findUnique({
+      where: { id },
+      // 房屋带出来:通过时要把申请人手机号写进授权名单,审计要记小区归属
+      include: { house: { select: { id: true, tenantId: true, communityId: true, code: true } } },
+    });
     if (!binding) throw new BizException(ErrorCode.NOT_FOUND);
     if (binding.status !== 'PENDING') throw new BizException(ErrorCode.VALIDATION, '该申请已处理');
     /*
@@ -155,6 +161,51 @@ export class BindingsService {
     if (done.count !== 1) {
       throw new BizException(ErrorCode.VALIDATION, '该申请刚刚已被其他人处理，请刷新后查看');
     }
+
+    /*
+     * 审批必须留痕。此前 revoke 有审计而 review 没有 —— 不对称:
+     * 「通过」开放的和「解除」撤销的是同一份权限,凭什么一个记一个不记。
+     */
+    await this.audit.append({
+      tenantId: binding.tenantId,
+      communityId: binding.house?.communityId ?? null,
+      actorType: 'ADMIN',
+      actorId: adminId,
+      action: 'UPDATE',
+      resourceType: 'HouseBinding',
+      resourceId: id,
+      reason: dto.approve ? null : dto.rejectReason ?? '未通过审核',
+      beforeSummary: { status: 'PENDING' },
+      afterSummary: {
+        event: 'BINDING_REVIEW',
+        status: dto.approve ? 'ACTIVE' : 'REJECTED',
+        houseCode: binding.house?.code ?? null,
+        wxUserId: binding.wxUserId,
+      },
+    });
+
+    if (dto.approve && binding.house) {
+      /*
+       * 通过的那一刻,申请人手机号自动进该房授权名单(单一数据源):
+       * 从此归名单管 —— 物业删号即解绑,和其他授权人完全一样。
+       * 没有手机号的用户(极少:老版本注册且从未授权)跳过,他的绑定照常生效,
+       * 只是换租时物业要在绑定列表里手动解除,而不是删号。
+       */
+      const user = await this.prisma.raw.wxUser.findUnique({
+        where: { id: binding.wxUserId },
+        select: { phone: true },
+      });
+      if (user?.phone) {
+        const house = binding.house;
+        await this.prisma.raw.$transaction((tx) =>
+          this.bindingSync.grantContact(tx, house, user.phone!, binding.applicantName ?? null, 'APPLY_APPROVED', {
+            type: 'ADMIN',
+            id: adminId,
+          }),
+        );
+      }
+    }
+
     return {
       ...binding,
       status: dto.approve ? ('ACTIVE' as const) : ('REJECTED' as const),

@@ -24,8 +24,10 @@ function makeService(binding: Record<string, unknown> | null, updateCount = 1) {
   const updateMany = jest.fn(async (_args: { data: Record<string, unknown> }) => ({ count: updateCount }));
   const append = jest.fn(async (_input: { afterSummary: Record<string, unknown> }) => ({}));
   const prisma = { t: { houseBinding: { findUnique, updateMany } } };
+  // revoke 路径不触碰 BindingSyncService,传一个只会在误用时爆炸的哨兵即可
+  const bindingSync = new Proxy({}, { get: () => { throw new Error('revoke 不应触碰 BindingSyncService'); } });
   return {
-    service: new BindingsService(prisma as never, { append } as never),
+    service: new BindingsService(prisma as never, { append } as never, bindingSync as never),
     findUnique,
     updateMany,
     append,

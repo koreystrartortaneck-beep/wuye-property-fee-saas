@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
 import { ErrorCode } from '@pf/shared';
 import { AuditService } from '../audit/audit.service';
+import { BindingSyncService } from '../binding/binding-sync.service';
 import { BizException } from '../common/biz.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { runWithTenant } from '../tenant/tenant-cls';
@@ -43,6 +44,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     @Inject(WX_API) private readonly wx: WxApi,
     private readonly audit: AuditService,
+    private readonly bindingSync: BindingSyncService,
   ) {}
 
   /** 微信登录：优先使用云托管可信 openid，否则用 code 换取，落库并签发 owner token */
@@ -62,7 +64,7 @@ export class AuthService {
 
   /**
    * 手机号授权（证据感知绑定）：
-   * - 精确规范化匹配 House.ownerPhone，命中房屋建/复活 PHONE_MATCH 绑定；
+   * - 精确规范化匹配 HouseContact.phone（房屋授权手机号列表），命中房屋建/复活 PHONE_MATCH 绑定；
    * - 人工审批绑定（source=APPLY 或已 reviewedBy）不被手机匹配覆盖；
    * - 既有 PHONE_MATCH 但手机号已不再匹配的房屋 → 自动失效解绑，人工审批保留；
    * - 仅向客户端返回掩码手机号。
@@ -75,64 +77,43 @@ export class AuthService {
     await this.prisma.raw.wxUser.update({ where: { id: wxUserId }, data: { phone, phoneBoundAt: now } });
 
     /*
-     * 只匹配**在营物业公司**的房屋。
+     * 匹配路径已从 House.ownerPhone（单字段）换成 HouseContact（授权手机号列表）——
+     * 一套房可以同时授权业主、家属、租客;物业删号即解绑（BindingSyncService）。
      *
-     * 2026-08-02 实测：业主授权手机号后提示「已自动绑定 1 处房屋」，
-     * 而首页什么都没有 —— 匹配到的那套房属于一个已停用（DISABLED）的租户，
-     * 业主端已经把停用公司的房屋过滤掉了。于是系统宣称做了一件事，实际什么也没发生。
+     * 只匹配**在营物业公司**的房屋:
+     * 2026-08-02 实测,业主授权后提示「已自动绑定 1 处房屋」而首页什么都没有 ——
+     * 匹配到的房属于已停用租户,业主端把它过滤掉了。宣称已生效、实际没生效,
+     * 而且发生在新业主进来的第一步。
      *
-     * 这是「宣称已生效、实际没生效」的又一例，而且发生在最不该发生的地方：
-     * 新业主进来的第一步。
+     * 同时按租户的渠道配置过滤:phoneMatch 关掉的物业公司不参与自动匹配
+     * （缺配置行 = 默认开,见 DEFAULT_BINDING_CONFIG）。
      */
-    const houses = await this.prisma.raw.house.findMany({
+    const contacts = await this.prisma.raw.houseContact.findMany({
       where: {
-        ownerPhone: phone,
-        status: 'ACTIVE',
-        community: { tenant: { status: 'ACTIVE' } },
+        phone,
+        house: {
+          status: 'ACTIVE',
+          community: {
+            tenant: {
+              status: 'ACTIVE',
+              OR: [{ bindingConfig: { is: null } }, { bindingConfig: { phoneMatch: true } }],
+            },
+          },
+        },
       },
+      include: { house: { select: { id: true, tenantId: true, communityId: true, code: true } } },
     });
+    // 同一套房可能有多行联系人(不同号)但 phone 精确匹配下 (houseId,phone) 唯一 → 房屋天然不重复
+    const houses = contacts.map((c) => c.house);
     const matchedHouseIds = new Set(houses.map((h) => h.id));
     const existing = await this.prisma.raw.houseBinding.findMany({ where: { wxUserId } });
-    const existingByHouse = new Map(existing.map((b) => [b.houseId, b]));
 
     await this.prisma.raw.$transaction(async (tx) => {
-      // 1) 命中房屋：建立或复活 PHONE_MATCH 绑定，绝不覆盖人工审批证据。
-      for (const house of houses) {
-        const cur = existingByHouse.get(house.id);
-        if (!cur) {
-          const created = await tx.houseBinding.create({
-            data: {
-              tenantId: house.tenantId,
-              wxUserId,
-              houseId: house.id,
-              relation: 'OWNER',
-              status: 'ACTIVE',
-              source: 'PHONE_MATCH',
-              phoneMatchedAt: now,
-            },
-          });
-          await this.appendBindingAudit(tx, house.tenantId, created.id, wxUserId, 'CREATE', {
-            event: 'BINDING_PHONE_MATCH_CREATE',
-            source: 'PHONE_MATCH',
-            status: 'ACTIVE',
-          });
-          continue;
-        }
-        // 人工审批（APPLY 或已审核）证据：保留，不被手机匹配改写。
-        if (cur.source === 'APPLY' || cur.reviewedBy) continue;
-        if (cur.status !== 'ACTIVE' || cur.revokedAt) {
-          await tx.houseBinding.updateMany({
-            where: { id: cur.id },
-            data: { status: 'ACTIVE', source: 'PHONE_MATCH', phoneMatchedAt: now, revokedAt: null, revokeReason: null },
-          });
-          await this.appendBindingAudit(tx, cur.tenantId, cur.id, wxUserId, 'UPDATE', {
-            event: 'BINDING_PHONE_MATCH_REACTIVATE',
-            source: 'PHONE_MATCH',
-            status: 'ACTIVE',
-          });
-        }
-      }
+      // 1) 命中房屋：建立或复活 PHONE_MATCH 绑定（共享实现,绝不覆盖人工审批证据）。
+      await this.bindingSync.applyPhoneMatch(tx, wxUserId, houses, now, { type: 'WX_USER', id: wxUserId });
       // 2) 失效的仅手机匹配绑定：手机号已变更/不再匹配 → 自动解绑，人工审批不受影响。
+      //    （物业删号已在 BindingSyncService.revokeContact 同步撤销;这条降级为
+      //      「用户自己换了微信手机号」的兜底,保形不动。）
       for (const b of existing) {
         if (b.source === 'PHONE_MATCH' && b.status === 'ACTIVE' && !matchedHouseIds.has(b.houseId)) {
           const upd = await tx.houseBinding.updateMany({
