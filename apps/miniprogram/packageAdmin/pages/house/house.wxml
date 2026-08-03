@@ -2,59 +2,69 @@
   <view wx:if="{{loading}}" class="adm-hint">加载中…</view>
   <view wx:elif="{{loadError}}" class="adm-denied">
     <view class="adm-denied-title">加载失败</view>
-    <view class="adm-denied-desc" bindtap="load">请检查网络后点此重试</view>
+    <view class="adm-denied-desc">请检查网络后重试</view>
+    <view class="adm-btn adm-retry" bindtap="load">重试</view>
   </view>
 
   <block wx:elif="{{house}}">
-    <!-- ① 这套房是谁、欠多少(接电话第一眼要看的) -->
-    <view class="adm-card hs-head">
-      <view class="hs-name">{{house.displayName}}</view>
-      <view class="hs-meta">{{house.code}} · {{house.communityName}}<text wx:if="{{house.area}}"> · {{house.area}}㎡</text></view>
-      <view class="hs-figures">
-        <view class="hs-fig">
-          <view class="hs-fig-num {{summary.unpaidCount > 0 ? 'adm-danger' : ''}}">¥{{summary.unpaidAmount}}</view>
-          <view class="hs-fig-label">待缴 {{summary.unpaidCount}} 笔</view>
+    <!-- 头卡:欠多少,一眼可见 -->
+    <view class="hero">
+      <view class="hero-name">{{house.displayName}}</view>
+      <view class="hero-meta">{{house.code}} · {{house.communityName}}<text wx:if="{{house.area}}"> · {{house.area}}㎡</text></view>
+      <view class="hero-figs">
+        <view class="fig">
+          <view class="fig-num {{summary.unpaidCount > 0 ? 'fig-warn' : ''}} adm-num">¥{{summary.unpaidAmount}}</view>
+          <view class="fig-lab">待缴 {{summary.unpaidCount}} 笔</view>
         </view>
-        <view class="hs-fig">
-          <view class="hs-fig-num">¥{{summary.paidAmount}}</view>
-          <view class="hs-fig-label">已缴 {{summary.paidCount}} 笔</view>
+        <view class="fig-div"></view>
+        <view class="fig">
+          <view class="fig-num adm-num">¥{{summary.paidAmount}}</view>
+          <view class="fig-lab">已缴 {{summary.paidCount}} 笔</view>
         </view>
       </view>
     </view>
 
-    <!-- ② 授权手机号:换住户就在这里(删旧号+加新号) -->
-    <view class="adm-section">授权手机号(谁能看到这套房的账单)</view>
+    <!-- 住这套房的人:换绑就在这 -->
+    <view class="adm-sec">授权手机号(谁能看到这套房的账单)</view>
     <view class="adm-card">
       <view wx:if="{{contacts.length === 0}}" class="adm-hint">还没有授权任何手机号,在下方添加</view>
       <view class="adm-row" wx:for="{{contacts}}" wx:key="id">
+        <view class="avatar">{{item.name ? item.name[0] : '住'}}</view>
         <view class="adm-row-main">
-          <view class="adm-row-title" data-phone="{{item.phone}}" bindtap="callPhone">{{item.phone}} 📞</view>
-          <view class="adm-row-sub">{{item.name || '未备注'}}<text wx:if="{{item.bound}}"> · 已绑定使用中</text></view>
+          <view class="adm-row-title">
+            {{item.name || '未备注'}}
+            <text wx:if="{{item.bound}}" class="tag-on">使用中</text>
+          </view>
+          <view class="adm-row-sub adm-num">{{item.phone}}</view>
         </view>
-        <view class="hs-remove" data-id="{{item.id}}" data-phone="{{item.phone}}" bindtap="removeContact">移除</view>
+        <view class="adm-pill adm-pill-quiet" data-phone="{{item.phone}}" bindtap="callPhone">拨号</view>
+        <view class="adm-pill adm-pill-danger" data-id="{{item.id}}" data-phone="{{item.phone}}" bindtap="removeContact">移除</view>
       </view>
-      <view class="hs-add">
-        <input class="hs-add-input" type="number" maxlength="11" placeholder="新住户手机号" value="{{newPhone}}" bindinput="onPhoneInput" />
-        <input class="hs-add-input hs-add-name" placeholder="备注姓名" value="{{newName}}" bindinput="onNameInput" />
-      </view>
-      <view class="adm-btn {{adding ? 'adm-btn-busy' : ''}}" bindtap="addContact">添加授权手机号</view>
-      <view class="adm-hint">换住户:先移除旧号(对方立即看不到账单),再添加新号(对方授权手机号即见账单)</view>
-    </view>
 
-    <!-- ③ 账单历史 -->
-    <view class="adm-section">账单(近 20 张)</view>
+      <view class="add-row">
+        <input class="adm-input add-phone" type="number" maxlength="11" placeholder="新住户手机号" value="{{newPhone}}" bindinput="onPhoneInput" />
+        <input class="adm-input add-name" placeholder="备注姓名" value="{{newName}}" bindinput="onNameInput" />
+      </view>
+      <view class="adm-link {{adding ? 'adm-btn-busy' : ''}}" bindtap="addContact">＋ 添加授权手机号</view>
+    </view>
+    <view class="adm-hint">换住户 = 先移除旧号(对方立即看不到账单),再添加新号(对方授权手机号即见账单)</view>
+
+    <!-- 账单 -->
+    <view class="adm-sec">账单</view>
     <view class="adm-card">
       <view wx:if="{{bills.length === 0}}" class="adm-hint">还没有账单</view>
       <view class="adm-row" wx:for="{{bills}}" wx:key="id">
         <view class="adm-row-main">
           <view class="adm-row-title">{{item.title}}</view>
-          <view class="adm-row-sub">{{item.periodText}}</view>
+          <view class="adm-row-sub adm-num">{{item.periodText}}</view>
         </view>
-        <view class="hs-bill-right">
-          <view class="hs-bill-amount">¥{{item.amount}}</view>
-          <view class="hs-bill-status {{item.status === 'UNPAID' ? 'adm-danger' : ''}}">{{item.statusLabel}}</view>
+        <view class="bill-right">
+          <view class="adm-row-title adm-num">¥{{item.amount}}</view>
+          <view class="bill-st {{item.status === 'UNPAID' ? 'adm-danger' : ''}}">{{item.statusLabel}}</view>
         </view>
       </view>
     </view>
+
+    <view class="adm-btn adm-btn-gold act-btn" bindtap="goBillThisHouse">给这户发账单</view>
   </block>
 </view>

@@ -72,7 +72,9 @@
       "pages": [
         "pages/home/home",
         "pages/house/house",
-        "pages/approvals/approvals"
+        "pages/approvals/approvals",
+        "pages/billing/billing",
+        "pages/announce/announce"
       ]
     }
   ]

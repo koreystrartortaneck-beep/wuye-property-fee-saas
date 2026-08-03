@@ -148,3 +148,39 @@ test('「没有管理权限」只允许由身份换发失败触发', () => {
   // 楼盘图有自己的失败态与重试
   assert.match(src, /gridError/, '楼盘图加载失败没有独立的错误态');
 });
+
+test('发账单支持三种范围,且预览与出账同口径', () => {
+  /*
+   * 「某一户 / 某一群 / 所有」是明确需求。三者共用 onlyHouseIds:
+   * 全部 = 不传(undefined),楼栋 = 该栋全部格子,单户 = 一个 id。
+   * 预览必须带同样的定向 —— 否则「选了 3 户」却预览全量,人核对的是另一批账。
+   */
+  const js = stripJs(read('packageAdmin/pages/billing/billing.js'));
+  assert.match(js, /scope: 'all'/, '缺少「全部」范围');
+  assert.match(js, /data-s="?building|'building'/, '缺少「按楼栋」范围');
+  assert.match(js, /'house'/, '缺少「某一户」范围');
+  // scopeHouseIds:全部返回 undefined(不定向),其余返回 id 列表
+  assert.match(js, /scopeHouseIds\(\)[\s\S]{0,400}return undefined/, '「全部」没有走不定向路径');
+  assert.match(js, /onlyHouseIds=\$\{ids\.join\(','\)\}/, '预览没有带定向参数');
+  assert.match(js, /body\.onlyHouseIds = ids/, '出账没有带定向参数');
+});
+
+test('发布是人点的最后一下,且发布前必须确认户数', () => {
+  /*
+   * 这是钱。自动化只做准备(草稿),发布永远要人确认 ——
+   * 且确认框必须写清「多少户会立即看到」,不能只说「确认发布?」。
+   */
+  const js = stripJs(read('packageAdmin/pages/billing/billing.js'));
+  assert.match(js, /showModal[\s\S]{0,300}b\.count[\s\S]{0,200}发布/, '发布前没有带户数的二次确认');
+  assert.match(js, /bill-batches\/\$\{b\.id\}\/publish/, '没有调发布接口');
+  // 批次数字取自后端批次,不能拿预览数字充数
+  assert.match(js, /admin\/bill-batches\?period=/, '发布按钮上的户数/金额没有取自真实批次');
+});
+
+test('发公告:发布即可见,所以要确认受众;可撤回但要说清收不回', () => {
+  const js = stripJs(read('packageAdmin/pages/announce/announce.js'));
+  assert.match(js, /本公司全部小区|本小区/, '确认框没有说清受众范围');
+  assert.match(js, /admin\/announcements/, '没有调公告接口');
+  const wxml = read('packageAdmin/pages/announce/announce.wxml').replace(/<!--[\s\S]*?-->/g, '');
+  assert.ok(/看过的人收不回来|收不回来/.test(js + wxml), '撤回没有说清「看过的人收不回」');
+});

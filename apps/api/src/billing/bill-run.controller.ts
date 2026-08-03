@@ -25,6 +25,13 @@ class TriggerRunDto {
   @ArrayMaxSize(500, { message: '单次最多剔除 500 套' })
   @IsString({ each: true })
   excludeHouseIds?: string[];
+
+  /** 定向出账:只给这些房屋出(手机端「给某一户/某几户发账单」) */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(2000, { message: '单次最多指定 2000 套' })
+  @IsString({ each: true })
+  onlyHouseIds?: string[];
 }
 
 class PreviewRunQuery {
@@ -34,6 +41,12 @@ class PreviewRunQuery {
 
   @Matches(/^\d{4}(-\d{2}|-Q[1-4])?$/, { message: 'period 格式须为 YYYY-MM / YYYY-Qn / YYYY' })
   period!: string;
+
+  /** 逗号分隔的房屋 id:定向预览必须与定向出账同口径,否则「选了 3 户」却预览全量 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(60_000)
+  onlyHouseIds?: string;
 }
 
 class CancelBillDto {
@@ -146,13 +159,17 @@ export class BillRunController {
 
   @Post('bill-runs')
   trigger(@Body() dto: TriggerRunDto) {
-    return this.billRun.generate(dto.ruleId, dto.period, { excludeHouseIds: dto.excludeHouseIds });
+    return this.billRun.generate(dto.ruleId, dto.period, {
+      excludeHouseIds: dto.excludeHouseIds,
+      onlyHouseIds: dto.onlyHouseIds,
+    });
   }
 
   /** 干跑预览:逐行金额+计算依据+跳过原因,零写入。物业核对后剔除再生成草稿 */
   @Get('bill-runs/preview')
   preview(@Query() q: PreviewRunQuery) {
-    return this.billRun.preview(q.ruleId, q.period);
+    const only = q.onlyHouseIds ? q.onlyHouseIds.split(',').filter(Boolean) : undefined;
+    return this.billRun.preview(q.ruleId, q.period, only);
   }
 
   @Get('bill-runs')

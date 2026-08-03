@@ -116,6 +116,14 @@ Page({
     if (id) wx.navigateTo({ url: `/packageAdmin/pages/house/house?id=${id}` });
   },
 
+  goBilling() {
+    wx.navigateTo({ url: `/packageAdmin/pages/billing/billing?communityId=${this.data.communityId}` });
+  },
+
+  goAnnounce() {
+    wx.navigateTo({ url: `/packageAdmin/pages/announce/announce?communityId=${this.data.communityId}` });
+  },
+
   onTodoTap(e) {
     const url = e.currentTarget.dataset.url;
     if (url) wx.navigateTo({ url });

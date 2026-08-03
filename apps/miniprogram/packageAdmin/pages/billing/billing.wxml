@@ -1,0 +1,132 @@
+<view class="page adm-page">
+  <!-- ① 选范围 -->
+  <block wx:if="{{step === 1}}">
+    <view class="adm-sec">收费标准</view>
+    <view class="adm-card">
+      <view wx:if="{{rules.length === 0}}" class="adm-hint">还没有「按户周年」的收费标准,请先在电脑后台建好</view>
+      <view class="adm-row" wx:for="{{rules}}" wx:key="id" data-i="{{index}}" bindtap="pickRule" hover-class="adm-row-hover">
+        <view class="adm-row-main">
+          <view class="adm-row-title">{{item.name}}</view>
+          <view class="adm-row-sub">{{item.code || '未设代号'}}</view>
+        </view>
+        <view class="adm-pill {{ruleId === item.id ? 'adm-pill-ok' : 'adm-pill-quiet'}}">{{ruleId === item.id ? '已选 ✓' : '选择'}}</view>
+      </view>
+    </view>
+
+    <view class="adm-sec">账期(按放户日在这个月的房屋出账)</view>
+    <picker mode="date" fields="month" value="{{period}}" bindchange="onPeriod">
+      <view class="adm-input pick-line">{{period}} ›</view>
+    </picker>
+
+    <view class="adm-sec">发给谁</view>
+    <view class="scope-row">
+      <view class="scope {{scope === 'all' ? 'scope-on' : ''}}" data-s="all" bindtap="pickScope">全部</view>
+      <view class="scope {{scope === 'building' ? 'scope-on' : ''}}" data-s="building" bindtap="pickScope">按楼栋</view>
+      <view class="scope {{scope === 'house' ? 'scope-on' : ''}}" data-s="house" bindtap="pickScope">某一户</view>
+    </view>
+
+    <view wx:if="{{scope === 'all'}}" class="adm-hint">本月该出账的全部房屋(挂了这条标准、且放户日在 {{period}} 的)</view>
+
+    <block wx:if="{{scope === 'building'}}">
+      <scroll-view scroll-x class="b-strip" enhanced show-scrollbar="{{false}}">
+        <view
+          class="b-chip {{pickedBuilding === item.building ? 'b-chip-on' : ''}}"
+          wx:for="{{buildings}}"
+          wx:key="building"
+          data-b="{{item.building}}"
+          bindtap="pickBuilding"
+        >
+          <view class="b-chip-name">{{item.building}}</view>
+          <view class="b-chip-sub b-chip-ok">{{item.houses}} 套</view>
+        </view>
+      </scroll-view>
+    </block>
+
+    <block wx:if="{{scope === 'house'}}">
+      <input class="adm-input full" placeholder="输房号搜索,如 B-5-1602" value="{{keyword}}" bindinput="onKeyword" />
+      <view class="adm-card" wx:if="{{houses.length > 0}}">
+        <view class="adm-row" wx:for="{{houses}}" wx:key="id" data-i="{{index}}" bindtap="pickHouse" hover-class="adm-row-hover">
+          <view class="adm-row-main">
+            <view class="adm-row-title">{{item.displayName}}</view>
+            <view class="adm-row-sub">{{item.code}}</view>
+          </view>
+          <view class="adm-arrow">›</view>
+        </view>
+      </view>
+      <view wx:if="{{pickedHouse}}" class="adm-hint">已选:{{pickedHouse.displayName}}</view>
+    </block>
+
+    <view class="adm-btn step-btn {{previewing ? 'adm-btn-busy' : ''}}" bindtap="preview">
+      {{previewing ? '计算中…' : '下一步:预览金额'}}
+    </view>
+  </block>
+
+  <!-- ② 预览 -->
+  <block wx:elif="{{step === 2}}">
+    <view class="sum-card">
+      <view class="sum-main">
+        <view class="sum-num adm-num">¥{{total}}</view>
+        <view class="sum-lab">{{payable.length}} 户可出账 · {{ruleName}} · {{period}}</view>
+      </view>
+      <view wx:if="{{excluded.length > 0}}" class="sum-ex">已勾掉 {{excluded.length}} 户</view>
+    </view>
+
+    <view class="adm-sec">逐户核对(点一行 = 本次不给这户出)</view>
+    <view class="adm-card">
+      <view
+        class="adm-row {{excluded.indexOf(item.houseId) >= 0 ? 'row-ex' : ''}}"
+        wx:for="{{payable}}"
+        wx:key="houseId"
+        data-id="{{item.houseId}}"
+        bindtap="toggleRow"
+        hover-class="adm-row-hover"
+      >
+        <view class="tick {{excluded.indexOf(item.houseId) >= 0 ? '' : 'tick-on'}}">{{excluded.indexOf(item.houseId) >= 0 ? '' : '✓'}}</view>
+        <view class="adm-row-main">
+          <view class="adm-row-title">{{item.displayName || item.code}}</view>
+          <view class="adm-row-sub">{{item.basis}}<text wx:if="{{item.periodRange}}"> · {{item.periodRange.start}} 起</text></view>
+        </view>
+        <view class="adm-row-title adm-num">¥{{item.amount}}</view>
+      </view>
+      <view wx:if="{{payable.length === 0}}" class="adm-hint">这个范围本月没有该出账的房屋</view>
+    </view>
+
+    <block wx:if="{{skipped.length > 0}}">
+      <view class="adm-sec">跳过 {{skipped.length}} 户(原因如下,不会出账)</view>
+      <view class="adm-card">
+        <view class="adm-row" wx:for="{{skipped}}" wx:key="houseId">
+          <view class="adm-row-main">
+            <view class="adm-row-title">{{item.displayName || item.code}}</view>
+            <view class="adm-row-sub adm-danger">{{item.reasonText}}</view>
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <view class="two-btn">
+      <view class="adm-btn adm-btn-ghost half" bindtap="backToScope">返回修改</view>
+      <view class="adm-btn half {{generating ? 'adm-btn-busy' : ''}}" bindtap="generate">
+        {{generating ? '生成中…' : '生成草稿'}}
+      </view>
+    </view>
+    <view class="adm-hint">草稿业主看不到。生成后还要你确认一次才发布。</view>
+  </block>
+
+  <!-- ③ 草稿已生成,待发布 -->
+  <block wx:else>
+    <view class="sum-card">
+      <view class="sum-main">
+        <view class="sum-num adm-num">{{batch.total ? '¥' + batch.total : batch.count + ' 户'}}</view>
+        <view class="sum-lab">草稿已生成 · {{batch.count}} 户<text wx:if="{{batch.skipped > 0}}"> · 跳过 {{batch.skipped}} 户</text></view>
+      </view>
+      <view class="adm-pill {{batch.published ? 'adm-pill-ok' : 'adm-pill-danger'}}">{{batch.published ? '已发布' : '业主看不到'}}</view>
+    </view>
+
+    <view wx:if="{{!batch.published}}" class="adm-btn pub-btn {{publishing ? 'adm-btn-busy' : ''}}" bindtap="publish">
+      发布给业主({{batch.count}} 户)
+    </view>
+    <view wx:else class="adm-hint">已发布,业主可在小程序看到并缴费。</view>
+
+    <view class="adm-btn adm-btn-ghost step-btn" bindtap="backToScope">再发一批</view>
+  </block>
+</view>

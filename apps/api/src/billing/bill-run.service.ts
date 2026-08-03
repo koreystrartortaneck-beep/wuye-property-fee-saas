@@ -29,6 +29,14 @@ export interface GenerateResult {
 export interface GenerateOptions {
   /** 预览后剔除的房屋（本次不出账，计入 skippedDetail: EXCLUDED_BY_ADMIN） */
   excludeHouseIds?: string[];
+  /*
+   * 只给这些房屋出账（户/群定向）。手机端「给某一户/某几户发账单」用它 ——
+   * 与 excludeHouseIds 是同一件事的两种表达:全量减去几户 / 只要这几户。
+   * 定向出账仍进同一个批次(RULE-<期>-<规则>):批次是「这条标准这个月的账」,
+   * 分几次补齐不该变成几个批次,否则发布要点好几次、合计也对不上。
+   * 未选中的户不计入 skippedDetail —— 它们不是「被跳过」,是本次没打算出。
+   */
+  onlyHouseIds?: string[];
 }
 
 /** 每户一个出账目标：周年方案下 period/dueDate 因户而异，legacy 全批相同 */
@@ -160,6 +168,12 @@ export class BillRunService {
     let generatedCents = 0;
     const skippedDetail: SkipDetail[] = [...selection.skipped];
     skipped += selection.skipped.length;
+
+    // 定向出账:先收窄到选中的户(不在选中列表里的不算「跳过」,是本次没打算出)
+    if (opts?.onlyHouseIds?.length) {
+      const only = new Set(opts.onlyHouseIds);
+      targets = targets.filter((t) => only.has(t.house.id));
+    }
 
     /*
      * 预览后剔除:物业在预览里取消勾选的户,本次不出账。
@@ -545,7 +559,11 @@ export class BillRunService {
    * 干跑预览:与 generate 同一条选房+计费路径,零写入。
    * 每行给出金额与计算依据(snapshot),物业核对后勾选剔除再生成草稿。
    */
-  async preview(ruleId: string, runKey: string): Promise<{ rows: PreviewRow[]; totalCents: number; total: string }> {
+  async preview(
+    ruleId: string,
+    runKey: string,
+    onlyHouseIds?: string[],
+  ): Promise<{ rows: PreviewRow[]; totalCents: number; total: string }> {
     const rule = await this.prisma.t.feeRule.findUnique({ where: { id: ruleId } });
     if (!rule) throw new BizException(ErrorCode.NOT_FOUND, '规则不存在');
     if (rule.ruleType === 'FORMULA') {
@@ -556,7 +574,14 @@ export class BillRunService {
     }
     this.assertSchemeSupported(rule);
 
-    const { targets, skipped } = await this.selectTargets(rule, runKey);
+    const selection = await this.selectTargets(rule, runKey);
+    let targets = selection.targets;
+    let skipped = selection.skipped;
+    if (onlyHouseIds?.length) {
+      const only = new Set(onlyHouseIds);
+      targets = targets.filter((t) => only.has(t.house.id));
+      skipped = skipped.filter((s) => only.has(s.houseId));
+    }
 
     const meterType = rule.ruleType === 'METER' ? (rule.params as { meterType: MeterType }).meterType : null;
     const diffByHouse = new Map<string, number>();

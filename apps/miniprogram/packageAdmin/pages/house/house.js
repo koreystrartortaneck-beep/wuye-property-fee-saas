@@ -115,6 +115,15 @@ Page({
     await this.load();
   },
 
+  /** 从详情直接给这一户补账单:范围预置成「某一户」 */
+  goBillThisHouse() {
+    const h = this.data.house;
+    if (!h) return;
+    wx.navigateTo({
+      url: `/packageAdmin/pages/billing/billing?communityId=${h.communityId || ''}&houseId=${h.id}&houseName=${encodeURIComponent(h.displayName)}`,
+    });
+  },
+
   callPhone(e) {
     const phone = e.currentTarget.dataset.phone;
     if (phone) wx.makePhoneCall({ phoneNumber: phone, fail: () => {} });

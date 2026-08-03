@@ -8,11 +8,6 @@
   </block>
 
   <block wx:else>
-    <!-- 顶部:身份 + 搜索(接电话查户仍是它最快) -->
-    <view class="hd">
-      <view class="hd-title">物业管理</view>
-      <view class="hd-sub">{{adminName}}</view>
-    </view>
     <input
       class="adm-search"
       placeholder="搜房号 / 业主 / 手机号"
@@ -65,35 +60,36 @@
         </view>
       </scroll-view>
 
-      <!-- 楼盘图:层从高到低,格子颜色即状态 -->
-      <block wx:for="{{units}}" wx:key="unit" wx:for-item="u">
-        <view wx:if="{{u.unit}}" class="unit-title">{{u.unit}}</view>
-        <view class="grid-card">
-          <view class="floor-row" wx:for="{{u.floors}}" wx:key="floor" wx:for-item="f">
-            <view class="floor-tag">{{f.floor > 0 ? f.floor + '层' : ''}}</view>
-            <view class="cells">
-              <view
-                class="cell {{item.unpaidCount > 0 ? 'cell-unpaid' : ''}} {{item.disabled ? 'cell-off' : ''}}"
-                wx:for="{{f.cells}}"
-                wx:key="id"
-                data-id="{{item.id}}"
-                bindtap="goHouse"
-                hover-class="cell-hover"
-              >
-                <view class="cell-no">{{item.label}}</view>
-                <view wx:if="{{item.unpaidCount > 0}}" class="cell-amt">¥{{item.unpaidAmount}}</view>
-              </view>
-            </view>
+      <!-- 楼盘图:一层一行,格子撑满,顶层在上 -->
+      <view class="unit-card" wx:for="{{units}}" wx:key="unit" wx:for-item="u">
+        <view class="unit-head">
+          <view class="unit-name">{{picked}}<text wx:if="{{u.unit}}"> · {{u.unit}}</text></view>
+          <view class="unit-legend">
+            <view class="dot"></view>正常
+            <view class="dot dot-r"></view>待缴
+            <view class="dot dot-g"></view>停用
           </view>
         </view>
-      </block>
+        <view class="frow" wx:for="{{u.floors}}" wx:key="floor" wx:for-item="f">
+          <view class="ftag">{{f.floor > 0 ? f.floor : ''}}</view>
+          <view
+            class="cell {{item.unpaidCount > 0 ? 'cell-unpaid' : ''}} {{item.disabled ? 'cell-off' : ''}}"
+            wx:for="{{f.cells}}"
+            wx:key="id"
+            data-id="{{item.id}}"
+            bindtap="goHouse"
+            hover-class="cell-hover"
+          >
+            <view class="cno">{{item.label}}</view>
+            <view wx:if="{{item.unpaidCount > 0}}" class="camt">¥{{item.unpaidAmount}}</view>
+          </view>
+        </view>
+      </view>
 
-      <!-- 图例 -->
-      <view class="legend" wx:if="{{buildings.length > 0}}">
-        <view class="legend-item"><view class="legend-dot"></view>正常</view>
-        <view class="legend-item"><view class="legend-dot legend-dot-unpaid"></view>有待缴</view>
-        <view class="legend-item"><view class="legend-dot legend-dot-off"></view>停用</view>
-        <text class="legend-tip">点任意房间进详情</text>
+      <!-- 两个批量动作:发账单(户/群/全部)与发公告 -->
+      <view class="quick" wx:if="{{buildings.length > 0}}">
+        <view class="adm-btn adm-btn-ghost quick-btn" bindtap="goAnnounce">发公告</view>
+        <view class="adm-btn quick-btn" bindtap="goBilling">发账单</view>
       </view>
     </block>
   </block>

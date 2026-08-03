@@ -303,3 +303,64 @@ describe('preview 纯读', () => {
     expect(miss.skipReason).toBe('HANDOVER_DATE_MISSING');
   });
 });
+
+describe('定向出账(某一户 / 某几户 / 全部)', () => {
+  const three = () =>
+    makePrisma({
+      attachments: [
+        { houseId: 'h1', startDate: null, endDate: null, house: makeHouse('h1', 'A-1', new Date(2019, 2, 15)) },
+        { houseId: 'h2', startDate: null, endDate: null, house: makeHouse('h2', 'A-2', new Date(2019, 2, 16)) },
+        { houseId: 'h3', startDate: null, endDate: null, house: makeHouse('h3', 'A-3', new Date(2019, 2, 17)) },
+      ],
+    });
+
+  it('只给选中的户出账', async () => {
+    const { prisma, created } = three();
+    await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h2'] });
+    expect(created[0].map((b) => b.houseId)).toEqual(['h2']);
+  });
+
+  it('未选中的户不算「跳过」——它们不是被拦下,是本次没打算出', async () => {
+    /*
+     * 混淆这两者的后果:skippedDetail 里躺着 548 条「跳过」,
+     * 物业以为出账出错了,而实际上他只是给一户补了张账单。
+     */
+    const { prisma } = three();
+    const r = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h2'] });
+    expect(r.skipped).toBe(0);
+    expect(r.skippedDetail ?? []).toHaveLength(0);
+  });
+
+  it('定向与剔除叠加:先收窄再剔除,剔除的仍计入跳过', async () => {
+    const { prisma, created } = three();
+    const r = await svc(prisma).generate('rule-1', '2026-03', {
+      onlyHouseIds: ['h1', 'h2'],
+      excludeHouseIds: ['h2'],
+    });
+    expect(created[0].map((b) => b.houseId)).toEqual(['h1']);
+    expect(r.skippedDetail?.some((s) => s.houseId === 'h2' && s.reason === 'EXCLUDED_BY_ADMIN')).toBe(true);
+  });
+
+  it('不传 onlyHouseIds = 全部(既有行为不变)', async () => {
+    const { prisma, created } = three();
+    await svc(prisma).generate('rule-1', '2026-03');
+    expect(created[0]).toHaveLength(3);
+  });
+
+  it('定向出账仍进同一批次——分几次补齐不该变成几个批次', async () => {
+    /*
+     * 批次是「这条标准这个月的账」。若定向另建批次,发布要点好几次、
+     * 合计也对不上,而物业只会觉得「怎么又多出一批」。
+     */
+    const { prisma } = three();
+    const a = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] });
+    const b = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h2'] });
+    expect(a.batchId).toBe(b.batchId);
+  });
+
+  it('预览必须与出账同口径:选了几户就只预览几户', async () => {
+    const { prisma } = three();
+    const r = await svc(prisma).preview('rule-1', '2026-03', ['h3']);
+    expect(r.rows.map((x) => x.houseId)).toEqual(['h3']);
+  });
+});

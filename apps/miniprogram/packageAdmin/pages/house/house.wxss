@@ -1,76 +1,84 @@
 @import "../../adm.wxss";
 
-.hs-head {
-  padding: 28rpx;
+/* 头卡:深紫渐变,待缴/已缴左右分栏 */
+.hero {
+  border-radius: 34rpx;
+  padding: 34rpx 32rpx;
+  background: linear-gradient(135deg, var(--plum, #3b2b57), var(--text, #251c38) 70%);
+  box-shadow: 0 24rpx 60rpx rgba(37, 28, 56, 0.26);
 }
-.hs-name {
-  font-size: 38rpx;
+.hero-name {
+  font-size: 42rpx;
   font-weight: 900;
-  color: var(--text, #251c38);
+  color: var(--cream-2, #fdfbf7);
+  letter-spacing: 1rpx;
 }
-.hs-meta {
+.hero-meta {
   margin-top: 6rpx;
-  font-size: 24rpx;
-  color: var(--text-3, #7c7288);
+  font-size: 23rpx;
+  color: rgba(253, 251, 247, 0.58);
 }
-.hs-figures {
+.hero-figs {
   display: flex;
-  gap: 28rpx;
-  margin-top: 22rpx;
+  align-items: center;
+  margin-top: 30rpx;
 }
-.hs-fig {
-  flex: 1;
+.fig { flex: 1; min-width: 0; }
+.fig-div {
+  width: 1rpx;
+  height: 64rpx;
+  background: rgba(253, 251, 247, 0.14);
+  margin: 0 26rpx;
 }
-.hs-fig-num {
+.fig-num {
   font-size: 40rpx;
   font-weight: 900;
-  color: var(--text, #251c38);
+  color: var(--cream-2, #fdfbf7);
 }
-.hs-fig-label {
+.fig-warn { color: #f0b9b8; }
+.fig-lab {
   margin-top: 4rpx;
-  font-size: 23rpx;
-  color: var(--text-3, #7c7288);
+  font-size: 22rpx;
+  color: rgba(253, 251, 247, 0.55);
 }
 
-.hs-remove {
+/* 住户行 */
+.avatar {
   flex-shrink: 0;
-  padding: 12rpx 26rpx;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: linear-gradient(145deg, var(--note, #fff1c8), var(--gold, #c9a66b));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+  font-weight: 900;
+  color: var(--plum, #3b2b57);
+}
+.tag-on {
+  margin-left: 10rpx;
+  padding: 2rpx 14rpx;
   border-radius: 999rpx;
-  background: rgba(196, 86, 86, 0.1);
-  color: var(--danger, #c45656);
-  font-size: 26rpx;
+  background: rgba(101, 163, 88, 0.14);
+  color: #4f7d44;
+  font-size: 20rpx;
   font-weight: 700;
 }
 
-.hs-add {
+.add-row {
   display: flex;
   gap: 14rpx;
-  margin: 18rpx 0 16rpx;
+  margin: 20rpx 0 4rpx;
 }
-.hs-add-input {
-  flex: 1;
-  min-width: 0;
-  height: 88rpx;
-  padding: 0 26rpx;
-  border-radius: 999rpx;
-  background: rgba(37, 28, 56, 0.05);
-  font-size: 28rpx;
-}
-.hs-add-name {
-  flex: 0 0 220rpx;
-}
+.add-phone { flex: 1; min-width: 0; }
+.add-name { flex: 0 0 220rpx; }
 
-.hs-bill-right {
-  flex-shrink: 0;
-  text-align: right;
-}
-.hs-bill-amount {
-  font-size: 30rpx;
-  font-weight: 900;
-  color: var(--text, #251c38);
-}
-.hs-bill-status {
+.bill-right { flex-shrink: 0; text-align: right; }
+.bill-st {
   margin-top: 2rpx;
-  font-size: 22rpx;
+  font-size: 21rpx;
   color: var(--text-3, #7c7288);
 }
+
+.act-btn { margin-top: 34rpx; }

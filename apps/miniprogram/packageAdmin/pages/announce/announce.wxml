@@ -1,0 +1,34 @@
+<view class="page adm-page">
+  <view class="adm-card write">
+    <input class="an-title" placeholder="公告标题(如:12 月 5 日停水通知)" value="{{title}}" maxlength="60" bindinput="onTitle" />
+    <textarea class="an-body" placeholder="正文。写清时间、范围、影响和联系方式 —— 业主看完不该还要打电话问。" value="{{content}}" maxlength="5000" bindinput="onContent" />
+    <view class="an-opts">
+      <view class="an-opt" bindtap="toggleScope">
+        <view class="tick {{allCommunities ? 'tick-on' : ''}}">{{allCommunities ? '✓' : ''}}</view>
+        <text>发给全部小区</text>
+      </view>
+      <view class="an-opt" bindtap="togglePinned">
+        <view class="tick {{pinned ? 'tick-on' : ''}}">{{pinned ? '✓' : ''}}</view>
+        <text>置顶</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="adm-btn send-btn {{sending ? 'adm-btn-busy' : ''}}" bindtap="send">
+    {{sending ? '发布中…' : '发布公告'}}
+  </view>
+  <view class="adm-hint">公告没有草稿:发布即所有业主可见。可以撤回,但看过的人收不回来。</view>
+
+  <view class="adm-sec">已发布的公告</view>
+  <view wx:if="{{loading}}" class="adm-hint">加载中…</view>
+  <view class="adm-card" wx:elif="{{list.length > 0}}">
+    <view class="adm-row" wx:for="{{list}}" wx:key="id">
+      <view class="adm-row-main">
+        <view class="adm-row-title">{{item.pinned ? '📌 ' : ''}}{{item.title}}</view>
+        <view class="adm-row-sub">{{item.at}} · {{item.scope}} · {{item.statusLabel}}</view>
+      </view>
+      <view wx:if="{{item.status === 'PUBLISHED'}}" class="adm-pill adm-pill-danger" data-id="{{item.id}}" bindtap="revoke">撤回</view>
+    </view>
+  </view>
+  <view wx:else class="adm-hint">还没有发过公告</view>
+</view>
