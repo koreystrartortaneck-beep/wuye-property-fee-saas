@@ -153,27 +153,35 @@ Page({
   },
 
   /*
-   * 顶上那个大数字必须跟着剔除动。
+   * 顶上那个大数字必须跟着剔除动,每一行也要看得出自己被点掉了。
    *
-   * 原来它写死成预览返回的合计:剔掉 15 户之后仍然显示 ¥56758 ——
-   * 人核对的是屏幕上的数字,数字不动就等于告诉他「剔除没生效」。
-   * 分币整数相加再折算,不拿字符串金额做浮点累加。
+   * 两个坑都踩过:
+   *   ① 大数字原来写死成预览返回的合计 —— 剔掉 15 户仍显示 ¥56758,
+   *      人核对的是屏幕上的数字,数字不动就等于告诉他「剔除没生效」。
+   *   ② 行上的勾和「本次不出」标记原来写的是 `excluded.indexOf(id) >= 0`,
+   *      而 **WXML 的表达式不支持函数调用** —— 求值为空,判断恒假,
+   *      于是每一行永远显示「会出账」。不报错、不告警,只是点了没反应。
+   *      所以状态一律在 JS 里算成每行一个布尔值(ex)再交给 WXML。
+   * 金额按分币整数相加再折算,不拿字符串金额做浮点累加。
    */
   recompute() {
-    const ex = this.data.excluded;
+    const set = {};
+    for (const id of this.data.excluded) set[id] = true;
     let cents = 0;
     let exCents = 0;
     let n = 0;
-    for (const r of this.data.payable) {
+    const payable = this.data.payable.map((r) => {
       const c = r.amountCents || 0;
-      if (ex.indexOf(r.houseId) >= 0) {
-        exCents += c;
-        continue;
+      const ex = !!set[r.houseId];
+      if (ex) exCents += c;
+      else {
+        cents += c;
+        n += 1;
       }
-      cents += c;
-      n += 1;
-    }
+      return { ...r, ex };
+    });
     this.setData({
+      payable,
       willCount: n,
       willTotal: (cents / 100).toFixed(2),
       exTotal: (exCents / 100).toFixed(2),

@@ -63,19 +63,20 @@
 
     <view wx:if="{{payable.length > 0}}" class="adm-sec">共 {{payable.length}} 户可出账,默认全出;点掉不该出的(比如线下已经收过)</view>
     <view class="adm-card" wx:if="{{payable.length > 0}}">
+      <!-- item.ex 由 recompute 在 JS 里算好:WXML 不支持函数调用,indexOf 在这里求不出值 -->
       <view
-        class="adm-row {{excluded.indexOf(item.houseId) >= 0 ? 'row-ex' : ''}}"
+        class="adm-row {{item.ex ? 'row-ex' : ''}}"
         wx:for="{{payable}}"
         wx:key="houseId"
         data-id="{{item.houseId}}"
         bindtap="toggleRow"
         hover-class="adm-row-hover"
       >
-        <view class="tick {{excluded.indexOf(item.houseId) >= 0 ? '' : 'tick-on'}}">{{excluded.indexOf(item.houseId) >= 0 ? '' : '✓'}}</view>
+        <view class="tick {{item.ex ? '' : 'tick-on'}}">{{item.ex ? '' : '✓'}}</view>
         <view class="adm-row-main">
           <view class="adm-row-title">
             {{item.displayName || item.code}}
-            <text wx:if="{{excluded.indexOf(item.houseId) >= 0}}" class="tag-ex">本次不出</text>
+            <text wx:if="{{item.ex}}" class="tag-ex">本次不出</text>
           </view>
           <view class="adm-row-sub">{{item.basis}}<text wx:if="{{item.periodRange}}"> · {{item.periodRange.start}} 起</text></view>
         </view>

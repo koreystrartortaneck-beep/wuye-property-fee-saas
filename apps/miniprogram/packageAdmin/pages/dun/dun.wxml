@@ -31,12 +31,13 @@
     <block wx:else>
       <view class="adm-sec">
         欠费清单
-        <text class="sec-act" bindtap="toggleAll">{{picked.length === rows.length ? '取消全选' : '全选'}}</text>
+        <text class="sec-act" bindtap="toggleAll">{{allPicked ? '取消全选' : '全选'}}</text>
       </view>
       <view class="adm-card">
         <view class="adm-row" wx:for="{{rows}}" wx:key="houseId">
-          <view class="tick {{picked.indexOf(item.houseId) >= 0 ? 'tick-on' : ''}}" data-id="{{item.houseId}}" bindtap="toggleRow">
-            {{picked.indexOf(item.houseId) >= 0 ? '✓' : ''}}
+          <!-- checked 由 JS 预先算好:WXML 不支持函数调用,indexOf 在这里永远求不出值 -->
+          <view class="tick {{item.checked ? 'tick-on' : ''}}" data-id="{{item.houseId}}" bindtap="toggleRow">
+            {{item.checked ? '✓' : ''}}
           </view>
           <view class="adm-row-main" data-id="{{item.houseId}}" bindtap="goHouse">
             <view class="adm-row-title">{{item.name}}<text wx:if="{{item.ownerName}}" class="own"> {{item.ownerName}}</text></view>

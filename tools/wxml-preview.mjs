@@ -32,6 +32,13 @@
  *      （试过输出 <image> 标签，但 HTML 解析器把它当 <img> 的别名，元素名仍是 img，
  *      所以最终是在 CSS 预处理里把 image/text/view/scroll-view 映射成 img/span/div。）
  *
+ *   4) **它不能比真机宽松**。渲染用的是真 JS 求值，而 WXML 的数据绑定不支持
+ *      函数调用：`picked.indexOf(id) >= 0` 在预览里算得出 true、勾照常显示，
+ *      真机上却求值为空、判断恒假。用户截图里一个勾都没亮，我在渲染图上看到的
+ *      却是勾选生效 —— 这是最坏的一类骗法：它让我确信自己修好了。
+ *      现已按真机行为返回空并告警；同时 tests/miniprogram-structure.test.js
+ *      有一条守卫全量扫 wxml 禁止函数调用（注入验证过）。
+ *
  * 还有一类不是工具的问题但同样会误判：**自己造的测试数据不自洽**。
  * 本轮有 4 次我把 fixture 缺字段当成产品缺陷（账单状态徽章、券有效期、
  * 收据抵扣行、访客日期），回源码核对后 3 次证明产品是对的。
@@ -46,8 +53,20 @@ const TAG = { view: 'div', text: 'span', button: 'div', 'scroll-view': 'div', bl
               image: 'img', navigator: 'div', canvas: 'div', form: 'div', input: 'input', textarea: 'textarea',
               picker: 'div', switch: 'div', checkbox: 'div', radio: 'div', label: 'label', 'rich-text': 'div' };
 
-/** {{ expr }} 求值：只支持属性访问、三元、比较、字面量、简单函数无 */
+/**
+ * {{ expr }} 求值：只支持属性访问、三元、比较、字面量。
+ *
+ * **必须比真机更严格，不能更宽松**（这是它第 5 次骗我，2026-08-03）：
+ * 这里用的是真 JS 求值，于是 `picked.indexOf(id) >= 0` 在预览里照常算出 true、
+ * 勾也照常显示；而 **WXML 的数据绑定不支持函数调用**，真机上这段求值为空、
+ * 判断恒假 —— 用户截图里一个勾都没亮，我却在渲染图上看到勾选生效。
+ * 现在遇到函数调用一律按真机行为返回空，并往 stderr 喊一声。
+ */
 function evalExpr(src, scope) {
+  if (/\.[a-zA-Z_$][\w$]*\s*\(/.test(src)) {
+    process.stderr.write(`⚠ WXML 不支持函数调用，真机上这段求值为空：{{${src.trim()}}}\n`);
+    return '';
+  }
   const code = `with(__s){ return (${src}); }`;
   try { return new Function('__s', code)(scope); } catch { return ''; }
 }

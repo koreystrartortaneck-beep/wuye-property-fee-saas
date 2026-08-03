@@ -180,6 +180,41 @@ test('「我的」菜单每一项都是个人相关，且路由真实存在', ()
   }
 });
 
+test('WXML 表达式里不许有函数调用——不报错,只是永远求不出值', () => {
+  /*
+   * 2026-08-03 实测(用户截图):催缴页勾选一个勾都不亮,而按钮上的「已选 1 户」
+   * 是对的。原因是 WXML 里写了 `picked.indexOf(item.houseId) >= 0` ——
+   * **WXML 的数据绑定不支持函数调用**,这段求值为空,判断恒假。
+   * 编译不报错、运行不告警,界面就是点了没反应。
+   *
+   * 更坏的是同一个写法早就躺在批量出账页里:那里判断反着写
+   * (`indexOf(...) >= 0 ? '' : 'tick-on'`),求不出值反而恒真 ——
+   * 于是每一行都显示「会出账」,剔除看上去从来没生效。
+   * 用户两次反馈的「勾选有问题」都是这一个原因。
+   *
+   * 状态一律在 JS 里算成每行一个布尔值再交给 WXML。
+   * 这一条扫全部 wxml(业主端也一样受这个限制)。
+   */
+  const offenders = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name.startsWith('.')) continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith('.wxml')) {
+        const src = fs.readFileSync(p, 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+        for (const m of src.matchAll(/\{\{([\s\S]*?)\}\}/g)) {
+          // 属性访问 (a.b) 允许;带括号的调用 (a.b(...)) 不允许
+          const call = /\.[a-zA-Z_$][\w$]*\s*\(/.exec(m[1]);
+          if (call) offenders.push(`${path.relative(MP, p)} → {{${m[1].trim().slice(0, 60)}}}`);
+        }
+      }
+    }
+  };
+  walk(MP);
+  assert.deepStrictEqual(offenders, [], `WXML 不支持函数调用,这些绑定永远求不出值:\n  ${offenders.join('\n  ')}`);
+});
+
 test('社区内容仍然可达：首页「查看全部」→ community，且带公告/公示筛选', () => {
   /*
    * 删掉重复页面的前提是 community 页真的覆盖它们。

@@ -32,6 +32,7 @@ Page({
     overdueDays: 0,
     sort: 'days',
     picked: [],
+    allPicked: false,
     dunning: false,
   },
 
@@ -61,12 +62,13 @@ Page({
        * 截断也必须说出来。
        */
       this.setData({
-        rows,
+        rows: rows.map((r) => ({ ...r, checked: false })),
         total: d.totalAmount || '0.00',
         totalHouses: d.totalHouses || rows.length,
         overdueHouses: d.overdueHouses || 0,
         truncated: d.truncated ? d.totalHouses : 0,
         picked: [],
+        allPicked: false,
       });
     } catch (e) {
       this.setData({ loadError: true });
@@ -85,15 +87,33 @@ Page({
 
   toggleRow(e) {
     const id = e.currentTarget.dataset.id;
-    const picked = this.data.picked.includes(id)
-      ? this.data.picked.filter((x) => x !== id)
-      : [...this.data.picked, id];
-    this.setData({ picked });
+    this.applyPicked(
+      this.data.picked.includes(id) ? this.data.picked.filter((x) => x !== id) : [...this.data.picked, id],
+    );
   },
 
   toggleAll() {
     const all = this.data.rows.map((r) => r.houseId);
-    this.setData({ picked: this.data.picked.length === all.length ? [] : all });
+    this.applyPicked(this.data.picked.length === all.length ? [] : all);
+  },
+
+  /*
+   * 勾选状态必须**在 JS 里算成每行一个布尔值**再交给 WXML。
+   *
+   * 2026-08-03 实测:原来 WXML 里写的是 `picked.indexOf(item.houseId) >= 0`,
+   * 界面上一个勾都不出现,而按钮上的「已选 1 户」是对的 ——
+   * WXML 的表达式**不支持函数调用**,indexOf(...) 求值为空,
+   * 于是判断永远为假。不报错、不告警,只是勾永远不亮。
+   * (预览工具用真 JS 求值,所以它照常显示勾 —— 工具比真机宽松,骗过我一次)
+   */
+  applyPicked(picked) {
+    const set = {};
+    for (const id of picked) set[id] = true;
+    this.setData({
+      picked,
+      rows: this.data.rows.map((r) => ({ ...r, checked: !!set[r.houseId] })),
+      allPicked: picked.length > 0 && picked.length === this.data.rows.length,
+    });
   },
 
   call(e) {

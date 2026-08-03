@@ -8,6 +8,6 @@
  * 屏幕上的值和 `node tools/stamp-miniprogram.mjs --print` 的输出一致，
  * 就说明模拟器/手机上跑的确实是当前工作区的代码。
  */
-const BUILD = '34a4169';
+const BUILD = 'e39664b';
 
 module.exports = { BUILD };
