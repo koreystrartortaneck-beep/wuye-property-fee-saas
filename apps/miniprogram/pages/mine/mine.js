@@ -4,6 +4,7 @@ const { bindPhone, loadMyHouses } = require('../../utils/auth');
 const { requestSubscribe, getSubscribeState } = require('../../utils/subscribe');
 const { BINDING_RELATION } = require('../../utils/labels');
 const { BUILD } = require('../../utils/version');
+const { exchangeAdmin } = require('../../utils/admin');
 
 // 与 utils/labels.js 的 BINDING_RELATION 完全重复，收敛到真源
 const RELATION_LABEL = BINDING_RELATION;
@@ -15,6 +16,12 @@ Page({
      * 这个值变了才说明真的生效了。与 node tools/stamp-miniprogram.mjs --print 对账。
      */
     build: BUILD,
+    /*
+     * 物业工作人员标识。认证 = 微信授权手机号匹配管理员名单(服务端换发令牌),
+     * 静默探测:是管理员就多出「物业管理」入口,普通业主什么都看不到。
+     * 界面显隐只是引导 —— 真正的门在服务端(AdminGuard),入口被转发也进不去。
+     */
+    adminName: '',
     loadError: false, // 档案加载失败：与「真的没绑房屋」区分开
     nav: { spacerPx: 48, rowPx: 32 },
     /** 订阅授权状态：accept/reject/ban/unknown，决定「缴费提醒」的说明与点击行为 */
@@ -68,6 +75,8 @@ Page({
   },
 
   async onShow() {
+    // 静默探测管理员身份,不阻塞页面其余加载
+    exchangeAdmin().then((admin) => this.setData({ adminName: admin ? admin.name : '' }));
     // 放在 onShow：业主去微信「设置 → 订阅消息」改完再回来，这里要能刷新
     void this.refreshNotifyState();
     const app = getApp();
@@ -231,6 +240,10 @@ Page({
   },
 
   /** mock 模式（开发用）没有微信授权按钮，引导到绑定房屋页手动输入 */
+  goAdmin() {
+    wx.navigateTo({ url: '/packageAdmin/pages/home/home' });
+  },
+
   goBindPhone() {
     if (this.data.hasPhone) return;
     wx.navigateTo({ url: '/pages/bind-house/bind-house' });

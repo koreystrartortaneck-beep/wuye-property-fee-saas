@@ -176,8 +176,12 @@ export class BindingSyncService {
             action: 'CREATE',
             resourceType: 'HouseContact',
             resourceId: contact.id,
-            // key 含 phone 会被审计层自动脱敏(audit.service.ts 的 redact 词表)
-            afterSummary: { event: 'HOUSE_CONTACT_ADD', houseCode: house.code ?? null, phone, source, activatedBindings: activated },
+            /*
+             * 键名不能撞脱敏词表(phone/mobile/…):撞了整个值被打码成 [REDACTED],
+             * 留痕形同不存在(audit.service.spec 的守卫在盯)。
+             * 尾 4 位足够对人:配合 houseCode,物业能认出这是登记的哪个号。
+             */
+            afterSummary: { event: 'HOUSE_CONTACT_ADD', houseCode: house.code ?? null, contactTail: phone.slice(-4), source, activatedBindings: activated },
           },
           tx,
         ),
@@ -241,7 +245,7 @@ export class BindingSyncService {
             afterSummary: {
               event: 'HOUSE_CONTACT_REMOVE',
               houseCode: house.code ?? null,
-              phone,
+              contactTail: phone.slice(-4),
               revokedBindings: bindings.map((b) => b.wxUserId),
             },
           },

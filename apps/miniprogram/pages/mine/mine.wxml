@@ -138,6 +138,18 @@
     </view>
   </view>
 
+  <!-- 物业工作人员入口:手机号在管理员名单里才显示;普通业主看不到这一段 -->
+  <view wx:if="{{adminName}}" class="section-title menu-title">物业工作</view>
+  <view wx:if="{{adminName}}" class="menu-card card">
+    <view class="menu-row" bindtap="goAdmin">
+      <view>
+        <view class="menu-name">物业管理</view>
+        <view class="menu-desc">{{adminName}} · 查户 / 审批 / 换绑</view>
+      </view>
+      <view class="arrow">›</view>
+    </view>
+  </view>
+
   <!-- 代码指纹：用来确认屏幕上跑的是哪一版代码，见 tools/stamp-miniprogram.mjs -->
   <view class="build-stamp">版本 {{build}}</view>
 </view>

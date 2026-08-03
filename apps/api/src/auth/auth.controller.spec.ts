@@ -12,7 +12,7 @@ describe('AuthController 云托管身份', () => {
     process.env = { ...originalEnv, WX_APPID: 'expected-appid' };
     delete process.env.WX_CLOUD_ENV;
     auth = { wxLogin: jest.fn().mockResolvedValue({ token: 'token' }) };
-    controller = new AuthController(auth as unknown as AuthService, {} as PrismaService);
+    controller = new AuthController(auth as unknown as AuthService, {} as PrismaService, { append: jest.fn() } as never);
   });
 
   afterAll(() => {

@@ -1,0 +1,33 @@
+@import "../../adm.wxss";
+
+.adm-card {
+  padding: 26rpx;
+  margin-bottom: 22rpx;
+}
+.ap-house {
+  font-size: 34rpx;
+  font-weight: 900;
+  color: var(--text, #251c38);
+}
+.ap-code {
+  font-size: 24rpx;
+  font-weight: 400;
+  color: var(--text-3, #7c7288);
+}
+.ap-who {
+  margin-top: 10rpx;
+  font-size: 27rpx;
+  color: var(--text-2, #55496b);
+}
+.ap-phone {
+  color: var(--gold-deep, #b8862f);
+  font-weight: 700;
+}
+.ap-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 20rpx;
+}
+.ap-btn {
+  flex: 1;
+}

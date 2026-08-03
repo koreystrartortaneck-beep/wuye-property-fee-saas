@@ -20,6 +20,10 @@ import { BizException } from './biz.exception';
  *   POST /payment/wxpay/refund-notify  同上
  *   POST /owner/coupons/:id/claim      每次写库并生成核销码；脚本连打会白占库存名额、
  *                                      刷掉别人能领的份额（超发本身由唯一约束挡住）
+ *   POST /auth/admin-exchange          权限授予点（业主令牌→管理员令牌）。判定本身
+ *                                      很便宜，但这是暴力尝试「哪个号是管理员」的入口，
+ *                                      且每个业主打开小程序都会静默探一次，要挡住脚本
+ *                                      而不挡住正常探测
  *
  * 上面这份清单不是说明文字，是被测试核对的契约（rate-limit.guard.spec.ts）：
  * 列进来却没标 @RateLimit 会让测试失败。加这条守卫是因为清单里的

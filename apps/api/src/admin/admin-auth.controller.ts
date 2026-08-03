@@ -3,7 +3,9 @@ import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import * as bcrypt from 'bcryptjs';
 import { ErrorCode } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
-import { AuthService, assertStrongPassword, BCRYPT_COST} from '../auth/auth.service';
+import { AuthService, assertStrongPassword, BCRYPT_COST, normalizePhone } from '../auth/auth.service';
+import { AuditService } from '../audit/audit.service';
+import { Roles, RolesGuard } from '../auth/roles.decorator';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { BizException } from '../common/biz.exception';
 import { PrismaService } from '../prisma/prisma.service';
@@ -152,16 +154,70 @@ export class AdminAuthService {
   }
 }
 
+class SetStaffPhoneDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  username!: string;
+
+  /** 空串 = 解除(收回小程序管理入口) */
+  @IsString()
+  @MaxLength(32)
+  phone!: string;
+}
+
 @Controller('admin/auth')
 export class AdminAuthController {
   constructor(
     private readonly service: AdminAuthService,
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
   ) {}
 
   @Post('login')
   login(@Body() dto: AdminLoginDto, @Ip() ip: string) {
     return this.service.login(dto.username, dto.password, ip);
+  }
+
+  /*
+   * 登记/解除员工手机号 —— 小程序管理端免密登录的凭据名单。
+   *
+   * 这个名单就是管理权的边界:号在名单上,微信授权手机号即获管理令牌。
+   * 所以限 TENANT_ADMIN、只能改本租户账号、每次变更审计(before/after 都记,
+   * 审计层会自动给 phone 键脱敏)。
+   */
+  @Roles('TENANT_ADMIN')
+  @UseGuards(AdminGuard, RolesGuard)
+  @Post('staff-phone')
+  async setStaffPhone(@Current() cur: CurrentAdmin, @Body() dto: SetStaffPhoneDto) {
+    const target = await this.prisma.raw.adminUser.findUnique({ where: { username: dto.username } });
+    if (!target || target.tenantId !== cur.tenantId) {
+      throw new BizException(ErrorCode.NOT_FOUND, '该账号不存在或不属于本物业公司');
+    }
+    const phone = dto.phone.trim() ? normalizePhone(dto.phone) : null;
+    if (phone && !/^1[3-9]\d{9}$/.test(phone)) {
+      throw new BizException(ErrorCode.VALIDATION, '请填写 11 位大陆手机号');
+    }
+    try {
+      await this.prisma.raw.adminUser.update({ where: { id: target.id }, data: { phone } });
+    } catch (e) {
+      if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002') {
+        throw new BizException(ErrorCode.VALIDATION, '该手机号已登记在其他管理账号上');
+      }
+      throw e;
+    }
+    await this.audit.append({
+      tenantId: cur.tenantId!,
+      actorType: 'ADMIN',
+      actorId: cur.adminId,
+      action: 'UPDATE',
+      resourceType: 'AdminUser',
+      resourceId: target.id,
+      // 键名避开脱敏词表;尾 4 位足以核对是谁的号,全号绝不进审计
+      beforeSummary: { contactTail: target.phone ? target.phone.slice(-4) : null },
+      afterSummary: { event: 'ADMIN_STAFF_PHONE_SET', username: target.username, contactTail: phone ? phone.slice(-4) : null },
+    });
+    return { username: target.username, phone: phone ? `${phone.slice(0, 3)}****${phone.slice(-4)}` : null };
   }
 
   /** 受限会话（mustChangePassword）唯一允许访问的端点 */

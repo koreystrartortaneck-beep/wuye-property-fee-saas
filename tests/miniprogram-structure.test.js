@@ -88,7 +88,11 @@ test('app.json 声明的页面与磁盘一致（多余文件永远打不开，�
 
 test('所有跳转目标都在 app.json 里声明过', () => {
   const app = JSON.parse(read(path.join(MP, 'app.json')));
-  const declared = new Set(app.pages);
+  // 分包页面(root/pages/...)与主包页面同等有效——漏了它们守卫就会误报新入口
+  const declared = new Set([
+    ...app.pages,
+    ...(app.subpackages || []).flatMap((s) => s.pages.map((p) => `${s.root}/${p}`)),
+  ]);
   const bad = [];
   const files = [];
   for (const d of pageDirs()) files.push(path.join(PAGES, d, `${d}.js`));

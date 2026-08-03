@@ -41,6 +41,11 @@ function walk(dir, exts, out = []) {
     if (e.name.startsWith('.')) continue;
     if (e.isDirectory()) {
       if (e.name === 'node_modules' || e.name === 'dist') continue;
+      /*
+       * packageAdmin 是**物业端**分包,不受业主端术语约束:
+       * 对物业说「住户」(业主/租客都可能)是准确的,对业主才统一说「业主」。
+       */
+      if (e.name === 'packageAdmin') continue;
       walk(p, exts, out);
     } else if (exts.some((x) => e.name.endsWith(x))) out.push(p);
   }

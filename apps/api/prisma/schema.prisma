@@ -347,6 +347,12 @@ model AdminUser {
   username     String       @unique
   passwordHash String
   name         String
+  /*
+   * 小程序免密登录的凭据:微信授权手机号(运营商核验过的本人号码)
+   * 匹配此列即换发管理员令牌(见 auth.controller 的 admin-exchange)。
+   * 全局唯一 —— 一号一账号,否则换发时无法确定给哪个租户的权限。
+   */
+  phone        String?      @unique
   role         AdminRole
   status       EntityStatus @default(ACTIVE)
   createdAt    DateTime     @default(now())

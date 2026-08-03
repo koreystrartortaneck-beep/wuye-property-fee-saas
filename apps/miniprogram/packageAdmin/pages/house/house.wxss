@@ -1,0 +1,76 @@
+@import "../../adm.wxss";
+
+.hs-head {
+  padding: 28rpx;
+}
+.hs-name {
+  font-size: 38rpx;
+  font-weight: 900;
+  color: var(--text, #251c38);
+}
+.hs-meta {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: var(--text-3, #7c7288);
+}
+.hs-figures {
+  display: flex;
+  gap: 28rpx;
+  margin-top: 22rpx;
+}
+.hs-fig {
+  flex: 1;
+}
+.hs-fig-num {
+  font-size: 40rpx;
+  font-weight: 900;
+  color: var(--text, #251c38);
+}
+.hs-fig-label {
+  margin-top: 4rpx;
+  font-size: 23rpx;
+  color: var(--text-3, #7c7288);
+}
+
+.hs-remove {
+  flex-shrink: 0;
+  padding: 12rpx 26rpx;
+  border-radius: 999rpx;
+  background: rgba(196, 86, 86, 0.1);
+  color: var(--danger, #c45656);
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.hs-add {
+  display: flex;
+  gap: 14rpx;
+  margin: 18rpx 0 16rpx;
+}
+.hs-add-input {
+  flex: 1;
+  min-width: 0;
+  height: 88rpx;
+  padding: 0 26rpx;
+  border-radius: 999rpx;
+  background: rgba(37, 28, 56, 0.05);
+  font-size: 28rpx;
+}
+.hs-add-name {
+  flex: 0 0 220rpx;
+}
+
+.hs-bill-right {
+  flex-shrink: 0;
+  text-align: right;
+}
+.hs-bill-amount {
+  font-size: 30rpx;
+  font-weight: 900;
+  color: var(--text, #251c38);
+}
+.hs-bill-status {
+  margin-top: 2rpx;
+  font-size: 22rpx;
+  color: var(--text-3, #7c7288);
+}

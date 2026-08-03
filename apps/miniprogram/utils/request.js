@@ -25,8 +25,10 @@ function clearToken() {
  */
 const TIMEOUT_MS = 12000;
 
-function rawRequest(path, { method = 'GET', data = {} } = {}) {
-  const auth = getToken() ? `Bearer ${getToken()}` : '';
+function rawRequest(path, { method = 'GET', data = {}, token } = {}) {
+  // token 覆盖:管理端分包用管理员令牌调管理接口,业主令牌照旧走存储
+  const bearer = token || getToken();
+  const auth = bearer ? `Bearer ${bearer}` : '';
 
   // 云托管：走 wx.cloud.callContainer 免备案内部通道
   if (config.useCloud) {
@@ -81,7 +83,8 @@ async function request(path, options = {}, retried = false) {
   }
   if (body.code === 0) return body.data;
 
-  if (body.code === 40100 && !retried && path !== '/auth/wx-login') {
+  if (body.code === 40100 && !retried && path !== '/auth/wx-login' && !options.token) {
+    // 管理员令牌过期不走业主重登(那只会拿到业主身份)——交给调用方重新换发
     clearToken();
     const { ensureLogin } = require('./auth');
     await ensureLogin();
