@@ -227,7 +227,19 @@ export class OwnerHousesService {
       where: { wxUserId_houseId: { wxUserId: ownerId, houseId: dto.houseId } },
     });
     if (exists && exists.status !== 'REJECTED') {
-      throw new BizException(ErrorCode.BINDING_EXISTS);
+      /*
+       * 「已绑定」和「审核中」必须分开说。
+       * 2026-08-03 实测:业主(已绑定 PAY-001)在申请列表里又选了自己家,
+       * 填完姓名、点了提交,得到一句「已绑定或已申请该房屋」——
+       * 他发来截图问「这是啥情况」。一句让人猜状态的提示,等于没提示:
+       * 已绑定的人该去首页看账单,审核中的人该等物业,两者下一步完全不同。
+       */
+      throw new BizException(
+        ErrorCode.BINDING_EXISTS,
+        exists.status === 'ACTIVE'
+          ? '这套房屋已经绑定在您名下，回首页即可查看账单，无需再次申请'
+          : '您已提交过这套房屋的申请，物业审核中，请耐心等待',
+      );
     }
     if (exists) {
       /*

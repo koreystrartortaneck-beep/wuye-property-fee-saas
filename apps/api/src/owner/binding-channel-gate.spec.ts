@@ -78,3 +78,23 @@ test('免审批但用户没有手机号:绑定照常生效,只是不进名单', 
   expect(bindingCreates[0]).toMatchObject({ status: 'ACTIVE' });
   expect(grants).toHaveLength(0);
 });
+
+test('重复申请的拒绝要分「已绑定」和「审核中」两句话', async () => {
+  /*
+   * 2026-08-03 实测:业主申请了自己名下已绑定的房,得到「已绑定或已申请该房屋」,
+   * 发截图来问「这是啥情况」。已绑定 → 该去看账单;审核中 → 该等物业。
+   * 下一步完全不同的两种状态,不能合成一句让人猜。
+   */
+  const make = (status: string) => {
+    const prisma = {
+      raw: {
+        house: { findUnique: jest.fn(async () => HOUSE) },
+        houseBinding: { findUnique: jest.fn(async () => ({ id: 'b1', status })) },
+      },
+    };
+    const bindingSync = { getConfig: jest.fn(async () => ({ phoneMatch: true, selfApply: true, selfApplyNeedsApproval: true })) };
+    return new OwnerHousesService(prisma as never, bindingSync as never, {} as never);
+  };
+  await expect(make('ACTIVE').applyBinding('wx-1', DTO)).rejects.toThrow(/已经绑定在您名下.*无需再次申请/);
+  await expect(make('PENDING').applyBinding('wx-1', DTO)).rejects.toThrow(/审核中，请耐心等待/);
+});
