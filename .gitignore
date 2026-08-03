@@ -16,3 +16,6 @@ apps/api/uploads/
 deploy/secrets/
 /商户所需材料/
 output/
+
+# 物业提供的原始表格：含数百户业主真实姓名与手机号，绝不入库
+物业费缴费规则/

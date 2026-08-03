@@ -9,6 +9,15 @@ export type RuleType = (typeof RULE_TYPES)[number];
 export const RULE_PERIODS = ['MONTHLY', 'QUARTERLY', 'YEARLY'] as const;
 export type RulePeriod = (typeof RULE_PERIODS)[number];
 
+// 账期方案：前三个值与 RULE_PERIODS 一一对应（legacy 路径），
+// ANNIVERSARY = 按户周年（以 House.handoverDate 为锚，每户各自的年度区间）
+export const PERIOD_SCHEMES = ['MONTHLY', 'QUARTERLY', 'YEARLY', 'ANNIVERSARY'] as const;
+export type PeriodScheme = (typeof PERIOD_SCHEMES)[number];
+
+// 金额取整：CENT=分（既有行为），YUAN=半进到整元（对齐物业手工账本）
+export const AMOUNT_ROUNDINGS = ['CENT', 'YUAN'] as const;
+export type AmountRounding = (typeof AMOUNT_ROUNDINGS)[number];
+
 export const METER_TYPES = ['WATER', 'ELEC', 'GAS'] as const;
 export type MeterType = (typeof METER_TYPES)[number];
 
