@@ -219,6 +219,8 @@ Page({
       const t = totals[k];
       return {
         period: map[k].period,
+        // 周年账期('2026-03-15')在分组头只显示「2026 年度」,完整起止在详情页
+        periodText: labels.periodLabel(map[k].period),
         // 有权威数字就用它；没有就退化成「已加载 N 笔」，不给小计
         count: t ? t.count : map[k].items.length,
         subtotal: t ? Number(t.amount).toFixed(2) : '',

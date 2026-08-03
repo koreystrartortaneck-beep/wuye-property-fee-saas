@@ -106,11 +106,19 @@
     </div>
     <div class="step-body">
       <el-button
+        :loading="previewing"
+        :disabled="!chosen.ruleId || !chosen.period || published"
+        @click="openPreview"
+      >先预览（不落库）</el-button>
+      <el-button
         type="primary"
         :loading="running"
         :disabled="!chosen.ruleId || !chosen.period"
         @click="generate"
       >{{ published ? '本账期已发布' : batch ? '重新生成（只补缺失的户）' : '生成账单' }}</el-button>
+      <span v-if="excludedIds.length" class="excluded-note">
+        已在预览中剔除 {{ excludedIds.length }} 户，生成时将跳过
+      </span>
 
       <div v-if="lastRun" class="run-result">
         <p class="ok-line">✓ 本次生成 <b>{{ lastRun.generated }}</b> 户</p>
@@ -121,6 +129,51 @@
       </div>
     </div>
   </section>
+
+  <!-- 预览：与生成同一条选房+计费路径，零写入。取消勾选 = 本次不给这户出账 -->
+  <el-dialog v-model="previewDialog" title="出账预览（未写入任何数据）" width="min(860px, 96vw)">
+    <div class="preview-bar">
+      <span>可出账 <b class="num">{{ previewPayable.length }}</b> 户</span>
+      <span>合计 <b class="num strong">¥{{ previewTotal }}</b></span>
+      <span v-if="previewSkipped.length" class="warn-line">⚠ {{ previewSkipped.length }} 户将被跳过（见表内原因）</span>
+    </div>
+    <el-table
+      ref="previewTable"
+      :data="previewRows"
+      size="small"
+      max-height="420"
+      @selection-change="onPreviewSelection"
+    >
+      <el-table-column type="selection" width="44" :selectable="(row: PreviewRow) => !row.skipReason" />
+      <el-table-column label="房屋" min-width="140">
+        <template #default="{ row }">{{ row.displayName || row.code }}</template>
+      </el-table-column>
+      <el-table-column label="账期" min-width="150">
+        <template #default="{ row }">
+          <template v-if="row.periodRange">{{ row.periodRange.start }} ~ {{ row.periodRange.end }}</template>
+          <template v-else>{{ row.period }}</template>
+        </template>
+      </el-table-column>
+      <el-table-column label="怎么算出来的" min-width="190">
+        <template #default="{ row }">
+          <span v-if="row.skipReason" class="warn-line">{{ SKIP_REASON[row.skipReason] ?? row.skipReason }}</span>
+          <span v-else class="calc">{{ previewCalcText(row) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="金额（元）" width="110" align="right">
+        <template #default="{ row }">
+          <span v-if="row.amount" class="num strong">{{ row.amount }}</span>
+          <span v-else>—</span>
+        </template>
+      </el-table-column>
+    </el-table>
+    <template #footer>
+      <el-button @click="previewDialog = false">关闭</el-button>
+      <el-button type="primary" @click="confirmPreviewSelection">
+        按勾选生成（剔除 {{ previewPayable.length - previewSelected.length }} 户）
+      </el-button>
+    </template>
+  </el-dialog>
 
   <!-- 第 4 步：核对并发布 -->
   <section class="step" :class="{ done: published, active: !!batch && !published }">
@@ -252,7 +305,7 @@
 
 <script setup lang="ts">
 import EmptyState from '../components/EmptyState.vue';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api, qs, type Page } from '../api';
@@ -362,10 +415,75 @@ function ruleAmountText(r: Rule): string {
   return '自定义公式';
 }
 
+/* ── 出账预览:与生成同一条路径,零写入;取消勾选 → excludeHouseIds ── */
+interface PreviewRow {
+  houseId: string;
+  code: string;
+  displayName: string;
+  period: string;
+  periodRange?: { start: string; end: string };
+  amount: string | null;
+  snapshot: Record<string, any> | null;
+  skipReason?: string;
+}
+const previewDialog = ref(false);
+const previewing = ref(false);
+const previewRows = ref<PreviewRow[]>([]);
+const previewTotal = ref('0.00');
+const previewSelected = ref<PreviewRow[]>([]);
+/** 预览里被取消勾选的户:生成时作为 excludeHouseIds 传给后端,并计入跳过明细 */
+const excludedIds = ref<string[]>([]);
+const previewTable = ref();
+const previewPayable = computed(() => previewRows.value.filter((r) => !r.skipReason));
+const previewSkipped = computed(() => previewRows.value.filter((r) => r.skipReason));
+
+async function openPreview() {
+  previewing.value = true;
+  try {
+    const r = await api<{ rows: PreviewRow[]; total: string }>(
+      `/admin/bill-runs/preview${qs({ ruleId: chosen.value.ruleId, period: chosen.value.period })}`,
+    );
+    previewRows.value = r.rows;
+    previewTotal.value = r.total;
+    previewDialog.value = true;
+    // 默认全选可出账的户;上一轮的剔除记忆保留(重新打开预览还能看到)
+    await nextTick();
+    for (const row of previewPayable.value) {
+      previewTable.value?.toggleRowSelection(row, !excludedIds.value.includes(row.houseId));
+    }
+  } finally {
+    previewing.value = false;
+  }
+}
+
+function onPreviewSelection(rows: PreviewRow[]) {
+  previewSelected.value = rows;
+}
+
+function confirmPreviewSelection() {
+  const selected = new Set(previewSelected.value.map((r) => r.houseId));
+  excludedIds.value = previewPayable.value.filter((r) => !selected.has(r.houseId)).map((r) => r.houseId);
+  previewDialog.value = false;
+  void generate();
+}
+
+function previewCalcText(row: PreviewRow): string {
+  const s = row.snapshot ?? {};
+  if (s.unitPrice != null && s.area != null) {
+    // 周年年度账单:months 在快照里,把 ×12 说出来,物业才能对上手工账本
+    return s.months ? `${s.area} ㎡ × ${s.unitPrice} 元/㎡ × ${s.months} 个月` : `${s.area} ㎡ × ${s.unitPrice} 元/㎡`;
+  }
+  if (s.amount != null) return `每户固定 ${s.amount} 元`;
+  if (s.readingDiff != null) return `用量 ${s.readingDiff} × ${s.unitPrice} 元`;
+  return '—';
+}
+
 /** 让每个金额都能解释清楚，业主质疑时一秒答得上来 */
 function calcText(row: Bill): string {
   const s = row.snapshot ?? {};
-  if (s.unitPrice != null && s.area != null) return `${s.area} ㎡ × ${s.unitPrice} 元/㎡`;
+  if (s.unitPrice != null && s.area != null) {
+    return s.months ? `${s.area} ㎡ × ${s.unitPrice} 元/㎡ × ${s.months} 个月` : `${s.area} ㎡ × ${s.unitPrice} 元/㎡`;
+  }
   if (s.amount != null) return `每户固定 ${s.amount} 元`;
   if (s.readingDiff != null) return `用量 ${s.readingDiff} × ${s.unitPrice} 元`;
   return '—';
@@ -474,6 +592,12 @@ function onPeriodChange() {
 
 // 换收费标准同样要重载：否则核对的是另一标准生成的账单
 watch(() => chosen.value.ruleId, () => void loadBatchForPeriod());
+// 剔除记忆只属于当前 (标准, 账期):换任何一个都必须清空,
+// 否则上一批的剔除会静默带进下一批 —— 少出一户和多出一户同样危险
+watch([() => chosen.value.ruleId, () => chosen.value.period], () => {
+  excludedIds.value = [];
+  previewRows.value = [];
+});
 
 async function generate() {
   running.value = true;
@@ -486,7 +610,11 @@ async function generate() {
       alreadyPublished?: boolean;
     }>('/admin/bill-runs', {
       method: 'POST',
-      body: { ruleId: chosen.value.ruleId, period: chosen.value.period },
+      body: {
+        ruleId: chosen.value.ruleId,
+        period: chosen.value.period,
+        ...(excludedIds.value.length ? { excludeHouseIds: excludedIds.value } : {}),
+      },
     });
     await Promise.all([loadBatchForPeriod(), loadRunStats()]);
     if (res.alreadyPublished) {
@@ -608,6 +736,18 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.preview-bar {
+  display: flex;
+  gap: 20px;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+.excluded-note {
+  margin-left: 10px;
+  color: var(--warning, #b8862f);
+  font-size: var(--fs-12);
+}
+
 /* ---------- 顶部状态条 ---------- */
 .status-bar {
   display: flex;

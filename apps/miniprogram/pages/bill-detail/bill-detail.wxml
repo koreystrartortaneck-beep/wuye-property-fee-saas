@@ -26,7 +26,7 @@
     </view>
     <view class="calc-row">
       <text class="calc-label">账期</text>
-      <text class="calc-value">{{bill.period}}</text>
+      <text class="calc-value">{{bill.periodText}}</text>
     </view>
     <view class="calc-row">
       <text class="calc-label">缴费期限</text>

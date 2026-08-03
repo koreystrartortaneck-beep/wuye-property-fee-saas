@@ -94,6 +94,11 @@
         <text class="picked-change" bindtap="resetCommunity">更换 ›</text>
       </view>
 
+      <view wx:if="{{selfApplyOff}}" class="list-hint">
+        该小区未开放自助申请。请联系物业登记您的手机号，登记后回到上方点「授权手机号」即可自动绑定。
+      </view>
+
+      <block wx:if="{{!selfApplyOff}}">
       <!--
         房号原来是把整个小区的房号一次性铺成一片圆角标签。
         业主问：一两百户、好几个小区之后这怎么用？—— 确实不能用：
@@ -169,6 +174,7 @@
         <view class="dark-button apply-btn {{submitting ? 'btn-busy' : ''}}" bindtap="submitApply">
           {{submitting ? '提交中…' : '提交绑定申请'}}
         </view>
+      </block>
       </block>
     </block>
   </view>

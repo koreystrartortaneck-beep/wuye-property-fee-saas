@@ -57,7 +57,7 @@
   <view class="bill-stack" wx:if="{{!noHouse}}">
     <block wx:for="{{groups}}" wx:key="period" wx:for-item="group">
       <view class="group-head">
-        <view class="group-period">{{group.period}}</view>
+        <view class="group-period">{{group.periodText}}</view>
         <view class="group-subtotal" wx:if="{{!group.partial}}">{{group.count}} 笔 · ¥{{group.subtotal}}</view>
         <view class="group-subtotal" wx:else>已加载 {{group.count}} 笔</view>
       </view>

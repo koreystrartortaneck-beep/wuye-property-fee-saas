@@ -29,6 +29,33 @@
     </div>
   </el-card>
 
+  <el-card class="mb">
+    <template #header>绑定渠道（业主怎么绑上自己的房屋）</template>
+    <el-alert
+      class="mb"
+      type="info"
+      :closable="false"
+      title="服务端强制生效：关掉的渠道即使有人绕过小程序直接调接口也会被拒绝。修改记入审计。"
+    />
+    <el-form label-width="var(--form-label-w)">
+      <el-form-item label="自动匹配">
+        <el-switch v-model="bindingForm.phoneMatch" :disabled="bindingSaving" />
+        <span class="sub">授权手机号后，号码在房屋授权名单里则自动绑定房屋</span>
+      </el-form-item>
+      <el-form-item label="自助申请">
+        <el-switch v-model="bindingForm.selfApply" :disabled="bindingSaving" />
+        <span class="sub">关掉后小程序不再显示「申请绑定」入口，业主只能由物业登记手机号</span>
+      </el-form-item>
+      <el-form-item label="申请需审批">
+        <el-switch v-model="bindingForm.selfApplyNeedsApproval" :disabled="bindingSaving || !bindingForm.selfApply" />
+        <span class="sub">关掉 = 申请即生效（不建议：任何人都能把自己绑到任意房号上）</span>
+      </el-form-item>
+      <el-form-item>
+        <el-button type="primary" :loading="bindingSaving" @click="saveBindingConfig">保存渠道设置</el-button>
+      </el-form-item>
+    </el-form>
+  </el-card>
+
   <el-card>
     <template #header>小区级收款策略</template>
     <el-table :data="communityRows" v-loading="loading" size="small">
@@ -138,6 +165,32 @@ const editTitle = computed(() => {
   return `调整小区收款策略 · ${communityName(scopeCommunityId.value)}`;
 });
 
+/* ── 绑定渠道 ── */
+const bindingForm = ref({ phoneMatch: true, selfApply: true, selfApplyNeedsApproval: true });
+const bindingSaving = ref(false);
+
+async function loadBindingConfig() {
+  try {
+    const r = await api<{ config: typeof bindingForm.value }>('/admin/binding-config');
+    bindingForm.value = { ...r.config };
+  } catch {
+    // 读不到保持默认;保存时后端仍会校验
+  }
+}
+
+async function saveBindingConfig() {
+  bindingSaving.value = true;
+  try {
+    await api('/admin/binding-config', { method: 'PUT', body: { ...bindingForm.value } });
+    ElMessage.success('已保存，立即生效');
+  } finally {
+    bindingSaving.value = false;
+  }
+}
+
+onMounted(() => {
+  void loadBindingConfig();
+});
 onMounted(load);
 
 async function load() {

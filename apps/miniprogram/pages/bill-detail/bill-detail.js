@@ -89,6 +89,14 @@ Page({
         id: b.id,
         title: b.title,
         period: b.period,
+        /*
+         * 周年账单:snapshot 里有账期起止,显示「2026-03-15 ~ 2027-03-14」——
+         * 业主要能看懂「这笔钱管到什么时候」;legacy 账单没有起止,照旧显示标签。
+         */
+        periodText:
+          b.snapshot && b.snapshot.periodStart
+            ? `${b.snapshot.periodStart} ~ ${b.snapshot.periodEnd}`
+            : b.period,
         amount: Number(b.amount).toFixed(2),
         status: b.status,
         settling,

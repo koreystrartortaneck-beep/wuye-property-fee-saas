@@ -70,6 +70,8 @@ Page({
      * 换到 200 套的小区会直接又铺一屏。
      */
     houseListOpen: false,
+    /** 所选小区关闭了自助申请:只显示「联系物业」提示,不进选房流程 */
+    selfApplyOff: false,
     selectedHouse: null,
     applicantName: '',
     relationIndex: 0,
@@ -227,8 +229,20 @@ Page({
 
   async pickCommunity(e) {
     const community = this.data.communities[e.currentTarget.dataset.index];
-    this.setData({ selectedCommunity: community, houseKeyword: '', houseListOpen: false, selectedHouse: null });
-    await this.searchHouses();
+    /*
+     * 渠道开关随小区下发(binding.selfApply)。关了就不进选房流程 ——
+     * UI 只是提示,真正的强制在服务端(POST /owner/bindings 会拒绝)。
+     * 旧 API 没有 binding 字段时按「开」处理(缺省=全开,与服务端一致)。
+     */
+    const selfApplyOff = community.binding && community.binding.selfApply === false;
+    this.setData({
+      selectedCommunity: community,
+      selfApplyOff,
+      houseKeyword: '',
+      houseListOpen: false,
+      selectedHouse: null,
+    });
+    if (!selfApplyOff) await this.searchHouses();
   },
 
   /** 退回小区选择。原来选错了没有任何出路，只能退出页面重进 */
@@ -236,6 +250,7 @@ Page({
     clearTimeout(this._houseTimer);
     this.setData({
       selectedCommunity: null,
+      selfApplyOff: false,
       houseKeyword: '',
       houses: [],
       houseTotal: 0,

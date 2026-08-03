@@ -121,3 +121,24 @@ module.exports = {
   HOUSE_TYPE,
   label,
 };
+
+/**
+ * 账期标签 → 人话。
+ *
+ * 四种格式并存(都按字典序可排,后端约定):
+ *   '2026-07'      → 「2026-07」   (legacy 月度)
+ *   '2026-Q3'      → 「2026-Q3」   (legacy 季度)
+ *   '2026'         → 「2026 年」   (legacy 年度)
+ *   '2026-03-15'   → 「2026 年度」 (按户周年:每户各自的年度起始日)
+ *
+ * 周年标签在**列表**里只显示年度 —— 完整起止(2026-03-15 ~ 2027-03-14)
+ * 放详情页。18 个字符塞进列表分组头的 flex 行会把右侧小计挤掉行,
+ * 这类挤压之前已经咬过三次。
+ */
+function periodLabel(period) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(period || '')) return `${period.slice(0, 4)} 年度`;
+  if (/^\d{4}$/.test(period || '')) return `${period} 年`;
+  return period || '';
+}
+
+module.exports.periodLabel = periodLabel;

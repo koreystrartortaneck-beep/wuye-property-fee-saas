@@ -40,11 +40,18 @@
         <el-option v-for="c in communities" :key="c.id" :label="c.name" :value="c.id" />
       </el-select>
       <div class="toolbar-spacer" />
+      <el-button :disabled="!communityId || communities.length < 2" @click="copyDialog = true">复制标准到其他小区</el-button>
       <el-button type="primary" :disabled="!communityId" @click="openCreate">新建规则</el-button>
     </div>
 
     <el-table :data="rows" v-loading="loading">
       <el-table-column prop="name" label="规则名称" min-width="130" />
+      <el-table-column label="代号" width="90">
+        <template #default="{ row }">
+          <span v-if="row.code" class="mono">{{ row.code }}</span>
+          <span v-else class="sub">—</span>
+        </template>
+      </el-table-column>
       <el-table-column label="计费方式" width="110">
         <template #default="{ row }">{{ RULE_TYPE_LABEL[row.ruleType] }}</template>
       </el-table-column>
@@ -54,8 +61,8 @@
       <el-table-column label="适用对象" width="90">
         <template #default="{ row }">{{ HOUSE_TYPE_LABEL[row.houseType] }}</template>
       </el-table-column>
-      <el-table-column label="周期" width="80">
-        <template #default="{ row }">{{ PERIOD_LABEL[row.period] }}</template>
+      <el-table-column label="账期" width="90">
+        <template #default="{ row }">{{ SCHEME_LABEL[row.periodScheme] || PERIOD_LABEL[row.period] }}</template>
       </el-table-column>
       <el-table-column label="出账日" width="80">
         <template #default="{ row }">{{ row.billDay }} 号</template>
@@ -104,7 +111,10 @@
         </el-form-item>
 
         <template v-if="form.ruleType === 'AREA_PRICE'">
-          <el-form-item label="单价"><el-input-number v-model="p.unitPrice" :min="0.01" :precision="2" /> 元/㎡/期</el-form-item>
+          <el-form-item label="单价">
+            <el-input-number v-model="p.unitPrice" :min="0.01" :precision="2" />
+            <span class="unit">{{ form.periodScheme === 'ANNIVERSARY' ? '元/㎡/月（年度账单自动 ×12）' : '元/㎡/期' }}</span>
+          </el-form-item>
         </template>
         <template v-else-if="form.ruleType === 'FIXED'">
           <el-form-item label="金额"><el-input-number v-model="p.amount" :min="0.01" :precision="2" /> 元/期</el-form-item>
@@ -127,18 +137,37 @@
           <el-alert type="info" :closable="false" title="公摊类规则每期需在「公摊录入」页登记总额后才能出账" />
         </template>
 
-        <el-form-item label="适用对象">
+        <el-form-item label="账期方式">
+          <el-select v-model="form.periodScheme" :disabled="!!editing">
+            <el-option v-for="(label, val) in SCHEME_LABEL" :key="val" :label="label" :value="val" />
+          </el-select>
+          <div v-if="form.periodScheme === 'ANNIVERSARY'" class="sub">
+            每户从各自的「放户日期」起算年度账期；房屋需在房屋页挂上此标准才会出账
+          </div>
+        </el-form-item>
+        <el-form-item v-if="form.periodScheme === 'ANNIVERSARY'" label="标准代号">
+          <el-input v-model="form.code" placeholder="如 WYF-ZZ（复制到其他小区时按它对齐）" style="width: 260px" />
+        </el-form-item>
+        <el-form-item v-if="form.periodScheme === 'ANNIVERSARY'" label="金额取整">
+          <el-radio-group v-model="form.rounding">
+            <el-radio value="YUAN">整元（对齐手工账本）</el-radio>
+            <el-radio value="CENT">精确到分</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <!-- 周年方案按挂接选房,适用对象不参与;legacy 保持原样 -->
+        <el-form-item v-if="form.periodScheme !== 'ANNIVERSARY'" label="适用对象">
           <el-select v-model="form.houseType">
             <el-option v-for="(label, val) in HOUSE_TYPE_LABEL" :key="val" :label="label" :value="val" />
           </el-select>
         </el-form-item>
-        <el-form-item label="出账周期">
+        <el-form-item v-if="form.periodScheme !== 'ANNIVERSARY'" label="出账周期">
           <el-select v-model="form.period">
             <el-option v-for="(label, val) in PERIOD_LABEL" :key="val" :label="label" :value="val" />
           </el-select>
         </el-form-item>
         <el-form-item label="出账日">
-          <el-input-number v-model="form.billDay" :min="1" :max="28" /> 号（自动出账触发日）
+          <el-input-number v-model="form.billDay" :min="1" :max="28" />
+          <span class="unit">{{ form.periodScheme === 'ANNIVERSARY' ? '号（每月这天自动准备当月草稿，发布仍需人工）' : '号（自动出账触发日）' }}</span>
         </el-form-item>
         <el-form-item label="缴费期限">
           出账后 <el-input-number v-model="form.dueDays" :min="1" :max="90" /> 天内
@@ -147,6 +176,26 @@
       <template #footer>
         <el-button @click="dialog = false">取消</el-button>
         <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="copyDialog" title="复制收费标准" width="min(460px, 92vw)">
+      <el-alert
+        class="mb"
+        type="info"
+        :closable="false"
+        title="把当前小区带「标准代号」的标准克隆到目标小区（已存在同代号的跳过）。开新楼盘 = 建小区 → 复制标准 → 导入房屋 → 出账。"
+      />
+      <el-form label-width="var(--form-label-w)">
+        <el-form-item label="目标小区">
+          <el-select v-model="copyTo" placeholder="选择目标小区">
+            <el-option v-for="c in communities.filter((x) => x.id !== communityId)" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="copyDialog = false">取消</el-button>
+        <el-button type="primary" :loading="copying" :disabled="!copyTo" @click="doCopy">复制</el-button>
       </template>
     </el-dialog>
 
@@ -208,14 +257,25 @@ const CREATE_RULE_TYPE_LABEL: Record<string, string> = {
 interface FeeRule {
   id: string;
   name: string;
+  code: string | null;
   ruleType: string;
   houseType: string;
   params: Record<string, unknown>;
   period: string;
+  periodScheme: string;
+  rounding: string;
   billDay: number;
   dueDays: number;
   enabled: boolean;
 }
+
+/** 账期方式。前三个沿用 legacy 语义;按户周年是本次的新收费模型 */
+const SCHEME_LABEL: Record<string, string> = {
+  MONTHLY: '每月',
+  QUARTERLY: '每季',
+  YEARLY: '每年',
+  ANNIVERSARY: '按户周年',
+};
 interface FormulaReportItem {
   id: string;
   communityId: string;
@@ -232,7 +292,10 @@ const rows = ref<FeeRule[]>([]);
 const loading = ref(false);
 const dialog = ref(false);
 const editing = ref<FeeRule | null>(null);
-const form = ref({ name: '', ruleType: 'AREA_PRICE', houseType: 'RESIDENCE', period: 'MONTHLY', billDay: 1, dueDays: 15 });
+const form = ref({ name: '', code: '', ruleType: 'AREA_PRICE', houseType: 'RESIDENCE', period: 'MONTHLY', periodScheme: 'ANNIVERSARY', rounding: 'YUAN', billDay: 1, dueDays: 15 });
+const copyDialog = ref(false);
+const copyTo = ref('');
+const copying = ref(false);
 const p = ref<Record<string, any>>({ unitPrice: 1, amount: 100, meterType: 'WATER', shareBy: 'AREA' });
 
 // 公式处置
@@ -304,14 +367,15 @@ function buildParams(type: string, src: Record<string, any>): Record<string, unk
 
 function openCreate() {
   editing.value = null;
-  form.value = { name: '', ruleType: 'AREA_PRICE', houseType: 'RESIDENCE', period: 'MONTHLY', billDay: 1, dueDays: 15 };
+  // 新建默认按户周年+整元:这是这家物业的真实收费方式;legacy 周期仍可选
+  form.value = { name: '', code: '', ruleType: 'AREA_PRICE', houseType: 'RESIDENCE', period: 'MONTHLY', periodScheme: 'ANNIVERSARY', rounding: 'YUAN', billDay: 1, dueDays: 15 };
   p.value = { unitPrice: 1, amount: 100, meterType: 'WATER', shareBy: 'AREA' };
   dialog.value = true;
 }
 
 function openEdit(row: FeeRule) {
   editing.value = row;
-  form.value = { name: row.name, ruleType: row.ruleType, houseType: row.houseType, period: row.period, billDay: row.billDay, dueDays: row.dueDays };
+  form.value = { name: row.name, code: row.code ?? '', ruleType: row.ruleType, houseType: row.houseType, period: row.period, periodScheme: row.periodScheme, rounding: row.rounding, billDay: row.billDay, dueDays: row.dueDays };
   p.value = { unitPrice: 1, amount: 100, meterType: 'WATER', shareBy: 'AREA', ...(row.params as object) };
   dialog.value = true;
 }
@@ -327,9 +391,15 @@ async function save() {
         body: { name: form.value.name, params: buildParams(form.value.ruleType, p.value), billDay: form.value.billDay, dueDays: form.value.dueDays },
       });
     } else {
+      const { code, ...rest } = form.value;
       await api('/admin/fee-rules', {
         method: 'POST',
-        body: { ...form.value, params: buildParams(form.value.ruleType, p.value), communityId: communityId.value },
+        body: {
+          ...rest,
+          ...(code.trim() ? { code: code.trim() } : {}),
+          params: buildParams(form.value.ruleType, p.value),
+          communityId: communityId.value,
+        },
       });
     }
     ElMessage.success('已保存');
@@ -369,6 +439,20 @@ async function doConvert() {
   }
 }
 
+async function doCopy() {
+  copying.value = true;
+  try {
+    const r = await api<{ copied: number; skipped: number }>('/admin/fee-rules/copy', {
+      method: 'POST',
+      body: { fromCommunityId: communityId.value, toCommunityId: copyTo.value },
+    });
+    ElMessage.success(`已复制 ${r.copied} 条` + (r.skipped ? `，${r.skipped} 条已存在跳过` : ''));
+    copyDialog.value = false;
+  } finally {
+    copying.value = false;
+  }
+}
+
 async function retire(row: { id: string }) {
   await api(`/admin/fee-rules/${row.id}/retire`, { method: 'POST' });
   ElMessage.success('已退役');
@@ -377,6 +461,15 @@ async function retire(row: { id: string }) {
 </script>
 
 <style scoped>
+.mono {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-12);
+}
+.unit {
+  margin-left: 8px;
+  color: var(--text-secondary);
+  font-size: var(--fs-12);
+}
 .sub {
   color: var(--text-secondary);
   font-size: var(--fs-12);
