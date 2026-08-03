@@ -3,6 +3,7 @@
     <view class="adm-denied">
       <view class="adm-denied-title">没有管理权限</view>
       <view class="adm-denied-desc">此入口仅限物业工作人员。若您是物业人员,请联系管理员把您的手机号登记为管理账号,然后重新授权手机号。</view>
+      <view class="adm-btn adm-retry" bindtap="onShow">重试</view>
     </view>
   </block>
 

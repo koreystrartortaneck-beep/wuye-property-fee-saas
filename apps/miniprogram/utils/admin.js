@@ -17,6 +17,15 @@ let session = null; // { token, name, role, at }
 /** 静默探测:是管理员返回 {name, role},不是返回 null。每次进入管理端都重新换发。 */
 async function exchangeAdmin() {
   try {
+    /*
+     * 必须先等业主登录完成。
+     *
+     * 2026-08-03 实测(审计对得上):真机预览首次启动,探测赶在 wx.login
+     * 之前发出 → 没有业主令牌 → 被当成「不是管理员」,页面显示「没有管理权限」;
+     * 一分钟后再进就成功了(服务端记了 5 次成功换发)。
+     * 竞态输出的是**假答案**,而且只在首次启动出现,最难复现的那种。
+     */
+    await getApp().loginReady;
     const res = await request('/auth/admin-exchange', { method: 'POST', silent: true });
     if (res && res.admin) {
       session = { ...res.admin, at: Date.now() };

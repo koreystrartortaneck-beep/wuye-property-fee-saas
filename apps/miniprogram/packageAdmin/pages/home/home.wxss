@@ -193,3 +193,8 @@
 .legend-tip {
   margin-left: auto;
 }
+
+.adm-retry {
+  margin: 40rpx auto 0;
+  width: 320rpx;
+}

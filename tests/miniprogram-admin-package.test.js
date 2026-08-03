@@ -97,3 +97,14 @@ test('首页是楼盘图:楼栋条 → 层格子,欠费格标金额,点格进房
   // 搜索保留:接电话查户仍是它最快
   assert.match(wxml, /bindinput="onKeywordInput"/, '搜索框被删掉了');
 });
+
+test('探测必须等业主登录完成——竞态会把管理员误判成普通人', () => {
+  /*
+   * 实测:首次启动时探测赶在 wx.login 前发出,页面显示「没有管理权限」,
+   * 而服务端审计里躺着成功换发记录。竞态给的是假答案,且只在首启出现。
+   */
+  const src = read('utils/admin.js');
+  const i = src.indexOf('async function exchangeAdmin');
+  const body = src.slice(i, src.indexOf('admin-exchange', i));
+  assert.match(body, /await getApp\(\)\.loginReady/, 'exchangeAdmin 没有先等 loginReady');
+});
