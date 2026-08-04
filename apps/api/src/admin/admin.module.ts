@@ -12,10 +12,12 @@ import { TenantsController, TenantsService } from './tenants.controller';
 import { CloudFilesController } from './cloud-files.controller';
 import { HouseProfileController, HouseProfileService } from './house-profile.controller';
 import { TodayController, TodayService } from './today.controller';
+import { MaintenanceController, MaintenanceService } from './maintenance.controller';
 
 @Module({
   imports: [BindingModule],
   controllers: [
+    MaintenanceController,
     TodayController,
     HouseProfileController,
     AdminAuthController,
@@ -30,6 +32,7 @@ import { TodayController, TodayService } from './today.controller';
     CloudFilesController,
   ],
   providers: [
+    MaintenanceService,
     TodayService,
     HouseProfileService,
     AdminAuthService,
