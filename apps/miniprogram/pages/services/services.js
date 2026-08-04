@@ -109,7 +109,15 @@ Page({
 
   async cancelOrder(e) {
     const id = e.currentTarget.dataset.id;
-    const ok = await new Promise((r) => wx.showModal({ title: '取消该预约？', success: (res) => r(res.confirm) }));
+    const ok = await new Promise((r) =>
+      wx.showModal({
+        title: '取消该预约？',
+        success: (res) => r(res.confirm),
+        // 弹窗失败(已有弹窗在显示、页面正在跳转都会 fail)也必须把 Promise 收掉,
+        // 否则这一下之后界面就永久卡住
+        fail: () => r(false),
+      }),
+    );
     if (!ok) return;
     await request(`/owner/service-orders/${id}/cancel`, { method: 'POST' });
     await this.loadOrders();

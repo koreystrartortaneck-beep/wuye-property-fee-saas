@@ -97,6 +97,8 @@ Page({
         content: `${b.houseName} · ${b.title}\n收 ¥${b.amount}(${this.data.method})\n单据号 ${voucherNo}\n\n确认后这笔账单立刻变「已缴」,业主端也会显示已缴。`,
         confirmText: '确认收款',
         success: (r) => resolve(r.confirm),
+        // 弹窗失败(文案超长/已有弹窗在显示)也必须把 Promise 收掉,否则界面永久卡在「处理中」
+        fail: () => resolve(false),
       }),
     );
     if (!ok) return;

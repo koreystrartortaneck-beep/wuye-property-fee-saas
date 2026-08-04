@@ -128,7 +128,13 @@ Page({
   async cancel(e) {
     const id = e.currentTarget.dataset.id;
     const confirm = await new Promise((resolve) =>
-      wx.showModal({ title: '取消该通行码？', success: (r) => resolve(r.confirm) }),
+      wx.showModal({
+        title: '取消该通行码？',
+        success: (r) => resolve(r.confirm),
+        // 弹窗失败(已有弹窗在显示、页面正在跳转都会 fail)也必须把 Promise 收掉,
+        // 否则这一下之后界面就永久卡住
+        fail: () => resolve(false),
+      }),
     );
     if (!confirm) return;
     await request(`/owner/visitor-passes/${id}/cancel`, { method: 'POST' });

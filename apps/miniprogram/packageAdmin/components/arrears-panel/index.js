@@ -141,6 +141,8 @@ Component({
         content: '给这些户发微信缴费提醒。业主没授权过订阅消息的收不到 —— 那几户还得打电话。',
         confirmText: '发提醒',
         success: (r) => resolve(r.confirm),
+        // 弹窗失败(文案超长/已有弹窗在显示)也必须把 Promise 收掉,否则界面永久卡在「处理中」
+        fail: () => resolve(false),
       }),
     );
     if (!ok) return;

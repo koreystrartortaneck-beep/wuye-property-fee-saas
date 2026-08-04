@@ -230,6 +230,8 @@ Page({
                 if (m.confirm) wx.openSetting({ complete: () => reject(new Error('reopen')) });
                 else reject(new Error('cancel'));
               },
+              // 弹窗自己失败时也要把 Promise 收掉,否则「保存到相册」永远转圈
+              fail: () => reject(new Error('modal-fail')),
             });
           } else {
             doSave();

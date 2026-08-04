@@ -390,7 +390,9 @@ Page({
           content: '您的账号已注销。如需继续使用，可重新授权登录并绑定房屋。',
           showCancel: false,
           complete: resolve,
-        }),
+        // 弹窗失败(文案超长/已有弹窗在显示)也必须把 Promise 收掉,否则界面永久卡在「处理中」
+        fail: () => resolve(false),
+      }),
       );
       wx.reLaunch({ url: '/pages/index/index' });
     } catch (e) {

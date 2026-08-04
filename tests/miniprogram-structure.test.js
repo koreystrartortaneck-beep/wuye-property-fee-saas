@@ -246,3 +246,58 @@ test('删掉的冗余页面不再被任何地方引用', () => {
   }
   assert.deepStrictEqual(offenders, [], `仍有引用已删除页面的文件`);
 });
+
+test('弹窗:文案不超 4 字,且被 Promise 包住的一律要接 fail', () => {
+  /*
+   * 2026-08-04 实测的卡死:新增房屋成功后弹「去看这套房」——**confirmText 最多 4 个字**,
+   * 微信直接走 fail;而那个弹窗被 new Promise 包着又没接 fail,
+   * Promise 永不 resolve → finally 不执行 → 界面永久停在「保存中…」。
+   * 房其实已经建好了,只有界面在骗人。
+   *
+   * 两条都必须钉住:
+   *   ① confirmText / cancelText ≤ 4 字(三元的两个分支都算)
+   *   ② 被 Promise 包住的弹窗必须有 fail —— 弹窗失败的原因不止文案超长
+   *      (已有弹窗在显示、页面正在跳转都会 fail),任何一次都不该让界面卡死
+   */
+  const overLong = [];
+  const noFail = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name.startsWith('.') || e.name === 'node_modules') continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        walk(p);
+        continue;
+      }
+      if (!e.name.endsWith('.js')) continue;
+      const src = fs.readFileSync(p, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+      const rel = path.relative(MP, p);
+      for (const m of src.matchAll(/wx\.show(?:Modal|ActionSheet)\(\{/g)) {
+        // 取出这一次调用的参数对象(按花括号配平)
+        let depth = 0;
+        let j = m.index + m[0].length - 1;
+        const from = j;
+        for (; j < src.length; j++) {
+          if (src[j] === '{') depth += 1;
+          else if (src[j] === '}' && --depth === 0) break;
+        }
+        const block = src.slice(from, j + 1);
+        for (const key of ['confirmText', 'cancelText']) {
+          const re = new RegExp(`${key}:[^,\\n]*`, 'g');
+          for (const t of block.matchAll(re)) {
+            for (const lit of t[0].matchAll(/'([^']*)'/g)) {
+              if ([...lit[1]].length > 4) overLong.push(`${rel} → ${key}='${lit[1]}'`);
+            }
+          }
+        }
+        const before = src.slice(Math.max(0, m.index - 400), m.index);
+        if (/new Promise\(/.test(before) && !/\bfail:/.test(block)) {
+          noFail.push(`${rel} → ${block.slice(0, 48).replace(/\s+/g, ' ')}…`);
+        }
+      }
+    }
+  };
+  walk(MP);
+  assert.deepStrictEqual(overLong, [], `弹窗按钮文案超过 4 字，微信会直接 fail：\n  ${overLong.join('\n  ')}`);
+  assert.deepStrictEqual(noFail, [], `弹窗被 Promise 包住却没接 fail，失败即界面卡死：\n  ${noFail.join('\n  ')}`);
+});

@@ -125,6 +125,12 @@ Page({
         { silent: true },
       );
       const house = (found.list || []).find((h) => h.code === code);
+      /*
+       * confirmText / cancelText 最多 4 个字。
+       * 2026-08-04 实测:这里原来写「去看这套房」(5 字)—— 微信直接走 fail,
+       * 而当时没接 fail,Promise 永不 resolve,finally 也不执行,
+       * 界面就永久停在「保存中…」。房其实已经建好了,只有界面在骗人。
+       */
       const ok = await new Promise((resolve) =>
         wx.showModal({
           title: updated ? '已更新这套房' : '已建好',
@@ -135,10 +141,12 @@ Page({
           ]
             .filter(Boolean)
             .join('\n'),
-          confirmText: house ? '去看这套房' : '好',
+          confirmText: house ? '去看看' : '好',
           showCancel: !!house,
           cancelText: '再建一套',
           success: (x) => resolve(x.confirm),
+          // 弹窗失败(文案超长/已有弹窗在显示)也必须把 Promise 收掉,否则界面永久卡在「处理中」
+          fail: () => resolve(false),
         }),
       );
       if (ok && house) {

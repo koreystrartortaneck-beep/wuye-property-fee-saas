@@ -75,6 +75,8 @@ Page({
         content: `发布后${scope}的业主立即能在小程序看到。确认发布?`,
         confirmText: '发布',
         success: (r) => resolve(r.confirm),
+        // 弹窗失败(文案超长/已有弹窗在显示)也必须把 Promise 收掉,否则界面永久卡在「处理中」
+        fail: () => resolve(false),
       }),
     );
     if (!ok) return;
@@ -102,6 +104,8 @@ Page({
         confirmText: '撤回',
         confirmColor: '#c45656',
         success: (r) => resolve(r.confirm),
+        // 弹窗失败(文案超长/已有弹窗在显示)也必须把 Promise 收掉,否则界面永久卡在「处理中」
+        fail: () => resolve(false),
       }),
     );
     if (!ok) return;
