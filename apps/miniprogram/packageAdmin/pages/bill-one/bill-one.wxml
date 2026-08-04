@@ -15,7 +15,12 @@
 
     <!-- 还没生成:列出这户挂着的标准与算出来的金额 -->
     <block wx:if="{{!result}}">
-      <view wx:if="{{candidates.length === 0}}" class="adm-card">
+      <!-- 整套房出不了账(如停用):把原因和改法一起说清,不让人对着「不该出账」猜 -->
+      <view wx:if="{{blockedAll}}" class="adm-card">
+        <view class="adm-row-title adm-danger">这户现在出不了账</view>
+        <view class="adm-hint">{{blockedAll}}</view>
+      </view>
+      <view wx:elif="{{candidates.length === 0}}" class="adm-card">
         <view class="adm-hint">这户没挂按年收费的标准,所以出不了账单。回上一页「收费标准」里挂一条即可。</view>
       </view>
 

@@ -220,6 +220,24 @@ test('单户出账不给人做选择:月份由放户日推导,标准取这户挂
   assert.match(js, /提前/, '收费月还没到时没有提示这是提前收');
 });
 
+test('出不了账要说出真正的原因——「停用」不能显示成「这个月不该出账」', () => {
+  /*
+   * 2026-08-04 实测:一套停用的房屋点「给这户发账单」,页面只说
+   * 「按这条标准,这个月不该给这户出账」。真因是**房屋停用**
+   * (服务端选房时 house.status 必须是 ACTIVE),而那句话把人指向了账期,
+   * 于是只能反复点。
+   *
+   * 两处都要说:房屋详情的按钮之前先提示,单户出账页给出原因 + 改法。
+   * 「预览里没有这户」的兜底文案也必须列全可能性,不能只说「不该出账」。
+   */
+  const one = stripJs(read('packageAdmin/pages/bill-one/bill-one.js'));
+  assert.match(one, /house\.status && house\.status !== 'ACTIVE'/, '单户出账页没有识别停用状态');
+  assert.match(one, /停用[\s\S]{0,80}在用/, '没有告诉人怎么改回来');
+  assert.match(one, /房屋已停用、这条标准已被摘除/, '兜底文案没有列全真实可能性');
+  const houseWxml = read('packageAdmin/pages/house/house.wxml').replace(/<!--[\s\S]*?-->/g, '');
+  assert.match(houseWxml, /house\.status !== 'ACTIVE'[\s\S]{0,200}停用/, '房屋详情没有在发账单按钮前提示停用');
+});
+
 test('剔除之后顶上的合计必须跟着变——数字不动等于说剔除没生效', () => {
   /*
    * 原来大数字写死成预览返回的合计:剔掉 15 户后仍显示 ¥56758。

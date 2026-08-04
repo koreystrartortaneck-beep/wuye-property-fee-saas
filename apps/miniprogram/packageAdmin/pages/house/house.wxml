@@ -155,6 +155,10 @@
       </view>
     </view>
 
+    <!-- 停用的房屋不出账:在按钮之前就说,别等人点进去才发现 -->
+    <view wx:if="{{house.status !== 'ACTIVE'}}" class="adm-hint adm-error">
+      这套房是「停用」状态,系统不会给它出账。要出账单,先在上面「房屋信息 · 编辑」里把状态改成「在用」。
+    </view>
     <view class="adm-btn adm-btn-gold act-btn" bindtap="goBillThisHouse">给这户发账单</view>
   </block>
 </view>

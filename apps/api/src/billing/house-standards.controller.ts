@@ -51,9 +51,14 @@ export class HouseStandardsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async listForHouse(houseId: string) {
+    /*
+     * status 必须带出来:停用的房屋不参与出账(selectTargets 里
+     * `house: { status: 'ACTIVE' }`)。调用方拿不到它,就只能对着一句
+     * 「这个月不该给这户出账」猜原因 —— 实测就是这么把人卡住的。
+     */
     const house = await this.prisma.t.house.findFirst({
       where: { id: houseId },
-      select: { id: true, code: true, displayName: true, handoverDate: true },
+      select: { id: true, code: true, displayName: true, handoverDate: true, status: true, area: true },
     });
     if (!house) throw new BizException(ErrorCode.NOT_FOUND, '房屋不存在或不属于当前物业公司');
     const items = await this.prisma.t.houseStandard.findMany({

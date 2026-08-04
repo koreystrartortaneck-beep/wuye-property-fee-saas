@@ -33,6 +33,8 @@ Page({
     /** 可出账的候选:每条挂接的标准一行 */
     candidates: [],
     pickedIndex: -1,
+    /** 整套房都出不了账时的原因(如停用),连标准都不用列 */
+    blockedAll: '',
     generating: false,
     publishing: false,
     /** 生成后的结果 */
@@ -45,11 +47,28 @@ Page({
   },
 
   async load() {
-    this.setData({ loading: true, loadError: false, result: null });
+    this.setData({ loading: true, loadError: false, result: null, blockedAll: '' });
     try {
       const d = await adminRequest(`/admin/houses/${this.data.id}/standards`, { silent: true });
       const house = d.house;
       const handover = house.handoverDate ? String(house.handoverDate).slice(0, 10) : '';
+
+      /*
+       * 停用的房屋一律不出账(服务端选房时就把它过滤掉了)。
+       * 必须在这里先说清楚 —— 否则预览返回空,页面只会说「这个月不该给这户出账」,
+       * 而真正的原因是「这套房是停用状态」。实测把用户卡在这句话上过一次。
+       * house.status 是后端新加的字段;老版本 API 没有它时不假设,走下面的通用解释。
+       */
+      if (house.status && house.status !== 'ACTIVE') {
+        this.setData({
+          house: { ...house, handoverDate: handover },
+          candidates: [],
+          pickedIndex: -1,
+          blockedAll: '这套房现在是「停用」状态,停用的房屋不出账。要给它出账,请返回上一页 →「房屋信息 · 编辑」→ 状态改成「在用」。',
+        });
+        return;
+      }
+
       const active = (d.items || []).filter(
         (s) => s.status === 'ACTIVE' && s.rule.periodScheme === 'ANNIVERSARY' && s.rule.enabled,
       );
@@ -79,11 +98,16 @@ Page({
           amount: row && row.amount ? row.amount : null,
           basis: row && row.snapshot ? basisText(row.snapshot) : '',
           rangeText: row && row.periodRange ? `账期 ${row.periodRange.start} ~ ${row.periodRange.end}` : '',
+          /*
+           * 预览里连这户都没出现时,别只说「不该出账」—— 那句话对着一个
+           * 明明挂了标准的房子说,人只能反复点。把真实的可能性列全:
+           * 停用 / 摘除 / 这条标准的锚点不在本月。
+           */
           blocked: row
             ? row.skipReason
               ? SKIP_REASON[row.skipReason] || row.skipReason
               : ''
-            : '按这条标准,这个月不该给这户出账',
+            : `这条标准算不到这户头上。可能是:房屋已停用、这条标准已被摘除,或它的账期锚点不在 ${month} 月`,
         });
       }
       const pickedIndex = candidates.findIndex((c) => !c.blocked);
