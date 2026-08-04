@@ -143,6 +143,24 @@ describe('彻底删除房屋', () => {
     expect(opts).toMatchObject({ timeout: 30_000 });
   });
 
+  it('删账单前必须摘断重开链(replacesBillId)——账单会指向账单', async () => {
+    /*
+     * 2026-08-04 第三次实测:PAY-001 卡在 bill.deleteMany 的外键上。
+     * 前两次是对账明细、只经 billId 连着的退款;这次是 Bill 自己 ——
+     * 作废后重开会把新旧两张账单串起来(replacesBillId)。
+     * 同一条 deleteMany 里父子都在也不行:MySQL 逐行检查外键。
+     * 三次的报错都只说 (`tenantId`),一次都没指到表名 —— 所以逐条钉住。
+     */
+    const { prisma } = makePrisma({});
+    (prisma.t.bill.findMany as jest.Mock).mockResolvedValue([{ id: 'b1' }, { id: 'b2' }]);
+    await svc(prisma, makeAudit()).purge({ target: 'HOUSE', id: 'h1', confirm: '测试房 001' } as never, 'admin-1');
+    const call = (prisma.t.bill.updateMany as jest.Mock).mock.calls[0][0];
+    expect(call.data).toMatchObject({ paymentId: null, replacesBillId: null });
+    const order = (m: string, k: string) =>
+      (prisma.t[m][k] as jest.Mock).mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER;
+    expect(order('bill', 'updateMany')).toBeLessThan(order('bill', 'deleteMany'));
+  });
+
   it('房屋不存在 → NOT_FOUND,不是静默成功', async () => {
     const { prisma } = makePrisma({ house: null });
     await expect(

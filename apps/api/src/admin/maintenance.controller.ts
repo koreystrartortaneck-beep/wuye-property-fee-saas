@@ -179,8 +179,18 @@ export class MaintenanceService {
         tx.paymentBill.deleteMany({ where: { OR: [{ paymentId: { in: ids(paymentIds) } }, { billId: { in: ids(billIds) } }] } }),
       );
       await del('notifyLog', () => tx.notifyLog.deleteMany({ where: { tenantId, billId: { in: ids(billIds) } } }));
-      // Bill.paymentId 是唯一外键指向 Payment:先摘掉引用,才能删 Payment
-      await tx.bill.updateMany({ where: { tenantId, id: { in: ids(billIds) } }, data: { paymentId: null } });
+      /*
+       * 删账单之前先把两个引用摘断:
+       *   · paymentId —— 唯一外键指向 Payment,不摘就删不了 Payment
+       *   · replacesBillId —— **账单指向账单**(作废后重开会串起来)。
+       *     同一条 deleteMany 里父子都在也不行:MySQL 逐行检查外键,
+       *     删到父行时子行还指着它。2026-08-04 实测 PAY-001 就卡在这,
+       *     而报错只说 (`tenantId`),第三次指不到表名。
+       */
+      await tx.bill.updateMany({
+        where: { tenantId, id: { in: ids(billIds) } },
+        data: { paymentId: null, replacesBillId: null },
+      });
       await del('payment', () =>
         tx.payment.deleteMany({ where: { tenantId, OR: [{ id: { in: ids(paymentIds) } }, { billId: { in: ids(billIds) } }] } }),
       );

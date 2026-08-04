@@ -40,6 +40,12 @@ export interface SchemaVersionInfo {
 interface MigrationRow {
   migration_name: string;
   finished_at: Date | null;
+  /*
+   * 被 `migrate resolve --rolled-back` 标记过的行:finished_at 也是 NULL,
+   * 但它**不是**失败 —— 它是「已知失败、已处理、等着重放」。
+   * 不排掉它,恢复之后 readiness 会永远报「有迁移失败」,而那是假警报。
+   */
+  rolled_back_at: Date | null;
 }
 
 @Injectable()
@@ -75,10 +81,16 @@ export class SchemaVersionService {
     // 触发器读不到不影响其它判断,单独兜住
     let auditTriggers: string[] = [];
     try {
-      const trs = await this.prisma.raw.$queryRawUnsafe<Array<{ TRIGGER_NAME: string }>>(
-        "SELECT TRIGGER_NAME FROM information_schema.TRIGGERS WHERE EVENT_OBJECT_TABLE = 'AuditLog' AND TRIGGER_SCHEMA = DATABASE()",
+      /*
+       * 显式取别名:列名大小写在驱动之间不一致,直接读 TRIGGER_NAME 拿到的是 undefined,
+       * 于是「触发器全没了」这个**假警报**会盖过真问题(2026-08-04 踩过)。
+       * 也不按 DATABASE() 过滤 —— 库名不匹配时宁可多列几个,也别把「看不见」
+       * 报成「不存在」。
+       */
+      const trs = await this.prisma.raw.$queryRawUnsafe<Array<{ name: string }>>(
+        "SELECT TRIGGER_NAME AS name FROM information_schema.TRIGGERS WHERE EVENT_OBJECT_TABLE = 'AuditLog'",
       );
-      auditTriggers = trs.map((t) => t.TRIGGER_NAME).sort();
+      auditTriggers = trs.map((t) => t.name).filter(Boolean).sort();
     } catch (error) {
       this.logger.warn(`读取审计触发器失败：${error instanceof Error ? error.message : String(error)}`);
     }
@@ -86,7 +98,7 @@ export class SchemaVersionService {
     let rows: MigrationRow[] = [];
     try {
       rows = await this.prisma.raw.$queryRawUnsafe<MigrationRow[]>(
-        'SELECT `migration_name`, `finished_at` FROM `_prisma_migrations` ORDER BY `migration_name`',
+        'SELECT `migration_name`, `finished_at`, `rolled_back_at` FROM `_prisma_migrations` ORDER BY `migration_name`',
       );
     } catch (error) {
       // 表不存在或无权限：如实报告，不要假装健康
@@ -104,7 +116,7 @@ export class SchemaVersionService {
     }
 
     const applied = rows.filter((r) => r.finished_at !== null).map((r) => r.migration_name);
-    const failed = rows.filter((r) => r.finished_at === null).map((r) => r.migration_name);
+    const failed = rows.filter((r) => r.finished_at === null && r.rolled_back_at === null).map((r) => r.migration_name);
     const appliedSet = new Set(applied);
     const pending = inImage.filter((name) => !appliedSet.has(name));
     const latestApplied = applied.length > 0 ? applied[applied.length - 1] : null;

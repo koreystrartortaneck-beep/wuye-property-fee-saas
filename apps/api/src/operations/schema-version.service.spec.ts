@@ -10,7 +10,7 @@ import { SchemaVersionService } from './schema-version.service';
  * 而此时它对「镜像里应该有哪些迁移」一无所知，那句话没有任何依据。
  * 一个在自己瞎了的时候仍然说「一切正常」的检查，比没有这个检查更糟。
  */
-type Row = { migration_name: string; finished_at: Date | null };
+type Row = { migration_name: string; finished_at: Date | null; rolled_back_at: Date | null };
 
 const BOTH_TRIGGERS = ['AuditLog_before_update_append_only', 'AuditLog_before_delete_append_only'];
 
@@ -20,7 +20,7 @@ function makeService(rows: Row[] | Error, inImage: string[], triggers: string[] 
       // 按 SQL 分派:同一个方法既查迁移表也查触发器,一律返回迁移行会让触发器判定失真
       $queryRawUnsafe: jest.fn(async (sql: string) => {
         if (sql.includes('information_schema.TRIGGERS')) {
-          return triggers.map((TRIGGER_NAME) => ({ TRIGGER_NAME }));
+          return triggers.map((name) => ({ name }));
         }
         if (rows instanceof Error) throw rows;
         return rows;
@@ -33,8 +33,10 @@ function makeService(rows: Row[] | Error, inImage: string[], triggers: string[] 
   return svc;
 }
 
-const done = (n: string): Row => ({ migration_name: n, finished_at: new Date() });
-const unfinished = (n: string): Row => ({ migration_name: n, finished_at: null });
+const done = (n: string): Row => ({ migration_name: n, finished_at: new Date(), rolled_back_at: null });
+const unfinished = (n: string): Row => ({ migration_name: n, finished_at: null, rolled_back_at: null });
+/** 已被 resolve --rolled-back 处理过的失败迁移:不该再算失败 */
+const rolledBack = (n: string): Row => ({ migration_name: n, finished_at: null, rolled_back_at: new Date() });
 
 describe('迁移状态自述', () => {
   it('全部已应用：ok，且说清应用到哪一个、共几个', async () => {
@@ -106,4 +108,16 @@ describe('审计 append-only 触发器', () => {
     expect(info.ok).toBe(false);
     expect(info.auditTriggers).toEqual([]);
   });
+});
+
+it('被 resolve 标成回滚的迁移不算失败——否则恢复之后永远报假警报', async () => {
+  /*
+   * 2026-08-04:一条清理迁移失败 → 用 `migrate resolve --rolled-back` 标回未应用 →
+   * 重放成功。但那条失败行仍留在 _prisma_migrations 里(finished_at 是 NULL),
+   * 只多了 rolled_back_at。不排掉它,readiness 会一直说「有迁移失败」,
+   * 而真出问题时这句话已经没人相信了。
+   */
+  const info = await makeService([rolledBack('a_1'), done('a_1'), done('b_2')], ['a_1', 'b_2']).info();
+  expect(info.failed).toEqual([]);
+  expect(info.ok).toBe(true);
 });
