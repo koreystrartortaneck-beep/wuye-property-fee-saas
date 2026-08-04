@@ -138,6 +138,17 @@ export class MaintenanceService {
     }
     if (paymentIds.length) {
       await del('invoiceApplication', () => this.prisma.t.invoiceApplication.deleteMany({ where: { paymentId: { in: paymentIds } } }));
+      /*
+       * 对账明细也指向支付与退款(每日对账把每笔订单都记了一行)。
+       * 2026-08-04 实测:漏了这一张,清 PAY-001(15 笔缴费、跑过 6 次对账)时
+       * 外键把删除挡了回来,而错误信息是「关联的数据不存在或已被删除」——
+       * 完全看不出是哪张表。所以这里逐张写清,而且顺序在 refund/payment 之前。
+       */
+      await del('reconciliationItem', () =>
+        this.prisma.t.reconciliationItem.deleteMany({
+          where: { OR: [{ paymentId: { in: paymentIds } }, { refundId: { in: refundIds.length ? refundIds : ['-'] } }] },
+        }),
+      );
       await del('refund', () => this.prisma.t.refund.deleteMany({ where: { paymentId: { in: paymentIds } } }));
       await del('paymentBill', () => this.prisma.raw.paymentBill.deleteMany({ where: { paymentId: { in: paymentIds } } }));
     }

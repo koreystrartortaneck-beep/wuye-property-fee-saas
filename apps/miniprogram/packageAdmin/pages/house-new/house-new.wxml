@@ -1,0 +1,54 @@
+<view class="page adm-page">
+  <view class="adm-card pad">
+    <view class="f-row">
+      <view class="f-lab">房号 <text class="req">*</text></view>
+      <input class="adm-input f-in" data-k="code" value="{{code}}" bindinput="onInput" placeholder="如 A-3-702" />
+    </view>
+    <view class="f-row">
+      <view class="f-lab">显示名</view>
+      <input class="adm-input f-in" data-k="displayName" value="{{displayName}}" bindinput="onInput" placeholder="留空就用房号" />
+    </view>
+    <view class="f-row">
+      <view class="f-lab">类型</view>
+      <view class="seg f-in">
+        <view class="seg-i {{type === item.v ? 'seg-on' : ''}}" wx:for="{{types}}" wx:key="v" data-v="{{item.v}}" bindtap="pickType">{{item.label}}</view>
+      </view>
+    </view>
+    <view class="f-row">
+      <view class="f-lab">建筑面积{{type === 'RESIDENCE' ? ' *' : ''}}</view>
+      <input class="adm-input f-in" type="digit" data-k="area" value="{{area}}" bindinput="onInput" placeholder="㎡ · 按面积收费必填" />
+    </view>
+    <view class="f-row">
+      <view class="f-lab">放户日期</view>
+      <picker class="f-in" mode="date" value="{{handoverDate}}" end="{{today}}" bindchange="onHandover">
+        <view class="adm-input pick-line">{{handoverDate || '决定每年几月出账'}} ›</view>
+      </picker>
+    </view>
+    <view class="f-row">
+      <view class="f-lab">住户手机</view>
+      <input class="adm-input f-in" type="number" maxlength="11" data-k="phone" value="{{phone}}" bindinput="onInput" placeholder="选填,可稍后再加" />
+    </view>
+    <view class="f-row">
+      <view class="f-lab">收费标准</view>
+      <view class="adm-input pick-line f-in" bindtap="togglePickRule">{{ruleName || '选填,挂了才出账'}} ›</view>
+    </view>
+  </view>
+
+  <!-- 标准选择:展开在表单下面,不跳页 -->
+  <view class="adm-card" wx:if="{{pickingRule}}">
+    <view wx:if="{{rules.length === 0}}" class="adm-hint">没有可挂的按年收费标准(要新建标准请在电脑后台)</view>
+    <view class="adm-row" wx:for="{{rules}}" wx:key="id" data-i="{{index}}" bindtap="pickRule" hover-class="adm-row-hover">
+      <view class="adm-row-main">
+        <view class="adm-row-title">{{item.name}}</view>
+        <view class="adm-row-sub">{{item.price}}</view>
+      </view>
+      <view class="adm-pill adm-pill-quiet">选它</view>
+    </view>
+    <view wx:if="{{ruleId}}" class="adm-link" bindtap="clearRule">不挂标准</view>
+  </view>
+
+  <view class="adm-hint">房号在本小区内唯一。填了已有的房号是<text class="em">更新</text>那套房,不会出现两套同号的。</view>
+  <view class="adm-hint">面积和放户日期可以以后再补,但补齐之前这套房出不了账。</view>
+
+  <view class="adm-btn act {{saving ? 'adm-btn-busy' : ''}}" bindtap="submit">{{saving ? '保存中…' : '保存'}}</view>
+</view>

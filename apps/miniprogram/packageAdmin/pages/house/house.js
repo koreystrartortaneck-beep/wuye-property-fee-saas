@@ -28,6 +28,8 @@ function priceText(rule) {
 Page({
   data: {
     id: '',
+    /** 当前板块:bills / contacts / standards / info —— 一屏一件事,不用上下滑 */
+    tab: 'bills',
     loading: true,
     loadError: false,
     house: null,
@@ -48,6 +50,7 @@ Page({
     newPhone: '',
     newName: '',
     adding: false,
+    deleting: false,
   },
 
   onLoad(query) {
@@ -121,6 +124,10 @@ Page({
     } finally {
       this.setData({ loading: false });
     }
+  },
+
+  pickTab(e) {
+    this.setData({ tab: e.currentTarget.dataset.t, editing: false });
   },
 
   /* ── 编辑房屋信息 ── */
@@ -366,7 +373,90 @@ Page({
     }
   },
 
-  /** 只给这一户出账单:单户页面,不再回到批量流程里选范围 */
+  /*
+   * 删除这套房。
+   *
+   * 先走常规删除 —— 它会把「还有账单 N 条」如实说出来。被挡住时才升级到
+   * 「彻底删除」,而且要人原样打出房号:那一步会把这套房名下的账单、缴费、
+   * 退款、发票全部物理销毁,不可恢复。绝不把它做成一个直接可点的按钮。
+   */
+  async removeHouse() {
+    const h = this.data.house;
+    if (!h || this.data.deleting) return;
+    const ok = await new Promise((resolve) =>
+      wx.showModal({
+        title: `删除 ${h.displayName}`,
+        content: '删除后这套房从楼盘图里消失。出过账单的房屋删不掉,系统会告诉你原因。',
+        confirmText: '删除',
+        confirmColor: '#c45656',
+        success: (r) => resolve(r.confirm),
+      }),
+    );
+    if (!ok) return;
+    this.setData({ deleting: true });
+    try {
+      await adminRequest(`/admin/houses/${this.data.id}`, { method: 'DELETE', silent: true });
+      wx.showToast({ title: '已删除', icon: 'success' });
+      setTimeout(() => wx.navigateBack(), 600);
+    } catch (err) {
+      const msg = (err && err.message) || '';
+      if (err && err.code === 40300) {
+        wx.showModal({ title: '权限不够', content: '删除房屋只有物业管理员账号能做。', showCancel: false });
+        return;
+      }
+      if (!/不能删除/.test(msg)) {
+        wx.showModal({ title: '删不了', content: msg || '请稍后重试', showCancel: false });
+        return;
+      }
+      await this.offerPurge(h, msg);
+    } finally {
+      this.setData({ deleting: false });
+    }
+  },
+
+  /** 常规删除被历史数据挡住时的唯一出路:彻底销毁(需原样打出房号) */
+  async offerPurge(house, why) {
+    const go = await new Promise((resolve) =>
+      wx.showModal({
+        title: '删不掉',
+        content: `${why}\n\n如果这是测试房,可以「彻底删除」——连它名下的账单、缴费、退款、发票一起物理销毁,不可恢复。`,
+        confirmText: '彻底删除',
+        cancelText: '算了',
+        confirmColor: '#c45656',
+        success: (r) => resolve(r.confirm),
+      }),
+    );
+    if (!go) return;
+    const typed = await new Promise((resolve) =>
+      wx.showModal({
+        title: '最后确认',
+        editable: true,
+        placeholderText: `请原样输入:${house.displayName}`,
+        content: '',
+        confirmText: '销毁',
+        confirmColor: '#c45656',
+        success: (r) => resolve(r.confirm && r.content ? r.content.trim() : ''),
+        fail: () => resolve(''),
+      }),
+    );
+    if (typed !== house.displayName) {
+      if (typed) wx.showToast({ title: '名字不一致,已取消', icon: 'none' });
+      return;
+    }
+    const r = await adminRequest('/admin/maintenance/purge', {
+      method: 'POST',
+      data: { target: 'HOUSE', id: this.data.id, confirm: house.displayName },
+    });
+    const n = Object.values(r.deleted || {}).reduce((a, b) => a + b, 0);
+    wx.showModal({
+      title: '已彻底删除',
+      content: `${house.displayName} 及其名下 ${n} 条数据已销毁。`,
+      showCancel: false,
+      success: () => wx.navigateBack(),
+    });
+  },
+
+  /** 只给这一户出账单:单页面,不再回到批量流程里选范围 */
   goBillThisHouse() {
     const h = this.data.house;
     if (!h) return;

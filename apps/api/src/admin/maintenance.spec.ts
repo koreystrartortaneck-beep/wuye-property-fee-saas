@@ -24,8 +24,13 @@ function makePrisma(opts: {
 }) {
   const executed: string[] = [];
   const zero = { count: 0 };
-  const delMany = jest.fn(async () => zero);
-  const table = (): Record<string, jest.Mock> => ({ deleteMany: delMany, findMany: jest.fn(async () => []), count: jest.fn(async () => 0), updateMany: jest.fn(async () => zero) });
+  const table = (): Record<string, jest.Mock> => ({
+    // 每张表独立的 mock:共用一个的话 invocationCallOrder 全相同,顺序断言测不出东西
+    deleteMany: jest.fn(async () => zero),
+    findMany: jest.fn(async () => []),
+    count: jest.fn(async () => 0),
+    updateMany: jest.fn(async () => zero),
+  });
   const t: Record<string, Record<string, jest.Mock>> = {
     house: {
       findFirst: jest.fn(async () => (opts.house === undefined ? HOUSE : opts.house)),
@@ -52,7 +57,7 @@ function makePrisma(opts: {
   const prisma = {
     t,
     raw: {
-      paymentBill: { deleteMany: delMany },
+      paymentBill: { deleteMany: jest.fn(async () => zero) },
       $executeRawUnsafe: jest.fn(async (sql: string) => {
         executed.push(sql);
         return 0;
@@ -66,7 +71,7 @@ function makePrisma(opts: {
       ),
     },
   };
-  return { prisma, executed, delMany };
+  return { prisma, executed };
 }
 
 const svc = (prisma: unknown, audit: unknown) => new MaintenanceService(prisma as never, audit as never);
@@ -98,6 +103,25 @@ describe('彻底删除房屋', () => {
     expect(audit.rows[0]).toMatchObject({ action: 'DELETE', resourceType: 'House', communityId: null });
     expect(JSON.stringify(audit.rows[0].afterSummary)).toContain('HOUSE_PURGE');
     expect(prisma.t.house.delete).toHaveBeenCalled();
+  });
+
+  it('删支付前必须先清对账明细——漏一张外键表,错误信息看不出是哪张', async () => {
+    /*
+     * 2026-08-04 实测:PAY-001(15 笔缴费、跑过 6 次每日对账)清不掉,
+     * 返回的是「关联的数据不存在或已被删除」—— 一句完全指不到表名的话。
+     * 真因是 ReconciliationItem.paymentId 的外键。这条钉住删除顺序。
+     */
+    const { prisma } = makePrisma({});
+    (prisma.t.bill.findMany as jest.Mock).mockResolvedValue([{ id: 'b1' }]);
+    (prisma.t.payment.findMany as jest.Mock).mockResolvedValue([{ id: 'p1' }]);
+    await svc(prisma, makeAudit()).purge(
+      { target: 'HOUSE', id: 'h1', confirm: '测试房 001' } as never,
+      'admin-1',
+    );
+    expect(prisma.t.reconciliationItem.deleteMany).toHaveBeenCalled();
+    const order = (m: string) =>
+      (prisma.t[m].deleteMany as jest.Mock).mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER;
+    expect(order('reconciliationItem')).toBeLessThan(order('payment'));
   });
 
   it('房屋不存在 → NOT_FOUND,不是静默成功', async () => {
