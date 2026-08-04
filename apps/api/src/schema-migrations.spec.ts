@@ -89,3 +89,40 @@ describe('schema 与迁移一致', () => {
     expect(orphan).toEqual([]);
   });
 });
+
+/**
+ * 摘过 AuditLog 的 append-only 触发器的迁移，必须在同一个文件里把它装回来。
+ *
+ * 背景（2026-08-04）：清测试小区时才发现，删审计记录只能靠迁移 ——
+ * AuditLog 上有 BEFORE UPDATE / BEFORE DELETE 两个触发器，而摘触发器是 DDL，
+ * Prisma 查询引擎走预处理协议根本执行不了（MySQL 1295）。这反过来是件好事：
+ * 「审计不可删」在运行时是硬保证，任何管理员、任何接口都破不了。
+ *
+ * 但迁移能破。所以这一条钉住：谁在迁移里摘了它，就必须在同一个文件里装回去。
+ * 少写一半，生产上的审计表会**静默地**变成可改可删 —— 没有任何报错，
+ * 而这正是这套系统里最不能悄悄消失的保证。
+ */
+test('摘掉审计 append-only 触发器的迁移，必须在同一个文件里把两个都装回来', () => {
+  const dir = path.join(PRISMA_DIR, 'migrations');
+  const offenders: string[] = [];
+  for (const name of fs.readdirSync(dir)) {
+    const file = path.join(dir, name, 'migration.sql');
+    if (!fs.existsSync(file)) continue;
+    const sql = fs.readFileSync(file, 'utf8');
+    const dropped = [...sql.matchAll(/DROP TRIGGER[^;]*?`(AuditLog_before_\w+_append_only)`/g)].map((m) => m[1]);
+    if (dropped.length === 0) continue;
+    for (const t of new Set(dropped)) {
+      // 装回来的定义必须真的存在（IF EXISTS 的 DROP 也算摘）
+      if (!new RegExp(`CREATE TRIGGER\\s+\`${t}\``).test(sql)) {
+        offenders.push(`${name}: 摘了 ${t} 没装回来`);
+      }
+    }
+    // 装回的两个都要在,别只顾自己要删的那个
+    for (const t of ['AuditLog_before_update_append_only', 'AuditLog_before_delete_append_only']) {
+      if (!new RegExp(`CREATE TRIGGER\\s+\`${t}\``).test(sql)) {
+        offenders.push(`${name}: 缺 ${t} 的重建`);
+      }
+    }
+  }
+  expect(offenders).toEqual([]);
+});

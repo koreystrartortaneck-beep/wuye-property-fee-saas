@@ -4,12 +4,12 @@ import { BizException } from '../common/biz.exception';
 /**
  * 彻底清除(物理删除)。
  *
- * 这是系统里唯一能突破「审计不可删」的地方,所以每一道闸都必须钉住:
+ * 破坏性操作,每一道闸都必须钉住:
  *   · 名字打错 → 不删
  *   · 小区名下还有业务数据 → 不删(不代劳删房)
- *   · 要连审计一起销毁 → 必须显式开开关
+ *   · 名下还有审计记录 → 拒绝(运行时清不掉,只有迁移能做)
  *   · 先写审计再动手,且审计行挂 communityId=null(否则它自己被这次清除带走)
- *   · 摘掉的触发器必须装回,装不回要炸(而不是静默留一张可改可删的审计表)
+ *   · 整套删除在一个事务里 —— 半残比失败严重
  */
 
 const HOUSE = { id: 'h1', code: 'T-001', displayName: '测试房 001', tenantId: 't1', communityId: 'c1' };
@@ -152,6 +152,34 @@ describe('彻底删除房屋', () => {
 });
 
 describe('彻底删除小区', () => {
+  it('有审计记录 → 明确拒绝,并说清只有迁移能清(运行时是硬保证)', async () => {
+    /*
+     * 2026-08-04 实测:运行时摘 AuditLog 的 append-only 触发器,MySQL 直接拒 1295
+     * ——Prisma 查询引擎走预处理协议,DDL 只有迁移引擎能做。
+     * 所以「审计不可删」在运行时破不了,接口不该假装能做,而要说清出路。
+     */
+    const { prisma, executed } = makePrisma({ auditCount: 200 });
+    await expect(
+      svc(prisma, makeAudit()).purge(
+        { target: 'COMMUNITY', id: 'c1', confirm: '【体验数据】云顶花园' } as never,
+        'admin-1',
+      ),
+    ).rejects.toThrow(/审计记录 200 条[\s\S]*迁移/);
+    expect(executed).toHaveLength(0); // 一条 DDL 都不该发
+    expect(prisma.t.community.delete).not.toHaveBeenCalled();
+  });
+
+  it('没有审计记录 → 清掉运行痕迹后删掉小区', async () => {
+    const { prisma } = makePrisma({ auditCount: 0 });
+    const r = await svc(prisma, makeAudit()).purge(
+      { target: 'COMMUNITY', id: 'c1', confirm: '【体验数据】云顶花园' } as never,
+      'admin-1',
+    );
+    expect(r).toMatchObject({ purged: true, target: 'COMMUNITY' });
+    expect(prisma.t.idempotencyRecord.deleteMany).toHaveBeenCalled();
+    expect(prisma.t.community.delete).toHaveBeenCalled();
+  });
+
   it('名下还有房屋/账单 → 拒绝,并且不代劳删它们', async () => {
     const { prisma } = makePrisma({ counts: { house: 551 } });
     const audit = makeAudit();
@@ -165,54 +193,7 @@ describe('彻底删除小区', () => {
     expect(audit.append).not.toHaveBeenCalled();
   });
 
-  it('有审计记录但没显式同意 → 拒绝,并说清这是唯一的例外开关', async () => {
-    const { prisma } = makePrisma({ auditCount: 200 });
-    await expect(
-      svc(prisma, makeAudit()).purge(
-        { target: 'COMMUNITY', id: 'c1', confirm: '【体验数据】云顶花园' } as never,
-        'admin-1',
-      ),
-    ).rejects.toThrow(/审计记录 200 条[\s\S]*purgeAuditLogs/);
-  });
 
-  it('显式同意后:摘触发器 → 删审计 → 装回触发器,且「销毁了多少条」写进审计', async () => {
-    const { prisma, executed } = makePrisma({ auditCount: 200 });
-    const audit = makeAudit();
-    const r = await svc(prisma, audit).purge(
-      { target: 'COMMUNITY', id: 'c1', confirm: '【体验数据】云顶花园', purgeAuditLogs: true } as never,
-      'admin-1',
-    );
-    expect(r).toMatchObject({ purged: true, target: 'COMMUNITY' });
-    expect(r.deleted.auditLog).toBe(200);
-    // 顺序:先 DROP 两个,最后 CREATE 回两个
-    expect(executed.filter((s) => s.startsWith('DROP TRIGGER'))).toHaveLength(2);
-    expect(executed.filter((s) => s.startsWith('CREATE TRIGGER'))).toHaveLength(2);
-    expect(executed.findIndex((s) => s.startsWith('CREATE TRIGGER'))).toBeGreaterThan(
-      executed.findIndex((s) => s.startsWith('DROP TRIGGER')),
-    );
-    // 链条断在哪里,链条自己记着
-    expect(JSON.stringify(audit.rows[0].beforeSummary)).toContain('"auditLogsDestroyed":200');
-    expect(audit.rows[0].communityId).toBeNull();
-    expect(prisma.t.community.delete).toHaveBeenCalled();
-  });
 
-  it('触发器没装回来 → 立刻炸,绝不留一张可改可删的审计表', async () => {
-    const { prisma } = makePrisma({ auditCount: 5, triggersBack: ['AuditLog_before_update_append_only'] });
-    await expect(
-      svc(prisma, makeAudit()).purge(
-        { target: 'COMMUNITY', id: 'c1', confirm: '【体验数据】云顶花园', purgeAuditLogs: true } as never,
-        'admin-1',
-      ),
-    ).rejects.toThrow(/触发器未能恢复/);
-  });
 
-  it('没有审计记录时不碰触发器——正常路径下审计表一秒都不会失去保护', async () => {
-    const { prisma, executed } = makePrisma({ auditCount: 0 });
-    await svc(prisma, makeAudit()).purge(
-      { target: 'COMMUNITY', id: 'c1', confirm: '【体验数据】云顶花园' } as never,
-      'admin-1',
-    );
-    expect(executed).toHaveLength(0);
-    expect(prisma.t.community.delete).toHaveBeenCalled();
-  });
 });

@@ -1,6 +1,10 @@
 {
   "navigationBarTitleText": "物业管理",
-  "usingComponents": {},
+  "usingComponents": {
+    "arrears-panel": "../../components/arrears-panel/index",
+    "ticket-panel": "../../components/ticket-panel/index",
+    "batch-panel": "../../components/batch-panel/index"
+  },
   "navigationStyle": "default",
   "navigationBarBackgroundColor": "#f6f0e7",
   "navigationBarTextStyle": "black"

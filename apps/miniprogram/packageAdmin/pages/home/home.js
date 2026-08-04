@@ -48,6 +48,10 @@ Page({
     communityId: '',
     /** 欠费概览(有欠费才显示) */
     arrears: null,
+    /** 当前板块:grid / arrears / tickets / batches —— 一屏一件事,不用上下滑 */
+    tab: 'grid',
+    ticketCount: 0,
+    draftCount: 0,
   },
 
   async onShow() {
@@ -65,6 +69,8 @@ Page({
     }
     this.setData({ adminName: s.name, denied: false, gridError: '' });
     await Promise.all([this.loadTodos(), this.loadGrid()]);
+    // 当前面板重新拉一次:刚登记完收款回来,数字要变
+    this.refreshPanel();
   },
 
   async loadTodos() {
@@ -81,6 +87,9 @@ Page({
         todos: (d.todos || [])
           .filter((t) => t.count > 0)
           .map((t) => ({ ...t, url: ACTIONABLE[t.key] || '' })),
+        // 标签上的角标:哪块有事,不点开也看得见
+        ticketCount: (d.todos || []).filter((t) => t.key === 'tickets').reduce((n, t) => n + t.count, 0),
+        draftCount: (d.todos || []).filter((t) => t.key === 'draftBatch').reduce((n, t) => n + t.count, 0),
         // 欠费不在 todos 里(它不是「待处理单据」而是常态),单独给一条入口
         arrears:
           d.arrears && d.arrears.houses > 0
@@ -119,6 +128,16 @@ Page({
     } finally {
       this.setData({ loading: false });
     }
+  },
+
+  pickTab(e) {
+    this.setData({ tab: e.currentTarget.dataset.t });
+  },
+
+  /** 让当前显示的面板重新拉数据(面板是组件,自己不知道页面什么时候回到前台) */
+  refreshPanel() {
+    const panel = this.selectComponent(`#${this.data.tab}`);
+    if (panel && panel.load) void panel.load();
   },
 
   retryGrid() {

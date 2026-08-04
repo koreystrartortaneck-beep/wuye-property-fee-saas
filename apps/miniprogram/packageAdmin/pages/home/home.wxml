@@ -33,6 +33,27 @@
     </block>
 
     <block wx:else>
+      <!-- 四块横向切:一屏一件事,角标告诉你今天该干哪一件 -->
+      <view class="tabs">
+        <view class="tab {{tab === 'grid' ? 'tab-on' : ''}}" data-t="grid" bindtap="pickTab">楼盘图</view>
+        <view class="tab {{tab === 'arrears' ? 'tab-on' : ''}}" data-t="arrears" bindtap="pickTab">
+          欠费<text wx:if="{{arrears}}" class="tab-bd">{{arrears.houses}}</text>
+        </view>
+        <view class="tab {{tab === 'tickets' ? 'tab-on' : ''}}" data-t="tickets" bindtap="pickTab">
+          报修<text wx:if="{{ticketCount > 0}}" class="tab-bd">{{ticketCount}}</text>
+        </view>
+        <view class="tab {{tab === 'batches' ? 'tab-on' : ''}}" data-t="batches" bindtap="pickTab">
+          待发布<text wx:if="{{draftCount > 0}}" class="tab-bd">{{draftCount}}</text>
+        </view>
+      </view>
+
+      <!-- ② 欠费 / ③ 报修 / ④ 待发布:与各自的独立页面共用同一个组件 -->
+      <arrears-panel wx:if="{{tab === 'arrears'}}" id="arrears" active="{{true}}" />
+      <ticket-panel wx:if="{{tab === 'tickets'}}" id="tickets" active="{{true}}" />
+      <batch-panel wx:if="{{tab === 'batches'}}" id="batches" active="{{true}}" />
+    </block>
+
+    <block wx:if="{{!keyword && tab === 'grid'}}">
       <!-- 待办条:紧凑横排,有事才出现 -->
       <scroll-view wx:if="{{todos.length > 0}}" scroll-x class="todo-strip" enhanced show-scrollbar="{{false}}">
         <view class="todo-chip" wx:for="{{todos}}" wx:key="key" data-url="{{item.url}}" bindtap="onTodoTap">
@@ -103,10 +124,6 @@
       <view class="quick" wx:if="{{buildings.length > 0}}">
         <view class="adm-btn adm-btn-ghost quick-btn" bindtap="goAnnounce">发公告</view>
         <view class="adm-btn quick-btn" bindtap="goBilling">发账单</view>
-      </view>
-      <view class="quick" wx:if="{{buildings.length > 0}}">
-        <view class="adm-btn adm-btn-ghost quick-btn" bindtap="goTickets">报事报修</view>
-        <view class="adm-btn adm-btn-ghost quick-btn" bindtap="goDun">欠费催缴</view>
       </view>
     </block>
   </block>

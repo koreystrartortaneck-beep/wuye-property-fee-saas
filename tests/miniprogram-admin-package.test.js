@@ -280,7 +280,7 @@ test('整批发布:户数取库里的草稿条数,剔除要留原因', () => {
    * ② 剔除 = 作废这一行草稿账单,必须问原因(线下已收 / 不该出),
    *    下个月有人问「这户为什么没账单」时,审计里那句话是唯一答案。
    */
-  const js = stripJs(read('packageAdmin/pages/batches/batches.js'));
+  const js = stripJs(read('packageAdmin/components/batch-panel/index.js'));
   assert.match(js, /status=DRAFT&pageSize=1/, '户数没有从库里的草稿条数取');
   assert.ok(!/validRows/.test(js), '户数用了批次上可能过期的 validRows');
   assert.match(js, /showActionSheet[\s\S]{0,300}线下已/, '剔除没有问原因');
@@ -348,11 +348,11 @@ test('催缴:合计取后端全量口径,截断要说出来,发送结果如实�
    * ③ 提醒走微信订阅消息,业主没授权就收不到,界面必须明说,
    *   否则物业以为发过了、业主那边什么都没响。
    */
-  const js = stripJs(read('packageAdmin/pages/dun/dun.js'));
+  const js = stripJs(read('packageAdmin/components/arrears-panel/index.js'));
   assert.match(js, /total: d\.totalAmount/, '欠费合计不是取后端全量口径');
   assert.match(js, /truncated/, '列表截断没有告知');
   assert.match(js, /r\.queued/, '发送结果没有用后端的真实条数');
-  assert.ok(/没授权/.test(js) || /没授权/.test(read('packageAdmin/pages/dun/dun.wxml')), '没有说明订阅未授权收不到');
+  assert.ok(/没授权/.test(js) || /没授权/.test(read('packageAdmin/components/arrears-panel/index.wxml')), '没有说明订阅未授权收不到');
   assert.match(js, /admin\/arrears\/dun/, '没有调催缴接口');
 });
 
@@ -361,13 +361,50 @@ test('工单:受理要填处理人、办结要填回复——业主两样都看�
    * 「一键办结」留下的是一条没人看得懂的记录,业主只会再报一次。
    * 两个接口后端都要求非空,页面用可编辑弹窗提前挡住空输入。
    */
-  const js = stripJs(read('packageAdmin/pages/tickets/tickets.js'));
+  const js = stripJs(read('packageAdmin/components/ticket-panel/index.js'));
   assert.match(js, /tickets\/\$\{id\}\/process/, '没有受理接口');
   assert.match(js, /tickets\/\$\{id\}\/done/, '没有办结接口');
   assert.match(js, /editable: true/, '受理/办结没有可输入的弹窗');
   assert.match(js, /业主会看到/, '没有告知这些字业主可见');
   // 枚举文案必须取自 utils/labels(与后端枚举有守卫比对),页面不许自建映射
   assert.match(js, /require\('\.\.\/\.\.\/\.\.\/utils\/labels'\)/, '工单状态文案没有走 utils/labels');
+});
+
+test('欠费/报修/待发布:首页标签与独立页面共用同一个组件,不许各抄一份', () => {
+  /*
+   * 首页要在一屏内横向切「楼盘图 / 欠费 / 报修 / 待发布」,而这三块各有几十行逻辑。
+   * 把它们抄一份进首页就是「改一处漏一处」的开始 —— 这个仓库已经在
+   * 账单状态文案上栽过一次(列表页补了 REFUNDED,详情页漏了,业主看到英文)。
+   * 所以:实现只许有一份(组件),页面和首页都只是它的两个入口。
+   */
+  const PANELS = [
+    ['arrears-panel', 'pages/dun/dun'],
+    ['ticket-panel', 'pages/tickets/tickets'],
+    ['batch-panel', 'pages/batches/batches'],
+  ];
+  const app = JSON.parse(read('app.json'));
+  const homeJson = JSON.parse(read('packageAdmin/pages/home/home.json'));
+  const homeWxml = read('packageAdmin/pages/home/home.wxml').replace(/<!--[\s\S]*?-->/g, '');
+  for (const [comp, page] of PANELS) {
+    // 组件四件套齐全
+    for (const ext of ['.js', '.wxml', '.json', '.wxss']) {
+      assert.ok(
+        fs.existsSync(path.join(MP, `packageAdmin/components/${comp}/index${ext}`)),
+        `缺组件文件 ${comp}/index${ext}`,
+      );
+    }
+    // 独立页面只剩一层壳:不许再有自己的实现
+    const pageJs = stripJs(read(`${'packageAdmin/'}${page}.js`));
+    assert.ok(!/adminRequest\(/.test(pageJs), `${page} 又自己发请求了——实现应该只在 ${comp} 里`);
+    assert.match(read(`packageAdmin/${page}.wxml`), new RegExp(`<${comp}\\b`), `${page} 没有用 ${comp}`);
+    // 首页把同一个组件当标签用
+    assert.equal(homeJson.usingComponents[comp], `../../components/${comp}/index`, `首页没注册 ${comp}`);
+    assert.match(homeWxml, new RegExp(`<${comp}\\b`), `首页没有把 ${comp} 当标签用`);
+  }
+  // 组件只在被看着时才拉数据
+  const one = stripJs(read('packageAdmin/components/arrears-panel/index.js'));
+  assert.match(one, /observer\(on\)[\s\S]{0,80}this\.load\(\)/, '面板没有按 active 触发加载');
+  assert.ok(app.subpackages.some((x) => x.root === 'packageAdmin'), '分包不见了');
 });
 
 test('发公告:发布即可见,所以要确认受众;可撤回但要说清收不回', () => {

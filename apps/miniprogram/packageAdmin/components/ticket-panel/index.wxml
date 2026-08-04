@@ -1,0 +1,59 @@
+  <view wx:if="{{loading}}" class="adm-hint">加载中…</view>
+  <view wx:elif="{{loadError}}" class="adm-denied">
+    <view class="adm-denied-title">加载失败</view>
+    <view class="adm-denied-desc">请检查网络后重试</view>
+    <view class="adm-btn adm-retry" bindtap="load">重试</view>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{pending.length === 0 && processing.length === 0 && done.length === 0}}" class="adm-denied">
+      <view class="adm-denied-title">还没有报事报修</view>
+      <view class="adm-denied-desc">业主在小程序里提交后会出现在这里。</view>
+    </view>
+
+    <!-- 待受理:业主在等,放最上面 -->
+    <block wx:if="{{pending.length > 0}}">
+      <view class="adm-sec">待受理 {{pending.length}} 条(业主在等)</view>
+      <view class="t-card" wx:for="{{pending}}" wx:key="id">
+        <view class="t-head">
+          <view class="t-type">{{item.typeText}}</view>
+          <view class="t-house" data-id="{{item.houseId}}" bindtap="goHouse">{{item.houseName}} ›</view>
+        </view>
+        <view class="t-body">{{item.content}}</view>
+        <view class="t-at">{{item.at}}</view>
+        <view class="adm-btn t-btn {{busy === item.id ? 'adm-btn-busy' : ''}}" data-id="{{item.id}}" bindtap="accept">受理(填处理人)</view>
+      </view>
+    </block>
+
+    <!-- 处理中 -->
+    <block wx:if="{{processing.length > 0}}">
+      <view class="adm-sec">处理中 {{processing.length}} 条</view>
+      <view class="t-card" wx:for="{{processing}}" wx:key="id">
+        <view class="t-head">
+          <view class="t-type">{{item.typeText}}</view>
+          <view class="t-house" data-id="{{item.houseId}}" bindtap="goHouse">{{item.houseName}} ›</view>
+        </view>
+        <view class="t-body">{{item.content}}</view>
+        <view class="t-at">{{item.at}}<text wx:if="{{item.assignee}}"> · 处理人 {{item.assignee}}</text></view>
+        <view class="adm-btn adm-btn-gold t-btn {{busy === item.id ? 'adm-btn-busy' : ''}}" data-id="{{item.id}}" bindtap="finish">办结(填回复)</view>
+      </view>
+    </block>
+
+    <!-- 已办结:折叠,现场很少看 -->
+    <block wx:if="{{done.length > 0}}">
+      <view class="adm-sec" bindtap="toggleDone">
+        已办结 {{done.length}} 条
+        <text class="sec-act">{{showDone ? '收起' : '展开'}}</text>
+      </view>
+      <view wx:if="{{showDone}}" class="adm-card">
+        <view class="adm-row" wx:for="{{done}}" wx:key="id">
+          <view class="adm-row-main">
+            <view class="adm-row-title">{{item.typeText}} · {{item.houseName}}</view>
+            <view class="adm-row-sub">{{item.content}}</view>
+            <view wx:if="{{item.reply}}" class="adm-row-sub">回复:{{item.reply}}</view>
+          </view>
+          <view class="adm-pill adm-pill-ok">{{item.statusText}}</view>
+        </view>
+      </view>
+    </block>
+  </block>

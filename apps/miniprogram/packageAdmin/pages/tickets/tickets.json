@@ -3,5 +3,7 @@
   "navigationBarTitleText": "报事报修",
   "navigationBarBackgroundColor": "#f6f0e7",
   "navigationBarTextStyle": "black",
-  "usingComponents": {}
+  "usingComponents": {
+    "ticket-panel": "../../components/ticket-panel/index"
+  }
 }

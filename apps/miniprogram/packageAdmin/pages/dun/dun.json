@@ -3,5 +3,7 @@
   "navigationBarTitleText": "欠费与催缴",
   "navigationBarBackgroundColor": "#f6f0e7",
   "navigationBarTextStyle": "black",
-  "usingComponents": {}
+  "usingComponents": {
+    "arrears-panel": "../../components/arrears-panel/index"
+  }
 }

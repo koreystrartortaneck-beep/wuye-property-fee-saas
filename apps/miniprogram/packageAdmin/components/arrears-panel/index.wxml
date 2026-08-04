@@ -1,0 +1,62 @@
+  <view wx:if="{{loading}}" class="adm-hint">加载中…</view>
+  <view wx:elif="{{loadError}}" class="adm-denied">
+    <view class="adm-denied-title">加载失败</view>
+    <view class="adm-denied-desc">请检查网络后重试</view>
+    <view class="adm-btn adm-retry" bindtap="load">重试</view>
+  </view>
+
+  <block wx:else>
+    <view class="sum-card">
+      <view class="sum-num adm-num">¥{{total}}</view>
+      <view class="sum-lab">{{totalHouses}} 户欠费<text wx:if="{{overdueHouses > 0}}"> · 其中 {{overdueHouses}} 户已逾期</text></view>
+    </view>
+
+    <view class="f-strip">
+      <view
+        class="f-chip {{overdueDays === item.key ? 'f-on' : ''}}"
+        wx:for="{{filters}}"
+        wx:key="key"
+        data-k="{{item.key}}"
+        bindtap="pickFilter"
+      >{{item.label}}</view>
+      <view class="f-chip f-sort" bindtap="toggleSort">{{sort === 'days' ? '按欠得久' : '按欠得多'}} ⇅</view>
+    </view>
+
+    <view wx:if="{{rows.length === 0}}" class="adm-denied">
+      <view class="adm-denied-title">没有欠费</view>
+      <view class="adm-denied-desc">这个范围里所有户都缴清了。</view>
+    </view>
+
+    <block wx:else>
+      <view class="adm-sec">
+        欠费清单
+        <text class="sec-act" bindtap="toggleAll">{{allPicked ? '取消全选' : '全选'}}</text>
+      </view>
+      <view class="adm-card">
+        <view class="adm-row" wx:for="{{rows}}" wx:key="houseId">
+          <!-- checked 由 JS 预先算好:WXML 不支持函数调用,indexOf 在这里永远求不出值 -->
+          <view class="tick {{item.checked ? 'tick-on' : ''}}" data-id="{{item.houseId}}" bindtap="toggleRow">
+            {{item.checked ? '✓' : ''}}
+          </view>
+          <view class="adm-row-main" data-id="{{item.houseId}}" bindtap="goHouse">
+            <view class="adm-row-title">{{item.name}}<text wx:if="{{item.ownerName}}" class="own"> {{item.ownerName}}</text></view>
+            <view class="adm-row-sub">
+              欠 {{item.unpaidCount}} 笔
+              <text wx:if="{{item.overdueDays > 0}}" class="adm-danger"> · 逾期 {{item.overdueDays}} 天</text>
+              <text wx:else> · 未到期</text>
+            </view>
+          </view>
+          <view class="r-right">
+            <view class="adm-row-title adm-num">¥{{item.unpaidAmount}}</view>
+            <view wx:if="{{item.phone}}" class="adm-pill adm-pill-quiet r-call" data-phone="{{item.phone}}" bindtap="call">打电话</view>
+          </view>
+        </view>
+      </view>
+      <view wx:if="{{truncated}}" class="adm-hint adm-error">共 {{truncated}} 户欠费,这里只列出前 {{rows.length}} 户;要全量请在电脑后台导出。</view>
+      <view class="adm-hint">催缴的第一手段是打电话。下面这个按钮发的是微信订阅提醒,业主没授权就收不到。</view>
+
+      <view class="adm-btn act {{dunning ? 'adm-btn-busy' : ''}}" bindtap="dun">
+        {{picked.length > 0 ? '给选中的 ' + picked.length + ' 户发提醒' : '发提醒(先勾选)'}}
+      </view>
+    </block>
+  </block>

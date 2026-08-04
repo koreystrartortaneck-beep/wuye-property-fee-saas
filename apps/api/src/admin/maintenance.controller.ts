@@ -1,5 +1,5 @@
 import { Body, Controller, Injectable, Logger, Post, UseGuards } from '@nestjs/common';
-import { IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { ErrorCode } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
@@ -23,16 +23,11 @@ import { PrismaService } from '../prisma/prisma.service';
  *   · **先写审计再删**,且审计行挂在 communityId=null 上(否则它自己会被删掉)
  *   · 返回逐表删除条数,删了什么如实报出来
  *
- * 关于审计记录:应用层「审计不可删」这条保证仍然成立 —— AuditLog 上有
- * BEFORE DELETE 触发器,任何 SQL 删除都会被数据库拒掉。这个端点是唯一的例外:
- * 它会**临时摘掉触发器**、只删指定小区的审计行、然后立刻装回去并复验。
- * 而「删了多少条审计」这件事本身会永久写进审计 —— 链条断在哪里,链条自己记着。
+ * 关于审计记录:它在数据库层面不可删 —— AuditLog 上有 BEFORE DELETE 触发器,
+ * 而摘触发器是 DDL,Prisma 查询引擎走预处理协议根本执行不了(MySQL 1295)。
+ * 所以「审计不可删」在运行时是**硬**保证。真要清(比如上线前清测试小区),
+ * 只能提交一个带 id 的一次性清理迁移,经评审进 git。
  */
-
-const TRIGGERS = [
-  ['AuditLog_before_update_append_only', 'UPDATE', 'AuditLog is append-only: UPDATE is forbidden'],
-  ['AuditLog_before_delete_append_only', 'DELETE', 'AuditLog is append-only: DELETE is forbidden'],
-] as const;
 
 class PurgeDto {
   @IsIn(['HOUSE', 'COMMUNITY'])
@@ -47,11 +42,6 @@ class PurgeDto {
   @MaxLength(191)
   @IsNotEmpty()
   confirm!: string;
-
-  /** 小区专用:同意连它名下的审计记录一起销毁(唯一能突破「审计不可删」的开关) */
-  @IsOptional()
-  @IsBoolean()
-  purgeAuditLogs?: boolean;
 }
 
 @Injectable()
@@ -98,17 +88,29 @@ export class MaintenanceService {
       throw new BizException(ErrorCode.VALIDATION, `请原样输入房屋名称「${house.displayName}」以确认彻底删除`);
     }
 
+    /*
+     * 先把「牵着这套房的东西」收全,再删。两条边都要走:
+     *   · 支付:主账单指向它(billId),或经 PaymentBill 关联它(一单多账单)
+     *   · 退款:挂在这些支付上,**或者** Refund.billId 直接指向这些账单
+     * 2026-08-04 实测:只按支付找退款,PAY-001 删到最后一步被
+     * 「Bill 上的外键」挡回来 —— 库里有一笔退款是只经 billId 连着账单的。
+     * 报错只说 (`tenantId`),指不到是哪张表,所以这里把两条边都写清。
+     */
     const bills = await this.prisma.t.bill.findMany({ where: { houseId: house.id }, select: { id: true } });
     const billIds = bills.map((b) => b.id);
+    const bIn = billIds.length ? billIds : ['-'];
     const payments = await this.prisma.t.payment.findMany({
-      where: { OR: [{ billId: { in: billIds.length ? billIds : ['-'] } }, { paymentBills: { some: { billId: { in: billIds.length ? billIds : ['-'] } } } }] },
+      where: { OR: [{ billId: { in: bIn } }, { paymentBills: { some: { billId: { in: bIn } } } }] },
       select: { id: true },
     });
-    const paymentIds = [...new Set(payments.map((p) => p.id))];
-    const refunds = paymentIds.length
-      ? await this.prisma.t.refund.findMany({ where: { paymentId: { in: paymentIds } }, select: { id: true } })
-      : [];
+    let paymentIds = [...new Set(payments.map((p) => p.id))];
+    const refunds = await this.prisma.t.refund.findMany({
+      where: { OR: [{ paymentId: { in: paymentIds.length ? paymentIds : ['-'] } }, { billId: { in: bIn } }] },
+      select: { id: true, paymentId: true },
+    });
     const refundIds = refunds.map((r) => r.id);
+    // 经 billId 找到的退款,它挂的那笔支付也要一起删,否则支付还牵着账单
+    paymentIds = [...new Set([...paymentIds, ...refunds.map((r) => r.paymentId)])];
 
     /*
      * 整套删除必须在一个事务里。
@@ -172,14 +174,16 @@ export class MaintenanceService {
           where: { tenantId, OR: [{ paymentId: { in: ids(paymentIds) } }, { refundId: { in: ids(refundIds) } }] },
         }),
       );
-      await del('refund', () => tx.refund.deleteMany({ where: { tenantId, paymentId: { in: ids(paymentIds) } } }));
+      await del('refund', () => tx.refund.deleteMany({ where: { tenantId, id: { in: ids(refundIds) } } }));
       await del('paymentBill', () =>
         tx.paymentBill.deleteMany({ where: { OR: [{ paymentId: { in: ids(paymentIds) } }, { billId: { in: ids(billIds) } }] } }),
       );
       await del('notifyLog', () => tx.notifyLog.deleteMany({ where: { tenantId, billId: { in: ids(billIds) } } }));
       // Bill.paymentId 是唯一外键指向 Payment:先摘掉引用,才能删 Payment
       await tx.bill.updateMany({ where: { tenantId, id: { in: ids(billIds) } }, data: { paymentId: null } });
-      await del('payment', () => tx.payment.deleteMany({ where: { tenantId, id: { in: ids(paymentIds) } } }));
+      await del('payment', () =>
+        tx.payment.deleteMany({ where: { tenantId, OR: [{ id: { in: ids(paymentIds) } }, { billId: { in: ids(billIds) } }] } }),
+      );
       await del('bill', () => tx.bill.deleteMany({ where: { tenantId, houseId: house.id } }));
       await del('houseBinding', () => tx.houseBinding.deleteMany({ where: { tenantId, houseId: house.id } }));
       await del('houseContact', () => tx.houseContact.deleteMany({ where: { tenantId, houseId: house.id } }));
@@ -239,12 +243,25 @@ export class MaintenanceService {
       );
     }
 
+    /*
+     * 审计记录只能由迁移清除,运行时做不到 —— 而且这是好事。
+     *
+     * 2026-08-04 实测:想在运行时临时摘掉 AuditLog 的 append-only 触发器,
+     * MySQL 直接拒绝 1295「This command is not supported in the prepared
+     * statement protocol yet」。Prisma 查询引擎走预处理协议,DROP/CREATE
+     * TRIGGER 只有迁移引擎(文本协议)能执行。
+     *
+     * 也就是说「审计不可删」在运行时是**硬**保证:任何管理员、任何接口、
+     * 任何参数都破不了。要清只能提交一个带 id 的一次性清理迁移,经评审进 git ——
+     * 这比留一个能在线绕过它的开关好得多。所以这里不再假装能做,只说清出路。
+     */
     const auditCount = await this.prisma.t.auditLog.count({ where: { communityId: community.id } });
-    if (auditCount > 0 && !dto.purgeAuditLogs) {
+    if (auditCount > 0) {
       throw new BizException(
         ErrorCode.VALIDATION,
-        `「${community.name}」下还有审计记录 ${auditCount} 条。审计按设计不可删除;` +
-          '确实要连审计一起销毁,请显式带上 purgeAuditLogs=true —— 这件事本身会被永久记入审计。',
+        `「${community.name}」下还有审计记录 ${auditCount} 条。审计在数据库层面不可删除` +
+          '(AuditLog 上有 BEFORE DELETE 触发器,只有迁移能摘掉它)。' +
+          '要彻底清掉这个小区,需要提交一个专门的清理迁移。',
       );
     }
 
@@ -258,7 +275,7 @@ export class MaintenanceService {
       resourceType: 'Community',
       resourceId: community.id,
       reason: '彻底清除测试小区',
-      beforeSummary: { name: community.name, status: community.status, auditLogsDestroyed: auditCount },
+      beforeSummary: { name: community.name, status: community.status },
       afterSummary: { event: 'COMMUNITY_PURGE' },
     });
 
@@ -271,52 +288,12 @@ export class MaintenanceService {
     counts.reconciliationRun = (await this.prisma.t.reconciliationRun.deleteMany({ where: { communityId: community.id } })).count;
     counts.refundAttempt = (await this.prisma.t.refundAttempt.deleteMany({ where: { communityId: community.id } })).count;
 
-    if (auditCount > 0) {
-      counts.auditLog = await this.deleteAuditLogsWithTriggersOff(community.tenantId, community.id);
-    }
     await this.prisma.t.community.delete({ where: { id: community.id } });
 
     this.logger.warn(`彻底删除小区 ${community.name} by=${adminId} 明细=${JSON.stringify(counts)}`);
     return { purged: true, target: 'COMMUNITY', name: community.name, deleted: counts };
   }
 
-  /**
-   * 摘掉 AuditLog 的 append-only 触发器 → 删指定小区的审计行 → 立刻装回并复验。
-   *
-   * DDL 在 MySQL 里会隐式提交,所以这段**不可能**放进事务里。风险是进程在
-   * 「摘掉」与「装回」之间死掉,那时审计表会静默地变成可改可删 ——
-   * 所以装回放在 finally,并且装回之后必须去 information_schema 复查两个触发器
-   * 都在;查不到就抛错并打 error 日志,绝不让它静默通过。
-   */
-  private async deleteAuditLogsWithTriggersOff(tenantId: string, communityId: string): Promise<number> {
-    let deleted = 0;
-    try {
-      for (const [name] of TRIGGERS) {
-        await this.prisma.raw.$executeRawUnsafe(`DROP TRIGGER IF EXISTS \`${name}\``);
-      }
-      deleted = await this.prisma.raw.$executeRaw`
-        DELETE FROM \`AuditLog\` WHERE \`tenantId\` = ${tenantId} AND \`communityId\` = ${communityId}
-      `;
-    } finally {
-      for (const [name, event, message] of TRIGGERS) {
-        await this.prisma.raw.$executeRawUnsafe(
-          `CREATE TRIGGER \`${name}\` BEFORE ${event} ON \`AuditLog\` FOR EACH ROW ` +
-            `SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '${message}'`,
-        );
-      }
-      const rows = await this.prisma.raw.$queryRaw<Array<{ TRIGGER_NAME: string }>>`
-        SELECT TRIGGER_NAME FROM information_schema.TRIGGERS
-        WHERE EVENT_OBJECT_TABLE = 'AuditLog' AND TRIGGER_SCHEMA = DATABASE()
-      `;
-      const back = new Set(rows.map((r) => r.TRIGGER_NAME));
-      const missing = TRIGGERS.map(([n]) => n).filter((n) => !back.has(n));
-      if (missing.length > 0) {
-        this.logger.error(`审计触发器未能装回:${missing.join(', ')} —— 审计表目前可改可删,必须立即人工修复`);
-        throw new BizException(ErrorCode.INTERNAL, `审计触发器未能恢复(${missing.join(', ')}),请立即联系维护`);
-      }
-    }
-    return deleted;
-  }
 }
 
 @Controller('admin/maintenance')
