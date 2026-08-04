@@ -1,3 +1,4 @@
+const { createPoller } = require('../../utils/poller');
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
 const labels = require('../../utils/labels');
@@ -37,6 +38,30 @@ Page({
     this.setData({ nav: getApp().globalData.nav });
   },
 
+  onLoad() {
+    /*
+     * 退款在途要自己刷。
+     * 业主点了退款(或物业给他退了),最终状态由微信回调/查单裁决 ——
+     * 几秒到两分钟。不刷新,他看到的就一直是「退款中」,而钱可能已经到账了。
+     */
+    this._poller = createPoller({
+      // 轮询只重拉账单与合计:onShow 那一套(登录、房屋列表、科目筛选)每 3 秒跑一遍太重
+      load: async () => {
+        await this.reload();
+        await this.loadSummary();
+      },
+      isPending: () => (this.data.bills || []).some((b) => b.status === 'REFUNDING'),
+    });
+  },
+
+  onHide() {
+    if (this._poller) this._poller.stop();
+  },
+
+  onUnload() {
+    if (this._poller) this._poller.stop();
+  },
+
   async onShow() {
     const app = getApp();
     await app.loginReady;
@@ -58,6 +83,7 @@ Page({
     await this.loadFilters();
     await this.reload();
     await this.loadSummary();
+    if (this._poller) this._poller.kick();
   },
 
   /** 待缴合计以权威 summary 为准（不受当前分页影响） */

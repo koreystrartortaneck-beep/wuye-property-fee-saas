@@ -186,3 +186,10 @@
   margin-top: 18rpx;
   color: var(--danger, #c45656);
 }
+
+/* 头卡里的一行提示:退款在途等 */
+.hero-note {
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: rgba(253, 251, 247, 0.7);
+}

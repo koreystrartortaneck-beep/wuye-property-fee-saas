@@ -301,3 +301,42 @@ test('弹窗:文案不超 4 字,且被 Promise 包住的一律要接 fail', () =
   assert.deepStrictEqual(overLong, [], `弹窗按钮文案超过 4 字，微信会直接 fail：\n  ${overLong.join('\n  ')}`);
   assert.deepStrictEqual(noFail, [], `弹窗被 Promise 包住却没接 fail，失败即界面卡死：\n  ${noFail.join('\n  ')}`);
 });
+
+test('用了自动刷新的页面必须在离开时停掉定时器', () => {
+  /*
+   * 2026-08-04 用户提出:退款/支付完成后页面该自己刷新 —— 因为退款的最终状态
+   * 由微信回调或查单裁决(几秒到两分钟),不刷新就一直显示「退款中」,
+   * 而库里早已 REFUNDED(实测那笔 ¥17 就是这样)。
+   *
+   * 但短轮询有它自己的坑:小程序不会替你清定时器。页面隐藏/卸载不停,
+   * 它就在后台继续发请求 —— 用户翻到别处、甚至退出小程序之前都在烧流量,
+   * 而这类泄漏没有任何报错。所以凡是 createPoller 的地方,
+   * onHide 与 onUnload 都必须 stop()。
+   */
+  const offenders = [];
+  const isPollerItself = (p) => path.basename(p) === 'poller.js';
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name.startsWith('.') || e.name === 'node_modules') continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        walk(p);
+        continue;
+      }
+      if (!e.name.endsWith('.js')) continue;
+      const src = fs.readFileSync(p, 'utf8');
+      // 跳过 poller 自己:它是定义方,不是使用方
+      if (isPollerItself(p) || !src.includes('createPoller(')) continue;
+      const rel = path.relative(MP, p);
+      // 组件用 detached / 页面用 onUnload;隐藏时也必须停
+      const hasStopOnLeave = /onUnload\(\)\s*\{[\s\S]{0,200}?\.stop\(\)/.test(src) || /detached\(\)\s*\{[\s\S]{0,200}?\.stop\(\)/.test(src);
+      const hasStopOnHide = /onHide\(\)\s*\{[\s\S]{0,200}?\.stop\(\)/.test(src);
+      if (!hasStopOnLeave) offenders.push(`${rel} → 卸载时没有 stop()`);
+      if (!hasStopOnHide) offenders.push(`${rel} → 隐藏时没有 stop()`);
+      // 拉完数据必须 kick 一次,否则轮询永远不会开始
+      if (!src.includes('.kick()')) offenders.push(`${rel} → 从不调用 kick(),自动刷新根本不会启动`);
+    }
+  };
+  walk(MP);
+  assert.deepStrictEqual(offenders, [], `自动刷新的定时器没收干净：\n  ${offenders.join('\n  ')}`);
+});

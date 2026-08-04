@@ -1,6 +1,7 @@
 const { adminRequest } = require('../../../utils/admin');
 // 枚举文案一律取自 utils/labels(与后端枚举有守卫逐项比对),页面不自建映射
 const { BILL_STATUS, label, periodLabel } = require('../../../utils/labels');
+const { createPoller } = require('../../../utils/poller');
 
 /*
  * 房屋详情 —— 管理端的核心一屏:这套房的一切,以及现场要做的动作。
@@ -35,6 +36,9 @@ Page({
     house: null,
     summary: null,
     bills: [],
+    payments: [],
+    /** 退款在途的笔数:汇总里待缴/已缴都不含它,不单独说就看不见 */
+    refunding: 0,
     contacts: [],
     /** 收费标准挂接 */
     standards: [],
@@ -55,10 +59,31 @@ Page({
 
   onLoad(query) {
     this.setData({ id: query.id });
+    /*
+     * 退款/支付的最终状态由微信回调或查单裁决,几秒到两分钟才落地。
+     * 不自动刷新的话,人看到的是「退款中」而库里早已 REFUNDED(实测踩过)。
+     * onShow 救不了 —— 他根本没离开这一页。
+     */
+    this._poller = createPoller({
+      load: () => this.load(),
+      isPending: () =>
+        (this.data.bills || []).some((b) => b.status === 'REFUNDING') ||
+        (this.data.payments || []).some((p) => p.status === 'CREATED' || p.status === 'PREPAY_UNKNOWN'),
+      onGiveUp: () =>
+        wx.showToast({ title: '状态还没落地,可在电脑后台查支付溯源', icon: 'none', duration: 3000 }),
+    });
   },
 
   onShow() {
     void this.load();
+  },
+
+  onHide() {
+    this._poller.stop();
+  },
+
+  onUnload() {
+    this._poller.stop();
   },
 
   async load() {
@@ -78,9 +103,16 @@ Page({
         ? String(standards.house.handoverDate).slice(0, 10)
         : '') || profile.house.handoverDate || '';
       const house = { ...profile.house, handoverDate: anchor };
+      /*
+       * 「退款中」必须单独露出来。
+       * 汇总只统计待缴与已缴(与欠费清单同口径),于是一笔退款在途时两个大字都是
+       * ¥0.00 —— 页面看着像一套没有任何账的房,而下面明明列着一笔 ¥17。
+       */
+      const refunding = (profile.bills || []).filter((b) => b.status === 'REFUNDING');
       this.setData({
         house,
         summary: profile.summary,
+        refunding: refunding.length,
         billMonthText: anchor ? `每年 ${MONTH[Number(anchor.slice(5, 7))]}出账` : '没填放户日期,出不了账',
         /*
          * 每笔账单带上它对应的支付订单号与通道 —— 这一页要能直接动钱:
@@ -102,6 +134,7 @@ Page({
             canReverse: b.status === 'PAID' && pay && pay.channel === 'OFFLINE' && pay.status === 'SUCCESS',
           };
         }),
+        payments: profile.payments || [],
         contacts: contacts.items || [],
         standards: (standards.items || [])
           .filter((s) => s.status === 'ACTIVE')
@@ -123,6 +156,8 @@ Page({
       this.setData({ loadError: true });
     } finally {
       this.setData({ loading: false });
+      // 有钱在路上(退款中 / 支付未终结)就自己转起来,变完自动停
+      this._poller.kick();
     }
   },
 

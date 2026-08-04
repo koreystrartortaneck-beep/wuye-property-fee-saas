@@ -390,14 +390,61 @@ export class HousesService {
       ...dto,
       ...(dto.handoverDate ? { handoverDate: new Date(`${dto.handoverDate}T00:00:00Z`) } : {}),
     };
-    if (dto.ownerPhone === undefined) {
-      return this.prisma.t.house.update({ where: { id }, data: data as Prisma.HouseUpdateInput });
-    }
-    const house = await this.prisma.t.house.findFirst({
+
+    /*
+     * 改房屋必须留审计 —— 这里原来一条都不写。
+     *
+     * 2026-08-04 实测:一套房的 displayName 被改成了「03-13」,而我翻遍审计
+     * 一条 House 的 UPDATE 都找不到 —— 无从判断是界面写错了、还是人手打的。
+     * 而这一页能改的两个字段(面积、放户日期)直接决定账单金额与出账月份:
+     * 「这户为什么突然多收了 500」只能靠这段历史回答。
+     */
+    const before = await this.prisma.t.house.findFirst({
       where: { id },
-      select: { id: true, tenantId: true, communityId: true, code: true, ownerPhone: true },
+      select: {
+        id: true, tenantId: true, communityId: true, code: true,
+        displayName: true, area: true, handoverDate: true, status: true, ownerName: true, ownerPhone: true,
+      },
     });
-    if (!house) throw new BizException(ErrorCode.NOT_FOUND, '房屋不存在或不属于当前物业公司');
+    if (!before) throw new BizException(ErrorCode.NOT_FOUND, '房屋不存在或不属于当前物业公司');
+    // 只记真变了的字段:全字段回写会让审计里堆满假变更,真正改过面积那一次就淹了
+    const changed: Record<string, { from: unknown; to: unknown }> = {};
+    const norm = (v: unknown) =>
+      v === null || v === undefined ? null : v instanceof Date ? v.toISOString().slice(0, 10) : String(v);
+    for (const key of ['displayName', 'area', 'handoverDate', 'status', 'ownerName'] as const) {
+      if (dto[key] === undefined) continue;
+      const from = norm((before as Record<string, unknown>)[key]);
+      const to = norm(key === 'handoverDate' ? dto.handoverDate : dto[key]);
+      if (from !== to) changed[key] = { from, to };
+    }
+    // 手机号只记「改了没」,不进审计正文 —— 审计脱敏会把号码打码,记了也没用
+    if (dto.ownerPhone !== undefined && (dto.ownerPhone ?? null) !== (before.ownerPhone ?? null)) {
+      changed.ownerPhoneChanged = { from: !!before.ownerPhone, to: !!dto.ownerPhone };
+    }
+    const writeAudit = async (tx?: Parameters<typeof this.audit.append>[1]) => {
+      if (Object.keys(changed).length === 0) return;
+      await this.audit.append(
+        {
+          tenantId: before.tenantId,
+          communityId: before.communityId,
+          actorType: 'ADMIN',
+          actorId: adminId,
+          action: 'UPDATE',
+          resourceType: 'House',
+          resourceId: id,
+          beforeSummary: { code: before.code, changed },
+          afterSummary: { event: 'HOUSE_UPDATE', fields: Object.keys(changed) },
+        },
+        tx,
+      );
+    };
+
+    if (dto.ownerPhone === undefined) {
+      const updated = await this.prisma.t.house.update({ where: { id }, data: data as Prisma.HouseUpdateInput });
+      await writeAudit();
+      return updated;
+    }
+    const house = before;
 
     const newPhone = dto.ownerPhone ? normalizePhone(dto.ownerPhone) : null;
     if (newPhone) this.bindingSync.assertMobile(newPhone);
@@ -411,7 +458,12 @@ export class HousesService {
       if (newPhone && newPhone !== oldPhone) {
         await this.bindingSync.grantContact(tx, house, newPhone, dto.ownerName ?? null, 'ADMIN', actor);
       }
-      return tx.house.update({ where: { id }, data: { ...data, ownerPhone: newPhone } as Prisma.HouseUpdateInput });
+      const updated = await tx.house.update({
+        where: { id },
+        data: { ...data, ownerPhone: newPhone } as Prisma.HouseUpdateInput,
+      });
+      await writeAudit(tx);
+      return updated;
     });
   }
 

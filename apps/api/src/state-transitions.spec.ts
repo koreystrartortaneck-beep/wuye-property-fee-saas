@@ -22,6 +22,10 @@ const SRC = __dirname;
 
 /** 显式豁免：键是 `相对路径:方法名`，值是理由（会被断言要求非空） */
 const EXEMPT: Record<string, string> = {
+  'admin/houses.controller.ts:update':
+    '先读一次只为算审计差异(哪个字段从什么改成什么),写的是绝对值而不是状态流转;' +
+    '两名管理员同时改同一套房仍是后写覆盖前写 —— 这一点在加审计之前就是如此,' +
+    '而现在至少两次修改都留下了痕迹,「谁把面积改了」查得出来',
   'admin/admin-auth.controller.ts:login':
     '更新的是 lastLoginAt/失败计数，不是状态机；并发重复写同一个时间戳无害',
   'billing/meter.controller.ts:createReading':

@@ -1,6 +1,7 @@
 const { request } = require('../../utils/request');
 const labels = require('../../utils/labels');
 const { fmtDate, fmtDateTime } = require('../../utils/datetime');
+const { createPoller } = require('../../utils/poller');
 const STATUS_LABEL = labels.BILL_STATUS;
 const METER_LABEL = labels.METER_TYPE;
 const SHARE_LABEL = labels.SHARE_BY;
@@ -17,7 +18,28 @@ Page({
 
   onLoad(options) {
     this.id = options.id;
+    /*
+     * 退款在途要自己刷:最终状态由微信回调/查单裁决,几秒到两分钟。
+     * 不刷新,业主盯着这一页看到的一直是「退款中」,而钱可能早退到了。
+     */
+    this._poller = createPoller({
+      load: () => this.load(),
+      isPending: () => !!this.data.bill && this.data.bill.status === 'REFUNDING',
+    });
     this.load();
+  },
+
+  onShow() {
+    // 从缴费页返回时状态可能已变
+    if (this.data.bill) void this.load();
+  },
+
+  onHide() {
+    this._poller.stop();
+  },
+
+  onUnload() {
+    this._poller.stop();
   },
 
   retry() {
@@ -35,6 +57,7 @@ Page({
       const b = await request(`/owner/bills/${this.id}`, { silent: true });
       this.render(b);
       this.setData({ loading: false, error: false });
+      this._poller.kick();
     } catch (e) {
       this.setData({ loading: false, error: true });
     }
