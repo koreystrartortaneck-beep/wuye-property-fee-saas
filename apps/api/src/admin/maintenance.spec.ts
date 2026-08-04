@@ -63,6 +63,10 @@ function makePrisma(opts: {
         return 0;
       }),
       $executeRaw: jest.fn(async () => opts.auditCount ?? 0),
+      // 事务桩:tx 就是同一批表(外加不受租户约束的 paymentBill),回调直接执行
+      $transaction: jest.fn(async (cb: (tx: unknown) => unknown) =>
+        cb({ ...t, paymentBill: { deleteMany: jest.fn(async () => zero) } }),
+      ),
       $queryRaw: jest.fn(async () =>
         (opts.triggersBack ?? [
           'AuditLog_before_update_append_only',
@@ -101,6 +105,8 @@ describe('彻底删除房屋', () => {
     expect(r).toMatchObject({ purged: true, code: 'T-001' });
     expect(audit.rows).toHaveLength(1);
     expect(audit.rows[0]).toMatchObject({ action: 'DELETE', resourceType: 'House', communityId: null });
+    // 审计必须写在同一个事务里:回滚了就不该留下一行「已销毁」
+    expect(prisma.raw.$transaction).toHaveBeenCalled();
     expect(JSON.stringify(audit.rows[0].afterSummary)).toContain('HOUSE_PURGE');
     expect(prisma.t.house.delete).toHaveBeenCalled();
   });
@@ -122,6 +128,19 @@ describe('彻底删除房屋', () => {
     const order = (m: string) =>
       (prisma.t[m].deleteMany as jest.Mock).mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER;
     expect(order('reconciliationItem')).toBeLessThan(order('payment'));
+  });
+
+  it('删除必须在一个事务里——半残的房屋比删失败严重得多', async () => {
+    /*
+     * 实测事故:漏了一张外键表,最后一步被数据库挡回来,而前面十几步已各自提交 ——
+     * 结果是「退款和发票没了、房和账单还在」。人看到的是失败,库里已经少了东西。
+     */
+    const { prisma } = makePrisma({});
+    await svc(prisma, makeAudit()).purge({ target: 'HOUSE', id: 'h1', confirm: '测试房 001' } as never, 'admin-1');
+    expect(prisma.raw.$transaction).toHaveBeenCalledTimes(1);
+    // 事务外不许有删除:所有 deleteMany 都必须发生在回调里(桩把 tx 指向同一批表)
+    const opts = (prisma.raw.$transaction as jest.Mock).mock.calls[0][1];
+    expect(opts).toMatchObject({ timeout: 30_000 });
   });
 
   it('房屋不存在 → NOT_FOUND,不是静默成功', async () => {

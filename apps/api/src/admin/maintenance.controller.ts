@@ -95,80 +95,85 @@ export class MaintenanceService {
       : [];
     const refundIds = refunds.map((r) => r.id);
 
-    const counts: Record<string, number> = {};
-    const del = async (label: string, fn: () => Promise<{ count: number }>) => {
-      counts[label] = (await fn()).count;
-    };
-
-    // 先记账再动手:删完就查不出来了
-    await this.audit.append({
-      tenantId: house.tenantId,
-      // 挂 null:否则这行审计会随着「彻底删小区」一起被清掉,那就等于没记
-      communityId: null,
-      actorType: 'ADMIN',
-      actorId: adminId,
-      action: 'DELETE',
-      resourceType: 'House',
-      resourceId: house.id,
-      reason: '彻底清除测试数据',
-      beforeSummary: {
-        code: house.code,
-        displayName: house.displayName,
-        communityId: house.communityId,
-        bills: billIds.length,
-        payments: paymentIds.length,
-        refunds: refundIds.length,
-      },
-      afterSummary: { event: 'HOUSE_PURGE' },
-    });
-
     /*
-     * 删除顺序按外键从叶到根。顺序错了会被数据库拒掉(那是安全的失败),
-     * 但每加一张新表都要想到这里 —— 所以逐张写清,不用「聪明」的循环。
+     * 整套删除必须在一个事务里。
+     *
+     * 2026-08-04 实测的教训:第一次清 PAY-001 时漏了对账明细那张表,
+     * 外键在最后一步把 DELETE 挡回来 —— 而前面十几步已经各自提交了。
+     * 结果是一套「退款和发票没了、房和账单还在」的半残房屋,
+     * 比删失败严重得多:人看到的是失败,库里却已经少了东西。
+     *
+     * 事务里必须用 prisma.raw + 显式 tenantId:tx 上没有租户扩展,
+     * 少写一个 tenantId 就是跨租户删除。所以每个 where 都带着它。
      */
-    if (refundIds.length) {
-      await del('refundAttempt', () => this.prisma.t.refundAttempt.deleteMany({ where: { refundId: { in: refundIds } } }));
-    }
-    if (paymentIds.length || refundIds.length) {
-      await del('paymentEvent', () =>
-        this.prisma.t.paymentEvent.deleteMany({
-          where: { OR: [{ paymentId: { in: paymentIds } }, { refundId: { in: refundIds } }] },
-        }),
+    const counts: Record<string, number> = {};
+    const tenantId = house.tenantId;
+    const ids = <T,>(a: T[]) => (a.length ? a : ([('-' as unknown) as T]));
+
+    await this.prisma.raw.$transaction(async (tx) => {
+      const del = async (label: string, fn: () => Promise<{ count: number }>) => {
+        counts[label] = (await fn()).count;
+      };
+
+      // 先记账,和删除同生共死:事务回滚了,这行「已销毁」也不该留下
+      await this.audit.append(
+        {
+          tenantId,
+          // 挂 null:否则这行审计会随着「彻底删小区」一起被清掉,那就等于没记
+          communityId: null,
+          actorType: 'ADMIN',
+          actorId: adminId,
+          action: 'DELETE',
+          resourceType: 'House',
+          resourceId: house.id,
+          reason: '彻底清除测试数据',
+          beforeSummary: {
+            code: house.code,
+            displayName: house.displayName,
+            communityId: house.communityId,
+            bills: billIds.length,
+            payments: paymentIds.length,
+            refunds: refundIds.length,
+          },
+          afterSummary: { event: 'HOUSE_PURGE' },
+        },
+        tx,
       );
-    }
-    if (paymentIds.length) {
-      await del('invoiceApplication', () => this.prisma.t.invoiceApplication.deleteMany({ where: { paymentId: { in: paymentIds } } }));
+
       /*
-       * 对账明细也指向支付与退款(每日对账把每笔订单都记了一行)。
-       * 2026-08-04 实测:漏了这一张,清 PAY-001(15 笔缴费、跑过 6 次对账)时
-       * 外键把删除挡了回来,而错误信息是「关联的数据不存在或已被删除」——
-       * 完全看不出是哪张表。所以这里逐张写清,而且顺序在 refund/payment 之前。
+       * 删除顺序按外键从叶到根。逐张写清,不用「聪明」的循环 ——
+       * 以后每加一张指向账单/支付的表,都要能在这里看见它。
        */
-      await del('reconciliationItem', () =>
-        this.prisma.t.reconciliationItem.deleteMany({
-          where: { OR: [{ paymentId: { in: paymentIds } }, { refundId: { in: refundIds.length ? refundIds : ['-'] } }] },
+      await del('refundAttempt', () => tx.refundAttempt.deleteMany({ where: { tenantId, refundId: { in: ids(refundIds) } } }));
+      await del('paymentEvent', () =>
+        tx.paymentEvent.deleteMany({
+          where: { tenantId, OR: [{ paymentId: { in: ids(paymentIds) } }, { refundId: { in: ids(refundIds) } }] },
         }),
       );
-      await del('refund', () => this.prisma.t.refund.deleteMany({ where: { paymentId: { in: paymentIds } } }));
-      await del('paymentBill', () => this.prisma.raw.paymentBill.deleteMany({ where: { paymentId: { in: paymentIds } } }));
-    }
-    if (billIds.length) {
-      await del('paymentBillByBill', () => this.prisma.raw.paymentBill.deleteMany({ where: { billId: { in: billIds } } }));
-      await del('notifyLog', () => this.prisma.t.notifyLog.deleteMany({ where: { billId: { in: billIds } } }));
+      await del('invoiceApplication', () => tx.invoiceApplication.deleteMany({ where: { tenantId, paymentId: { in: ids(paymentIds) } } }));
+      // 对账明细也指向支付与退款(每日对账把每笔订单都记一行)——漏了它就是上面那次事故
+      await del('reconciliationItem', () =>
+        tx.reconciliationItem.deleteMany({
+          where: { tenantId, OR: [{ paymentId: { in: ids(paymentIds) } }, { refundId: { in: ids(refundIds) } }] },
+        }),
+      );
+      await del('refund', () => tx.refund.deleteMany({ where: { tenantId, paymentId: { in: ids(paymentIds) } } }));
+      await del('paymentBill', () =>
+        tx.paymentBill.deleteMany({ where: { OR: [{ paymentId: { in: ids(paymentIds) } }, { billId: { in: ids(billIds) } }] } }),
+      );
+      await del('notifyLog', () => tx.notifyLog.deleteMany({ where: { tenantId, billId: { in: ids(billIds) } } }));
       // Bill.paymentId 是唯一外键指向 Payment:先摘掉引用,才能删 Payment
-      await this.prisma.t.bill.updateMany({ where: { id: { in: billIds } }, data: { paymentId: null } });
-    }
-    if (paymentIds.length) {
-      await del('payment', () => this.prisma.t.payment.deleteMany({ where: { id: { in: paymentIds } } }));
-    }
-    await del('bill', () => this.prisma.t.bill.deleteMany({ where: { houseId: house.id } }));
-    await del('houseBinding', () => this.prisma.t.houseBinding.deleteMany({ where: { houseId: house.id } }));
-    await del('houseContact', () => this.prisma.t.houseContact.deleteMany({ where: { houseId: house.id } }));
-    await del('houseStandard', () => this.prisma.t.houseStandard.deleteMany({ where: { houseId: house.id } }));
-    await del('ticket', () => this.prisma.t.ticket.deleteMany({ where: { houseId: house.id } }));
-    await del('visitorPass', () => this.prisma.t.visitorPass.deleteMany({ where: { houseId: house.id } }));
-    await del('serviceOrder', () => this.prisma.t.serviceOrder.deleteMany({ where: { houseId: house.id } }));
-    await this.prisma.t.house.delete({ where: { id: house.id } });
+      await tx.bill.updateMany({ where: { tenantId, id: { in: ids(billIds) } }, data: { paymentId: null } });
+      await del('payment', () => tx.payment.deleteMany({ where: { tenantId, id: { in: ids(paymentIds) } } }));
+      await del('bill', () => tx.bill.deleteMany({ where: { tenantId, houseId: house.id } }));
+      await del('houseBinding', () => tx.houseBinding.deleteMany({ where: { tenantId, houseId: house.id } }));
+      await del('houseContact', () => tx.houseContact.deleteMany({ where: { tenantId, houseId: house.id } }));
+      await del('houseStandard', () => tx.houseStandard.deleteMany({ where: { tenantId, houseId: house.id } }));
+      await del('ticket', () => tx.ticket.deleteMany({ where: { tenantId, houseId: house.id } }));
+      await del('visitorPass', () => tx.visitorPass.deleteMany({ where: { tenantId, houseId: house.id } }));
+      await del('serviceOrder', () => tx.serviceOrder.deleteMany({ where: { tenantId, houseId: house.id } }));
+      await tx.house.delete({ where: { id: house.id } });
+    }, { timeout: 30_000 });
 
     this.logger.warn(`彻底删除房屋 ${house.code}(${house.displayName}) by=${adminId} 明细=${JSON.stringify(counts)}`);
     return { purged: true, target: 'HOUSE', code: house.code, displayName: house.displayName, deleted: counts };
