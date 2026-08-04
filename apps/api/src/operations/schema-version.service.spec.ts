@@ -12,10 +12,16 @@ import { SchemaVersionService } from './schema-version.service';
  */
 type Row = { migration_name: string; finished_at: Date | null };
 
-function makeService(rows: Row[] | Error, inImage: string[]) {
+const BOTH_TRIGGERS = ['AuditLog_before_update_append_only', 'AuditLog_before_delete_append_only'];
+
+function makeService(rows: Row[] | Error, inImage: string[], triggers: string[] = BOTH_TRIGGERS) {
   const prisma = {
     raw: {
-      $queryRawUnsafe: jest.fn(async () => {
+      // 按 SQL 分派:同一个方法既查迁移表也查触发器,一律返回迁移行会让触发器判定失真
+      $queryRawUnsafe: jest.fn(async (sql: string) => {
+        if (sql.includes('information_schema.TRIGGERS')) {
+          return triggers.map((TRIGGER_NAME) => ({ TRIGGER_NAME }));
+        }
         if (rows instanceof Error) throw rows;
         return rows;
       }),
@@ -73,5 +79,31 @@ describe('迁移状态自述', () => {
     expect(info.detail).toContain('读不到');
     // 不能再输出「已应用至 …」那种确定语气
     expect(info.detail).not.toContain('已应用至');
+  });
+});
+
+/*
+ * 审计表的 append-only 触发器缺失是**静默**的:没有任何报错,
+ * 任何 UPDATE/DELETE 都会照常成功。2026-08-04 的事故就是一个清理迁移
+ * 在「摘掉」与「装回」之间失败了 —— 就绪检查不说,就没有任何地方会说。
+ */
+describe('审计 append-only 触发器', () => {
+  it('两个都在 → ok,并把名字如实列出来', async () => {
+    const info = await makeService([done('a_1')], ['a_1']).info();
+    expect(info.ok).toBe(true);
+    expect(info.auditTriggers).toEqual([...BOTH_TRIGGERS].sort());
+  });
+
+  it('少一个 → 不 ok,并明说「审计记录目前可改可删」', async () => {
+    const info = await makeService([done('a_1')], ['a_1'], ['AuditLog_before_update_append_only']).info();
+    expect(info.ok).toBe(false);
+    expect(info.detail).toContain('AuditLog_before_delete_append_only');
+    expect(info.detail).toContain('可改可删');
+  });
+
+  it('两个都没了 → 不 ok', async () => {
+    const info = await makeService([done('a_1')], ['a_1'], []).info();
+    expect(info.ok).toBe(false);
+    expect(info.auditTriggers).toEqual([]);
   });
 });

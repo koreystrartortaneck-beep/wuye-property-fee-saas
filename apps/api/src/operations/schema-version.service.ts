@@ -24,6 +24,15 @@ export interface SchemaVersionInfo {
   pendingCount: number;
   /** 应用失败（有 started_at 无 finished_at）的迁移名 */
   failed: string[];
+  /*
+   * AuditLog 的 append-only 触发器还在不在。
+   *
+   * 2026-08-04 的事故让这一项成为必查：一个清理迁移在「摘掉触发器」和
+   * 「装回触发器」之间失败了，而**审计表失去保护是完全静默的** ——
+   * 没有任何报错，任何 UPDATE/DELETE 都会照常成功。就绪检查必须能回答
+   * 「那两个触发器现在在不在」，否则这套系统最核心的防篡改保证无人守着。
+   */
+  auditTriggers: string[];
   ok: boolean;
   detail: string;
 }
@@ -63,6 +72,17 @@ export class SchemaVersionService {
     const inImage = this.migrationsInImage();
     const latestInImage = inImage.length > 0 ? inImage[inImage.length - 1] : null;
 
+    // 触发器读不到不影响其它判断,单独兜住
+    let auditTriggers: string[] = [];
+    try {
+      const trs = await this.prisma.raw.$queryRawUnsafe<Array<{ TRIGGER_NAME: string }>>(
+        "SELECT TRIGGER_NAME FROM information_schema.TRIGGERS WHERE EVENT_OBJECT_TABLE = 'AuditLog' AND TRIGGER_SCHEMA = DATABASE()",
+      );
+      auditTriggers = trs.map((t) => t.TRIGGER_NAME).sort();
+    } catch (error) {
+      this.logger.warn(`读取审计触发器失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+
     let rows: MigrationRow[] = [];
     try {
       rows = await this.prisma.raw.$queryRawUnsafe<MigrationRow[]>(
@@ -77,6 +97,7 @@ export class SchemaVersionService {
         latestApplied: null,
         pendingCount: inImage.length,
         failed: [],
+        auditTriggers,
         ok: false,
         detail: `无法读取迁移记录：${message.slice(0, 120)}`,
       };
@@ -104,12 +125,19 @@ export class SchemaVersionService {
         latestApplied: applied.length > 0 ? applied[applied.length - 1] : null,
         pendingCount: 0,
         failed,
+        auditTriggers,
         ok: false,
         detail: '读不到镜像内的迁移目录，无法判断是否有未应用的迁移（数据库中已记录 ' + applied.length + ' 个）',
       };
     }
 
-    const ok = failed.length === 0 && pending.length === 0;
+    /*
+     * 触发器缺失也算不就绪。审计表失去保护是静默的 —— 不在这里说出来,
+     * 就没有任何地方会说。
+     */
+    const REQUIRED_TRIGGERS = ['AuditLog_before_delete_append_only', 'AuditLog_before_update_append_only'];
+    const missingTriggers = REQUIRED_TRIGGERS.filter((t) => !auditTriggers.includes(t));
+    const ok = failed.length === 0 && pending.length === 0 && missingTriggers.length === 0;
     let detail: string;
     if (failed.length > 0) {
       detail = `有 ${failed.length} 个迁移应用失败：${failed.join('、')}`;
@@ -119,6 +147,9 @@ export class SchemaVersionService {
       detail = `已应用至 ${latestApplied ?? '（无迁移）'}，共 ${applied.length} 个`;
     }
 
-    return { latestInImage, latestApplied, pendingCount: pending.length, failed, ok, detail };
+    if (missingTriggers.length > 0) {
+      detail = `审计表缺少 append-only 触发器：${missingTriggers.join('、')} —— 审计记录目前可改可删,必须立即修复。` + detail;
+    }
+    return { latestInImage, latestApplied, pendingCount: pending.length, failed, auditTriggers, ok, detail };
   }
 }

@@ -30,4 +30,11 @@ COPY --from=build /app ./
 WORKDIR /app/apps/api
 EXPOSE 3000
 # 启动前自动执行未应用的迁移（幂等）
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/apps/api/src/main.js"]
+#
+# 中间那句 resolve 是一次性的恢复措施：20260804020000 在 2026-08-04 的部署里失败过，
+# Prisma 会把它记成 failed，此后 migrate deploy 一律返回 P3009 并停下 ——
+# 新容器起不来（老容器继续服务，业务不断，但**任何部署都发不出去**）。
+# `resolve --rolled-back` 把它标回未应用，deploy 就会重放修好的那版 SQL。
+# `|| true`：已经恢复之后再执行会报错，不能让它挡住启动。
+# 恢复确认后应当删掉这一行 —— 它不该长期留在启动路径上。
+CMD ["sh", "-c", "npx prisma migrate resolve --rolled-back 20260804020000_purge_test_communities || true; npx prisma migrate deploy && node dist/apps/api/src/main.js"]
