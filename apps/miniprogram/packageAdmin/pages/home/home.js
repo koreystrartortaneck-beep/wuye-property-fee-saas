@@ -153,6 +153,10 @@ Page({
     wx.navigateTo({ url: '/packageAdmin/pages/dun/dun' });
   },
 
+  goNewHouse() {
+    wx.navigateTo({ url: `/packageAdmin/pages/house-new/house-new?communityId=${this.data.communityId}` });
+  },
+
   goTickets() {
     wx.navigateTo({ url: '/packageAdmin/pages/tickets/tickets' });
   },

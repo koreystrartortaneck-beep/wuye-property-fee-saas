@@ -79,7 +79,8 @@
         "pages/batches/batches",
         "pages/collect/collect",
         "pages/dun/dun",
-        "pages/tickets/tickets"
+        "pages/tickets/tickets",
+        "pages/house-new/house-new"
       ]
     }
   ]

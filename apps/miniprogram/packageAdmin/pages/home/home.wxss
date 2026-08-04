@@ -204,3 +204,17 @@
   font-weight: 800;
   color: #b23f3f;
 }
+
+/* 新增房屋:虚线,和楼盘图排在一起 */
+.add-house {
+  margin-top: 18rpx;
+  height: 92rpx;
+  border-radius: 24rpx;
+  border: 2rpx dashed rgba(184, 134, 47, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  font-weight: 800;
+  color: var(--gold-deep, #b8862f);
+}

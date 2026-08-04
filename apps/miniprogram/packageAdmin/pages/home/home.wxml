@@ -97,6 +97,7 @@
         </view>
       </view>
       <view wx:if="{{units.length > 0}}" class="adm-hint">点房间 = 进这一户:改面积/放户日期、换住户手机号、只给这一户发账单</view>
+      <view wx:if="{{communityId}}" class="add-house" bindtap="goNewHouse">＋ 新增房屋</view>
 
       <!-- 批量动作:一屏一个主动作(发账单),其余用素色 -->
       <view class="quick" wx:if="{{buildings.length > 0}}">

@@ -64,7 +64,22 @@ export class MaintenanceService {
   ) {}
 
   async purge(dto: PurgeDto, adminId: string) {
-    return dto.target === 'HOUSE' ? this.purgeHouse(dto, adminId) : this.purgeCommunity(dto, adminId);
+    /*
+     * 底层错误必须原样带出来。
+     *
+     * 实测两次都栽在这上面:漏一张外键表 → 「关联的数据不存在或已被删除」;
+     * 小区清除失败 → 「服务器内部错误」。两句话都指不到任何一张表,
+     * 而这是个**破坏性**操作 —— 失败时最需要知道的就是「被哪张表挡住了」。
+     * 维护端点不该把诊断信息藏起来(它本来就只有管理员能调)。
+     */
+    try {
+      return dto.target === 'HOUSE' ? await this.purgeHouse(dto, adminId) : await this.purgeCommunity(dto, adminId);
+    } catch (e) {
+      if (e instanceof BizException) throw e;
+      const detail = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      this.logger.error(`彻底清除失败 target=${dto.target} id=${dto.id}: ${detail}`);
+      throw new BizException(ErrorCode.VALIDATION, `彻底清除失败:${detail.slice(0, 400)}`);
+    }
   }
 
   /**
