@@ -50,8 +50,8 @@ fi
 
 CLI="/Applications/wechatwebdevtools.app/Contents/MacOS/cli"
 PROJ="$(cd "$(dirname "$0")" && pwd)/apps/miniprogram"
-VER="${1:-1.3.0}"
-DESC="首个提审版本：支付成功立刻反馈、绑定房屋全流程重做（输入即搜、房号模糊匹配、支持数百户小区）、「我的」页只留个人相关项、账号注销"
+VER="${1:-1.4.0}"
+DESC="物业管理端(手机):楼盘图点房间进单户作业台、四标签横向切、新增/删除房屋、单户与批量发账单、线下收款登记、退款与冲正、欠费催缴、报事报修、待发布批次核对;退款/支付状态自动刷新;业主端账单页同步"
 
 [ -x "$CLI" ] || { echo "✗ 找不到微信开发者工具 CLI：$CLI"; exit 1; }
 [ -d "$PROJ" ] || { echo "✗ 找不到小程序目录：$PROJ"; exit 1; }
