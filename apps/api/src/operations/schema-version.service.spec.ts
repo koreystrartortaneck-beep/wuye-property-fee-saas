@@ -14,9 +14,23 @@ type Row = { migration_name: string; finished_at: Date | null; rolled_back_at: D
 
 const BOTH_TRIGGERS = ['AuditLog_before_update_append_only', 'AuditLog_before_delete_append_only'];
 
-function makeService(rows: Row[] | Error, inImage: string[], triggers: string[] = BOTH_TRIGGERS) {
+function makeService(
+  rows: Row[] | Error,
+  inImage: string[],
+  triggers: string[] = BOTH_TRIGGERS,
+  /** 行为探测:'ON' 触发器拦下,'OFF' 改到了,'EMPTY' 审计表是空的 */
+  probe: 'ON' | 'OFF' | 'EMPTY' = 'ON',
+) {
   const prisma = {
     raw: {
+      $transaction: jest.fn(async (cb: (tx: unknown) => unknown) =>
+        cb({
+          $executeRawUnsafe: jest.fn(async () => {
+            if (probe === 'ON') throw new Error("AuditLog is append-only: UPDATE is forbidden");
+            return probe === 'EMPTY' ? 0 : 1;
+          }),
+        }),
+      ),
       // 按 SQL 分派:同一个方法既查迁移表也查触发器,一律返回迁移行会让触发器判定失真
       $queryRawUnsafe: jest.fn(async (sql: string) => {
         if (sql.includes('information_schema.TRIGGERS')) {
@@ -96,17 +110,16 @@ describe('审计 append-only 触发器', () => {
     expect(info.auditTriggers).toEqual([...BOTH_TRIGGERS].sort());
   });
 
-  it('少一个 → 不 ok,并明说「审计记录目前可改可删」', async () => {
-    const info = await makeService([done('a_1')], ['a_1'], ['AuditLog_before_update_append_only']).info();
-    expect(info.ok).toBe(false);
-    expect(info.detail).toContain('AuditLog_before_delete_append_only');
-    expect(info.detail).toContain('可改可删');
-  });
-
-  it('两个都没了 → 不 ok', async () => {
-    const info = await makeService([done('a_1')], ['a_1'], []).info();
-    expect(info.ok).toBe(false);
-    expect(info.auditTriggers).toEqual([]);
+  it('元数据只作诊断:列出来什么就是什么,不拿它判不就绪', async () => {
+    /*
+     * 一开始我拿它当门禁,结果生产上 information_schema 查出来是空的
+     * (那条摘/装触发器的迁移同一时刻明明应用成功了)—— 于是天天误报。
+     * 门禁改由行为探测把关,这里只钉「如实列出」。
+     */
+    const one = await makeService([done('a_1')], ['a_1'], ['AuditLog_before_update_append_only']).info();
+    expect(one.auditTriggers).toEqual(['AuditLog_before_update_append_only']);
+    const none = await makeService([done('a_1')], ['a_1'], []).info();
+    expect(none.auditTriggers).toEqual([]);
   });
 });
 
@@ -120,4 +133,39 @@ it('被 resolve 标成回滚的迁移不算失败——否则恢复之后永远�
   const info = await makeService([rolledBack('a_1'), done('a_1'), done('b_2')], ['a_1', 'b_2']).info();
   expect(info.failed).toEqual([]);
   expect(info.ok).toBe(true);
+});
+
+/*
+ * 元数据可能查不到(经数据库代理),但「审计到底删不删得动」必须有答案 ——
+ * 所以直接在一个必定回滚的事务里试一次。
+ */
+describe('审计保护的行为探测', () => {
+  it('被 45000 拦下 → ON,且判就绪', async () => {
+    const info = await makeService([done('a_1')], ['a_1'], BOTH_TRIGGERS, 'ON').info();
+    expect(info.auditProtection).toBe('ON');
+    expect(info.ok).toBe(true);
+  });
+
+  it('居然改到了 → OFF,不就绪,并明说「可改可删」', async () => {
+    const info = await makeService([done('a_1')], ['a_1'], BOTH_TRIGGERS, 'OFF').info();
+    expect(info.auditProtection).toBe('OFF');
+    expect(info.ok).toBe(false);
+    expect(info.detail).toContain('可改可删');
+  });
+
+  it('审计表是空的 → UNKNOWN,不能据此判定不就绪(那会天天误报)', async () => {
+    const info = await makeService([done('a_1')], ['a_1'], BOTH_TRIGGERS, 'EMPTY').info();
+    expect(info.auditProtection).toBe('UNKNOWN');
+    expect(info.ok).toBe(true);
+  });
+
+  it('元数据查不到触发器但行为探测说保护在 → 仍判就绪(元数据只作诊断)', async () => {
+    /*
+     * 2026-08-04 实测:information_schema 查出来是空的,而那条摘/装触发器的迁移
+     * 明明应用成功了。拿元数据当门禁会天天误报,而误报久了就没人看了。
+     */
+    const info = await makeService([done('a_1')], ['a_1'], [], 'ON').info();
+    expect(info.auditTriggers).toEqual([]);
+    expect(info.ok).toBe(true);
+  });
 });

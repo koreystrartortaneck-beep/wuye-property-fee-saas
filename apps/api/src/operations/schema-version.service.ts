@@ -33,6 +33,19 @@ export interface SchemaVersionInfo {
    * 「那两个触发器现在在不在」，否则这套系统最核心的防篡改保证无人守着。
    */
   auditTriggers: string[];
+  /*
+   * 「审计真的删不动吗」—— 直接试一次,而不是去读元数据。
+   *
+   * 2026-08-04:information_schema.TRIGGERS 查出来是空的,而同一时刻那条
+   * 摘/装触发器的迁移明明应用成功了。元数据经数据库代理可能就是查不到,
+   * 于是我分不清「触发器没了」和「看不见触发器」——
+   * 而这两者的严重性差着天壤:一个是防篡改保证已经失效,一个是虚惊一场。
+   *
+   * 所以改成**行为验证**:在一个必定回滚的事务里试着 UPDATE 一行审计,
+   * 被 45000 拦下就是保护在,没拦下就是保护没了。这比任何元数据都可信。
+   * ON = 拦下了,OFF = 没拦下(危险),UNKNOWN = 说不清(比如审计表是空的)。
+   */
+  auditProtection: 'ON' | 'OFF' | 'UNKNOWN';
   ok: boolean;
   detail: string;
 }
@@ -74,6 +87,32 @@ export class SchemaVersionService {
     return [];
   }
 
+  /**
+   * 试着改一行审计 —— 全程在一个**一定会回滚**的事务里,不会留下任何痕迹。
+   * 被 append-only 触发器拦下 = 保护在;顺利改到 = 保护没了。
+   */
+  private async probeAuditProtection(): Promise<'ON' | 'OFF' | 'UNKNOWN'> {
+    const ROLLBACK = '__probe_rollback__';
+    try {
+      await this.prisma.raw.$transaction(async (tx) => {
+        // 只碰一行,且把 reason 写成它自己(即使真被改到也不改变内容)
+        const n = await tx.$executeRawUnsafe(
+          'UPDATE `AuditLog` SET `reason` = `reason` WHERE `id` IN (SELECT `id` FROM (SELECT `id` FROM `AuditLog` LIMIT 1) AS t)',
+        );
+        // 一行都没碰到(审计表是空的)→ 触发器不会触发,这一次探测说明不了任何事
+        throw new Error(n > 0 ? ROLLBACK : 'EMPTY');
+      });
+      return 'UNKNOWN';
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('append-only')) return 'ON';
+      if (message.includes(ROLLBACK)) return 'OFF';
+      if (message.includes('EMPTY')) return 'UNKNOWN';
+      this.logger.warn(`审计保护探测失败：${message.slice(0, 160)}`);
+      return 'UNKNOWN';
+    }
+  }
+
   async info(): Promise<SchemaVersionInfo> {
     const inImage = this.migrationsInImage();
     const latestInImage = inImage.length > 0 ? inImage[inImage.length - 1] : null;
@@ -95,6 +134,8 @@ export class SchemaVersionService {
       this.logger.warn(`读取审计触发器失败：${error instanceof Error ? error.message : String(error)}`);
     }
 
+    const auditProtection = await this.probeAuditProtection();
+
     let rows: MigrationRow[] = [];
     try {
       rows = await this.prisma.raw.$queryRawUnsafe<MigrationRow[]>(
@@ -110,6 +151,7 @@ export class SchemaVersionService {
         pendingCount: inImage.length,
         failed: [],
         auditTriggers,
+        auditProtection,
         ok: false,
         detail: `无法读取迁移记录：${message.slice(0, 120)}`,
       };
@@ -138,6 +180,7 @@ export class SchemaVersionService {
         pendingCount: 0,
         failed,
         auditTriggers,
+        auditProtection,
         ok: false,
         detail: '读不到镜像内的迁移目录，无法判断是否有未应用的迁移（数据库中已记录 ' + applied.length + ' 个）',
       };
@@ -147,9 +190,12 @@ export class SchemaVersionService {
      * 触发器缺失也算不就绪。审计表失去保护是静默的 —— 不在这里说出来,
      * 就没有任何地方会说。
      */
-    const REQUIRED_TRIGGERS = ['AuditLog_before_delete_append_only', 'AuditLog_before_update_append_only'];
-    const missingTriggers = REQUIRED_TRIGGERS.filter((t) => !auditTriggers.includes(t));
-    const ok = failed.length === 0 && pending.length === 0 && missingTriggers.length === 0;
+    /*
+     * 判「不就绪」只认行为探测的 OFF。
+     * auditTriggers 是元数据,经数据库代理可能查不到 —— 拿它当门禁会天天误报,
+     * 而误报久了就没人看了。它只留作诊断信息。
+     */
+    const ok = failed.length === 0 && pending.length === 0 && auditProtection !== 'OFF';
     let detail: string;
     if (failed.length > 0) {
       detail = `有 ${failed.length} 个迁移应用失败：${failed.join('、')}`;
@@ -159,9 +205,18 @@ export class SchemaVersionService {
       detail = `已应用至 ${latestApplied ?? '（无迁移）'}，共 ${applied.length} 个`;
     }
 
-    if (missingTriggers.length > 0) {
-      detail = `审计表缺少 append-only 触发器：${missingTriggers.join('、')} —— 审计记录目前可改可删,必须立即修复。` + detail;
+    if (auditProtection === 'OFF') {
+      detail = '审计表的 append-only 保护已失效（实测能改到审计行）—— 审计记录目前可改可删，必须立即修复。' + detail;
     }
-    return { latestInImage, latestApplied, pendingCount: pending.length, failed, auditTriggers, ok, detail };
+    return {
+      latestInImage,
+      latestApplied,
+      pendingCount: pending.length,
+      failed,
+      auditTriggers,
+      auditProtection,
+      ok,
+      detail,
+    };
   }
 }
