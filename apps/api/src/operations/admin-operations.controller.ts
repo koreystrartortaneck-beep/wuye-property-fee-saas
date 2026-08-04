@@ -210,6 +210,31 @@ export class AdminOperationsController {
             ? '订阅消息模板已配置，业主可收到出账/到期/逾期提醒'
             : `缺少模板环境变量 ${missingTemplates.join('、')}，业主收不到对应提醒`,
       },
+      /*
+       * 审计防篡改必须进就绪清单。
+       *
+       * 2026-08-04 的教训不是「触发器丢了」，而是**我没有任何地方能看到它在不在**：
+       * 那天我给 SchemaVersionService 加了 auditTriggers/auditProtection，
+       * 却忘了这个端点是**逐字段手抄**的 —— 新字段一个都没进响应。
+       * 于是我的探测脚本读到「键不存在」，把它当成了「触发器为 0」，
+       * 据此判定防篡改可能已失效，还为此写了一条补救迁移。
+       * 报警的来源是我自己的读取错误。
+       *
+       * 所以这里补两件事:①新字段照原样透出 ②把审计保护做成一条 check，
+       * 让 healthy 真正反映它 —— 一个看不见的保证等于没有保证。
+       */
+      {
+        name: 'AUDIT_APPEND_ONLY',
+        healthy: schema.auditProtection !== 'OFF',
+        detail:
+          schema.auditProtection === 'ON'
+            ? '审计记录改不动（实测被 append-only 触发器拦下）'
+            : schema.auditProtection === 'OFF'
+              ? '审计表的 append-only 保护已失效：实测能改到审计行，审计记录目前可改可删，必须立即修复'
+              : `无法确认审计保护（探测结果 ${schema.auditProtection}）—— 触发器元数据：${
+                  (schema.auditTriggers ?? []).length > 0 ? (schema.auditTriggers ?? []).join('、') : '查不到'
+                }`,
+      },
     ];
 
     return {
@@ -221,6 +246,11 @@ export class AdminOperationsController {
         latestApplied: schema.latestApplied,
         pendingCount: schema.pendingCount,
         failed: schema.failed,
+        // 这两个字段以前漏在这里没抄出来,导致「查不到」被我读成了「为 0」
+        auditTriggers: schema.auditTriggers ?? [],
+        auditProtection: schema.auditProtection,
+        ok: schema.ok,
+        detail: schema.detail,
       },
     };
   }

@@ -62,6 +62,9 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     const alerts = { readiness: () => ({ healthy: destinationConfigured, destinationConfigured }) };
     const schemaVersion = {
       info: jest.fn().mockResolvedValue({
+        // 审计保护默认「实测拦下」——桩少给字段会让别的断言以奇怪的方式炸
+        auditTriggers: ['AuditLog_before_delete_append_only', 'AuditLog_before_update_append_only'],
+        auditProtection: 'ON',
         latestInImage: '20260730020000_bill_payment_unique',
         latestApplied: schemaOk ? '20260730020000_bill_payment_unique' : '20260727120000_coupon_deduction',
         pendingCount: schemaOk ? 0 : 1,
@@ -249,4 +252,37 @@ describe('运行状况就绪检查：支付与对账模式', () => {
     expect(r.schemaVersion.pendingCount).toBe(0);
     expect(r.schemaVersion.latestInImage).toBe(r.schemaVersion.latestApplied);
   });
+});
+
+it('SchemaVersionInfo 的每个字段都必须透到响应里——手抄漏一个,就等于那个信号不存在', async () => {
+  /*
+   * 2026-08-04 的真实教训:我给 SchemaVersionService 加了 auditTriggers/auditProtection,
+   * 却忘了 readiness 是**逐字段手抄**的。新字段一个都没进响应,
+   * 而我的探测脚本读到「键不存在」→ 当成「触发器为 0」→ 判定防篡改可能已失效,
+   * 还为此写了一条补救迁移。报警的来源是我自己的读取错误。
+   *
+   * 所以这一条拿服务返回对象的键集合去比响应:以后再加字段,漏抄立刻变红。
+   */
+  const full = {
+    latestInImage: 'a_1',
+    latestApplied: 'a_1',
+    pendingCount: 0,
+    failed: [],
+    auditTriggers: ['t1'],
+    auditProtection: 'ON' as const,
+    ok: true,
+    detail: 'ok',
+  };
+  const schemaVersion = { info: jest.fn().mockResolvedValue(full) };
+  const c = new AdminOperationsController(
+    { metrics: jest.fn() } as never,
+    { readiness: () => ({ destinationConfigured: true }) } as never,
+    {} as never,
+    {} as never,
+    schemaVersion as never,
+  );
+  const r = (await c.getReadiness({ tenantId: 't1', adminId: 'a1' } as never)) as {
+    schemaVersion: Record<string, unknown>;
+  };
+  expect(Object.keys(r.schemaVersion).sort()).toEqual(Object.keys(full).sort());
 });
