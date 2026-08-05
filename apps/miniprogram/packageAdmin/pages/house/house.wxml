@@ -58,6 +58,7 @@
           </view>
         </view>
       </view>
+      <view wx:if="{{!isAdmin}}" class="adm-hint">退款与冲正要物业管理员来做 —— 你可以先登记收款,退款请找管理员。</view>
       <view wx:if="{{house.status !== 'ACTIVE'}}" class="adm-hint adm-error">
         这套房是「停用」状态,系统不会给它出账。要出账单,先去「信息」把状态改成「在用」。
       </view>
@@ -174,7 +175,7 @@
         </block>
       </view>
 
-      <view class="danger">
+      <view wx:if="{{isAdmin}}" class="danger">
         <view class="danger-t">删除这套房</view>
         <view class="danger-d">出过账单的房屋删不掉 —— 账单是审计凭据,得能回答「这房去年收过多少」。这种情况请改成「停用」:停用后不出账、不进欠费、楼盘图里变灰。</view>
         <view class="adm-btn adm-btn-ghost danger-b {{deleting ? 'adm-btn-busy' : ''}}" bindtap="removeHouse">删除这套房</view>

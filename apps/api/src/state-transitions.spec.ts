@@ -85,7 +85,13 @@ function findReadThenWrite(): string[] {
       const readsStatus = /\.(findUnique|findFirst)\(/.test(body) && /\bstatus\b/.test(body);
       const uncondUpdate = /\.update\(\s*\{\s*where:\s*\{\s*(id|tenantId_id)\b/.test(body);
       const hasConditional = /updateMany\(\s*\{\s*where:\s*\{[^}]*status/.test(body);
-      if (readsStatus && uncondUpdate && !hasConditional) {
+      /*
+       * 事务内的 SELECT … FOR UPDATE 同样解决这个问题,而且是**跨行不变式**
+       * (「至少还剩一个在职管理员」)唯一的解法 —— 条件更新只能守单行。
+       * 所以它和 updateMany 条件更新一样算作已防护,不必逐个开豁免。
+       */
+      const hasRowLock = /FOR UPDATE/i.test(body) && /\$transaction\(/.test(body);
+      if (readsStatus && uncondUpdate && !hasConditional && !hasRowLock) {
         found.push(`${file.slice(SRC.length + 1)}:${name}`);
       }
     }
@@ -128,8 +134,23 @@ describe('状态流转必须是条件更新', () => {
           /\.(findUnique|findFirst)\(/.test(body) &&
           /\bstatus\b/.test(body) &&
           /\.update\(\s*\{\s*where:\s*\{\s*id\b/.test(body) &&
-          !/updateMany\(\s*\{\s*where:\s*\{[^}]*status/.test(body),
+          !/updateMany\(\s*\{\s*where:\s*\{[^}]*status/.test(body) &&
+          !(/FOR UPDATE/i.test(body) && /\$transaction\(/.test(body)),
       );
+
+    // 行锁那条也要被认成「已防护」,否则以后有人把它从检测器里删掉,测试照样绿
+    const locked = `
+  async disable(id: string) {
+    const row = await this.prisma.raw.admin.findUnique({ where: { id } });
+    if (row.status !== 'ACTIVE') throw new Error('x');
+    return this.prisma.raw.$transaction(async (tx) => {
+      const others = await tx.$queryRaw\`SELECT id FROM admin WHERE status='ACTIVE' AND id <> \${id} FOR UPDATE\`;
+      if (others.length === 0) throw new Error('last one');
+      return tx.admin.update({ where: { id }, data: { status: 'DISABLED' } });
+    });
+  }
+`;
+    expect(detect(locked)).toBe(false);
     expect(detect(bad)).toBe(true);
     expect(detect(good)).toBe(false);
   });

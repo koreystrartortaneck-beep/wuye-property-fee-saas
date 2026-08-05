@@ -1,4 +1,4 @@
-const { adminRequest } = require('../../../utils/admin');
+const { adminRequest, currentAdmin } = require('../../../utils/admin');
 // 枚举文案一律取自 utils/labels(与后端枚举有守卫逐项比对),页面不自建映射
 const { BILL_STATUS, label, periodLabel } = require('../../../utils/labels');
 const { createPoller } = require('../../../utils/poller');
@@ -39,6 +39,8 @@ Page({
     payments: [],
     /** 退款在途的笔数:汇总里待缴/已缴都不含它,不单独说就看不见 */
     refunding: 0,
+    /** 是不是物业管理员:决定退款/冲正/删房这几个动钱的动作显不显示 */
+    isAdmin: false,
     contacts: [],
     /** 收费标准挂接 */
     standards: [],
@@ -108,11 +110,14 @@ Page({
        * 汇总只统计待缴与已缴(与欠费清单同口径),于是一笔退款在途时两个大字都是
        * ¥0.00 —— 页面看着像一套没有任何账的房,而下面明明列着一笔 ¥17。
        */
+      const me = currentAdmin();
+      const isAdmin = !!me && (me.role === 'TENANT_ADMIN' || me.role === 'SUPER_ADMIN');
       const refunding = (profile.bills || []).filter((b) => b.status === 'REFUNDING');
       this.setData({
         house,
         summary: profile.summary,
         refunding: refunding.length,
+        isAdmin,
         billMonthText: anchor ? `每年 ${MONTH[Number(anchor.slice(5, 7))]}出账` : '没填放户日期,出不了账',
         /*
          * 每笔账单带上它对应的支付订单号与通道 —— 这一页要能直接动钱:
@@ -130,8 +135,13 @@ Page({
             orderNo: pay ? pay.orderNo : '',
             channel: pay ? pay.channel : '',
             canCollect: b.status === 'UNPAID',
-            canRefund: b.status === 'PAID' && pay && pay.channel === 'WXPAY' && pay.status === 'SUCCESS',
-            canReverse: b.status === 'PAID' && pay && pay.channel === 'OFFLINE' && pay.status === 'SUCCESS',
+            /*
+             * 退款与冲正限物业管理员。收费员看到按钮却点出 403,只会以为系统坏了 ——
+             * 所以不给死按钮,而是在下面用一句话说清「这两件事要找管理员」。
+             * 界面显隐只是免死按钮,门始终在服务端的 @Roles 上。
+             */
+            canRefund: isAdmin && b.status === 'PAID' && pay && pay.channel === 'WXPAY' && pay.status === 'SUCCESS',
+            canReverse: isAdmin && b.status === 'PAID' && pay && pay.channel === 'OFFLINE' && pay.status === 'SUCCESS',
           };
         }),
         payments: profile.payments || [],

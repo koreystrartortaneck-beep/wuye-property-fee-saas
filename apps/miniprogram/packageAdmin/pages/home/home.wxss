@@ -218,3 +218,5 @@
   font-weight: 800;
   color: var(--gold-deep, #b8862f);
 }
+
+.staff-entry { margin-top: 16rpx; }

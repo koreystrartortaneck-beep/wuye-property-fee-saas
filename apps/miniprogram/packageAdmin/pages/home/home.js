@@ -46,6 +46,13 @@ Page({
     houseTotal: 0,
     searching: false,
     communityId: '',
+    /*
+     * 是不是物业管理员。
+     * 收费员看不到「员工与权限」入口 —— 那个接口整个控制器限管理员,
+     * 给他一个点了就 403 的按钮,只会让他以为系统坏了。
+     * 界面显隐只是免死按钮,门始终在服务端。
+     */
+    isAdmin: false,
     /** 欠费概览(有欠费才显示) */
     arrears: null,
     /** 当前板块:grid / arrears / tickets / batches —— 一屏一件事,不用上下滑 */
@@ -67,7 +74,7 @@ Page({
       this.setData({ denied: true, loading: false });
       return;
     }
-    this.setData({ adminName: s.name, denied: false, gridError: '' });
+    this.setData({ adminName: s.name, isAdmin: s.role === 'TENANT_ADMIN' || s.role === 'SUPER_ADMIN', denied: false, gridError: '' });
     await Promise.all([this.loadTodos(), this.loadGrid()]);
     // 当前面板重新拉一次:刚登记完收款回来,数字要变
     this.refreshPanel();
@@ -170,6 +177,10 @@ Page({
 
   goDun() {
     wx.navigateTo({ url: '/packageAdmin/pages/dun/dun' });
+  },
+
+  goStaff() {
+    wx.navigateTo({ url: '/packageAdmin/pages/staff/staff' });
   },
 
   goNewHouse() {

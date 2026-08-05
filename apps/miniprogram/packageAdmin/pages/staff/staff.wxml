@@ -1,0 +1,81 @@
+<view class="page adm-page">
+  <view wx:if="{{loading}}" class="adm-hint">加载中…</view>
+  <view wx:elif="{{loadError}}" class="adm-denied">
+    <view class="adm-denied-title">加载失败</view>
+    <view class="adm-denied-desc">员工管理只有物业管理员能进。若你是收费员,这一页看不到。</view>
+    <view class="adm-btn adm-retry" bindtap="load">重试</view>
+  </view>
+
+  <block wx:else>
+    <view class="adm-sec">在职与停用的账号({{items.length}})</view>
+    <view class="adm-card">
+      <view class="st-row" wx:for="{{items}}" wx:key="id" wx:for-index="i">
+        <view class="st-line">
+          <view class="adm-row-main">
+            <view class="adm-row-title">
+              {{item.name}}
+              <text class="st-role {{item.role === 'TENANT_ADMIN' ? 'st-role-admin' : ''}}">{{item.roleLabel}}</text>
+              <text wx:if="{{item.isSelf}}" class="st-me">我</text>
+            </view>
+            <view class="adm-row-sub">
+              {{item.username}}<text wx:if="{{item.phoneTail}}"> · 手机 …{{item.phoneTail}}</text>
+              <text wx:else> · 未设手机号</text>
+            </view>
+            <view wx:if="{{item.blockedReason}}" class="adm-row-sub adm-danger">{{item.blockedReason}}</view>
+          </view>
+          <view class="adm-pill {{item.status === 'ACTIVE' ? 'adm-pill-ok' : 'adm-pill-quiet'}}">
+            {{item.status === 'ACTIVE' ? '在职' : '已停用'}}
+          </view>
+        </view>
+        <view class="st-acts">
+          <view class="adm-pill adm-pill-quiet" data-i="{{i}}" bindtap="setPhone">手机号</view>
+          <view class="adm-pill adm-pill-quiet" data-i="{{i}}" bindtap="switchRole">
+            改成{{item.role === 'TENANT_ADMIN' ? '收费员' : '管理员'}}
+          </view>
+          <view class="adm-pill adm-pill-quiet" data-i="{{i}}" bindtap="resetPassword">重置密码</view>
+          <view class="adm-pill {{item.status === 'ACTIVE' ? 'adm-pill-danger' : 'adm-pill-ok'}}" data-i="{{i}}" bindtap="toggleStatus">
+            {{item.status === 'ACTIVE' ? '停用' : '恢复'}}
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 新建 -->
+    <view class="adm-sec">加一个人</view>
+    <view class="adm-card" wx:if="{{adding}}">
+      <view class="f-row">
+        <view class="f-lab">姓名 <text class="req">*</text></view>
+        <input class="adm-input f-in" data-k="name" value="{{form.name}}" bindinput="onInput" placeholder="真实姓名,业主受理工单会看到" />
+      </view>
+      <view class="f-row">
+        <view class="f-lab">登录名 <text class="req">*</text></view>
+        <input class="adm-input f-in" data-k="username" value="{{form.username}}" bindinput="onInput" placeholder="电脑后台用,如 wangshoufei" />
+      </view>
+      <view class="f-row">
+        <view class="f-lab">手机号</view>
+        <input class="adm-input f-in" type="number" maxlength="11" data-k="phone" value="{{form.phone}}" bindinput="onInput" placeholder="选填,用于手机免密进入" />
+      </view>
+      <view class="r-pick">
+        <view
+          class="r-item {{form.role === item.v ? 'r-on' : ''}}"
+          wx:for="{{roles}}"
+          wx:key="v"
+          data-v="{{item.v}}"
+          bindtap="pickRole"
+        >
+          <view class="r-name">{{item.label}}</view>
+          <view class="r-desc">{{item.desc}}</view>
+        </view>
+      </view>
+      <view class="two-btn">
+        <view class="adm-btn adm-btn-ghost half" bindtap="toggleAdd">取消</view>
+        <view class="adm-btn half {{saving ? 'adm-btn-busy' : ''}}" bindtap="create">{{saving ? '创建中…' : '创建'}}</view>
+      </view>
+    </view>
+    <view wx:else class="adm-btn adm-btn-ghost add-btn" bindtap="toggleAdd">＋ 新建员工账号</view>
+
+    <view class="adm-hint">初始密码只显示一次(系统不留明文),忘了只能重置。</view>
+    <view class="adm-hint">填了手机号也要先在电脑后台登录一次改密,之后才能用手机授权手机号免密进入。</view>
+    <view class="adm-hint">停用是即时的 —— 他手里的登录状态当场失效,不用等过期。</view>
+  </block>
+</view>

@@ -414,3 +414,32 @@ test('发公告:发布即可见,所以要确认受众;可撤回但要说清收�
   const wxml = read('packageAdmin/pages/announce/announce.wxml').replace(/<!--[\s\S]*?-->/g, '');
   assert.ok(/看过的人收不回来|收不回来/.test(js + wxml), '撤回没有说清「看过的人收不回」');
 });
+
+test('员工与权限:收费员看不到会 403 的按钮,且界面显隐只是免死按钮', () => {
+  /*
+   * 两个角色的差别必须在界面上兑现,否则收费员点一下退款得到 403,
+   * 只会以为系统坏了 —— 死按钮比没有按钮糟。
+   *
+   * 但显隐**不是**权限:门在服务端的 @Roles 上(整个 /admin/staff 控制器限管理员,
+   * 退款/冲正/整批作废各自限管理员)。这里钉的是「不给死按钮 + 说清找谁」。
+   */
+  const homeJs = stripJs(read('packageAdmin/pages/home/home.js'));
+  const homeWxml = read('packageAdmin/pages/home/home.wxml').replace(/<!--[\s\S]*?-->/g, '');
+  assert.match(homeJs, /isAdmin: s\.role === 'TENANT_ADMIN'/, '首页没有按角色判断管理员');
+  assert.match(homeWxml, /wx:if="\{\{isAdmin\}\}"[\s\S]{0,120}员工与权限/, '「员工与权限」入口没有按角色显隐');
+
+  const houseJs = stripJs(read('packageAdmin/pages/house/house.js'));
+  assert.match(houseJs, /canRefund: isAdmin &&/, '退款按钮没有按角色显隐');
+  assert.match(houseJs, /canReverse: isAdmin &&/, '冲正按钮没有按角色显隐');
+  const houseWxml = read('packageAdmin/pages/house/house.wxml').replace(/<!--[\s\S]*?-->/g, '');
+  assert.match(houseWxml, /!isAdmin[\s\S]{0,120}找管理员/, '收费员看不到退款时没有说清该找谁');
+  assert.match(houseWxml, /wx:if="\{\{isAdmin\}\}" class="danger"/, '删房的危险区没有按角色显隐');
+
+  // 员工页三件必须说清的事(实测里人会卡住的地方)
+  const staffJs = stripJs(read('packageAdmin/pages/staff/staff.js'));
+  assert.match(staffJs, /只显示这一次/, '没有说清初始密码只显示一次');
+  assert.match(staffJs, /admin\/staff/, '没有调员工接口');
+  assert.match(staffJs, /当场失效/, '停用/重置没有说清旧登录状态立刻失效');
+  const staffWxml = read('packageAdmin/pages/staff/staff.wxml').replace(/<!--[\s\S]*?-->/g, '');
+  assert.match(staffWxml, /先在电脑后台登录一次改密/, '没有说清填了手机号还不能立刻免密登录');
+});
