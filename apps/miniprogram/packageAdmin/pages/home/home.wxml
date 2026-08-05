@@ -54,14 +54,7 @@
     </block>
 
     <block wx:if="{{!keyword && tab === 'grid'}}">
-      <!-- 待办条:紧凑横排,有事才出现 -->
-      <scroll-view wx:if="{{todos.length > 0}}" scroll-x class="todo-strip" enhanced show-scrollbar="{{false}}">
-        <view class="todo-chip" wx:for="{{todos}}" wx:key="key" data-url="{{item.url}}" bindtap="onTodoTap">
-          <text class="todo-count">{{item.count}}</text>
-          <text class="todo-label">{{item.label}}</text>
-        </view>
-      </scroll-view>
-
+      <!-- 待办不再单独铺一条(黄色 chip 又占位又重复)——报修/待发布的数字就在标签角标上 -->
       <!-- 欠费:不是「待处理单据」而是常态,所以单独一条,点进去催缴 -->
       <view wx:if="{{arrears}}" class="ar-bar" bindtap="goDun">
         <view class="ar-main">
@@ -119,8 +112,14 @@
       </view>
       <view wx:if="{{units.length > 0}}" class="adm-hint">点房间 = 进这一户:改面积/放户日期、换住户手机号、只给这一户发账单</view>
       <view wx:if="{{communityId}}" class="add-house" bindtap="goNewHouse">＋ 新增房屋</view>
-      <!-- 员工与权限:只有管理员看得到 —— 收费员点进去也是 403,不给死入口 -->
-      <view wx:if="{{isAdmin}}" class="adm-btn adm-btn-ghost staff-entry" bindtap="goStaff">员工与权限</view>
+      <!-- 绑定审批是自助申请的唯一出口(原来只在待办条里,待办条删了它不能跟着消失);
+           员工与权限只有管理员看得到 —— 收费员点进去也是 403,不给死入口 -->
+      <view class="entry-row">
+        <view class="adm-btn adm-btn-ghost entry-btn" bindtap="goApprovals">
+          绑定审批<text wx:if="{{bindingCount > 0}}" class="entry-bd">{{bindingCount}}</text>
+        </view>
+        <view wx:if="{{isAdmin}}" class="adm-btn adm-btn-ghost entry-btn" bindtap="goStaff">员工与权限</view>
+      </view>
 
       <!-- 批量动作:一屏一个主动作(发账单),其余用素色 -->
       <view class="quick" wx:if="{{buildings.length > 0}}">

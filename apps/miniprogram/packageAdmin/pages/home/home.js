@@ -34,7 +34,7 @@ Page({
     adminName: '',
     denied: false,
     loading: true,
-    todos: [],
+    bindingCount: 0,
     gridError: '',
     /** 楼栋条:[{building, houses, unpaidHouses}] */
     buildings: [],
@@ -83,20 +83,13 @@ Page({
   async loadTodos() {
     try {
       const d = await adminRequest('/admin/today', { silent: true });
-      const ACTIONABLE = {
-        bindings: '/packageAdmin/pages/approvals/approvals',
-        // 「本月账单已生成待发布」以前点了只弹「请在电脑后台处理」——
-        // 手机端现在能发布,这条必须能点进去,否则待办等于在通知你回办公室
-        draftBatch: '/packageAdmin/pages/batches/batches',
-        tickets: '/packageAdmin/pages/tickets/tickets',
-      };
+      // 待办不再铺成一条黄色 chip(用户嫌丑,且和标签角标重复)。
+      // 数字直接落在各自的入口上:报修/待发布在标签角标,绑定审批在自己的按钮上。
       this.setData({
-        todos: (d.todos || [])
-          .filter((t) => t.count > 0)
-          .map((t) => ({ ...t, url: ACTIONABLE[t.key] || '' })),
         // 标签上的角标:哪块有事,不点开也看得见
         ticketCount: (d.todos || []).filter((t) => t.key === 'tickets').reduce((n, t) => n + t.count, 0),
         draftCount: (d.todos || []).filter((t) => t.key === 'draftBatch').reduce((n, t) => n + t.count, 0),
+        bindingCount: (d.todos || []).filter((t) => t.key === 'bindings').reduce((n, t) => n + t.count, 0),
         // 欠费不在 todos 里(它不是「待处理单据」而是常态),单独给一条入口
         arrears:
           d.arrears && d.arrears.houses > 0
@@ -191,10 +184,8 @@ Page({
     wx.navigateTo({ url: '/packageAdmin/pages/tickets/tickets' });
   },
 
-  onTodoTap(e) {
-    const url = e.currentTarget.dataset.url;
-    if (url) wx.navigateTo({ url });
-    else wx.showToast({ title: '这类事项请在电脑后台处理', icon: 'none' });
+  goApprovals() {
+    wx.navigateTo({ url: '/packageAdmin/pages/approvals/approvals' });
   },
 
   /* ── 搜索(保留:接电话查户仍是它快) ── */

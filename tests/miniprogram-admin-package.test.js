@@ -264,13 +264,23 @@ test('楼盘图格子定列数:房号必须读得出来', () => {
   assert.ok(!/\.cell \{[^}]*flex: 1;/.test(wxss), '格子又回到了 flex:1 撑满整行');
 });
 
-test('待办「已生成待发布」必须能点进去发布,不许再劝人回电脑', () => {
+test('待办数字必须落在能点进去的入口上,不许出现「请回电脑处理」', () => {
   /*
-   * 待办的意义是「这里有事要做」。点下去弹「这类事项请在电脑后台处理」,
-   * 等于用一条通知提醒你去办公室 —— 手机端已经能发布了。
+   * 待办条(黄色 chip)已删 —— 用户嫌丑,且和标签角标重复。
+   * 但它的三个数字不能跟着消失,得各有去处:
+   *   报修/待发布 → 标签角标;绑定审批 → 底部自己的按钮(它是自助申请的唯一出口)。
+   * 也不许回到「点了弹请回电脑后台」的老路 —— 手机端全都能办。
    */
   const js = stripJs(read('packageAdmin/pages/home/home.js'));
-  assert.match(js, /draftBatch: '\/packageAdmin\/pages\/batches\/batches'/, '待发布待办没有路由到发布页');
+  assert.match(js, /draftCount/, '待发布数字丢了');
+  assert.match(js, /ticketCount/, '报修数字丢了');
+  assert.match(js, /bindingCount/, '绑定审批数字丢了');
+  assert.match(js, /\/packageAdmin\/pages\/approvals\/approvals/, '绑定审批失去了唯一入口');
+  assert.ok(!/请在电脑后台处理/.test(js), '又出现了「请在电脑后台处理」');
+  const wxml = read('packageAdmin/pages/home/home.wxml');
+  assert.match(wxml, /draftCount > 0/, '待发布标签的角标条件不见了');
+  assert.match(wxml, /goApprovals/, '绑定审批按钮不见了');
+  assert.ok(!/todo-strip/.test(wxml), '待办条又回来了');
 });
 
 test('整批发布:户数取库里的草稿条数,剔除要留原因', () => {
