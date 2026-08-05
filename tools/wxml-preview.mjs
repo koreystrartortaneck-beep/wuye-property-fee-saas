@@ -202,8 +202,23 @@ function render(node, scope) {
     return `<image class="${cls}" style="${st}" data-wx="image"></image>`;
   }
   if (node.tag === 'input' || node.tag === 'textarea') {
+    /*
+     * 有 value 就画 value（用正文色），没有才画 placeholder（用灰色）。
+     *
+     * 原来一律只画 placeholder：于是「已经填好的表单」在图里永远是空的 ——
+     * 用它做使用手册，一眼就看出不是真机。而 value 本来就在数据里，
+     * 不画它是白丢信息。
+     */
+    const val = a.value ? interpolate(a.value, scope) : '';
     const ph = a.placeholder ? interpolate(a.placeholder, scope) : '';
-    return `<div class="${cls}" style="${style};color:#b9b2c4">${ph}</div>`;
+    const text = val || ph;
+    const color = val ? 'inherit' : '#b9b2c4';
+    /*
+     * 必须自己做垂直居中:真 <input> 的文字天生在框内居中,
+     * 而 div 里的文字贴顶 —— 渲染出来就是「字浮在输入框上方」。
+     */
+    const box = node.tag === 'textarea' ? 'align-items:flex-start;padding-top:8px' : 'align-items:center';
+    return `<div class="${cls}" style="${style};color:${color};display:flex;${box}">${text}</div>`;
   }
   return `<${tag} class="${cls}" style="${style}"${extraAttr}>${inner}</${tag}>`;
 }
@@ -284,7 +299,35 @@ function mapSelectors(css) {
   });
 }
 
-const [, , wxmlPath, wxssPath, appWxssPath, dataPath, outPath, title] = process.argv;
+const [, , wxmlPath, wxssPath, appWxssPath, dataPath, outPath, title, chromeTitle] = process.argv;
+
+/*
+ * 微信外壳：状态栏 + 右上胶囊 + 原生导航栏。
+ *
+ * 第 8 个参数给了就画（值就是导航栏标题；给 '-' 表示自定义导航的页面，只画状态栏）。
+ * 为什么要画：真机上这三样永远在，不画的图一眼就能看出不是手机截的 ——
+ * 而手册的用途正是「让人对着图找按钮」。这是补齐真实,不是伪装。
+ */
+function wxChrome(t) {
+  if (!t) return '';
+  const bar = t === '-' ? '' : `
+  <div class="__nav">
+    <span class="__back">‹</span>
+    <span class="__title">${t}</span>
+  </div>`;
+  return `
+<div class="__status">
+  <span class="__time">9:41</span>
+  <span class="__icons">
+    <svg width="17" height="11" viewBox="0 0 17 11"><g fill="#251c38">
+      <rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/>
+      <rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></g></svg>
+    <svg width="16" height="12" viewBox="0 0 16 12"><path d="M8 10.5 1 4.2A9.6 9.6 0 0 1 15 4.2Z" fill="none" stroke="#251c38" stroke-width="1.4"/></svg>
+    <svg width="26" height="12" viewBox="0 0 26 12"><rect x="0.6" y="0.6" width="21" height="10.8" rx="2.6" fill="none" stroke="#251c38" stroke-opacity=".5"/><rect x="2.2" y="2.2" width="17.8" height="7.6" rx="1.4" fill="#251c38"/><rect x="23" y="4" width="2" height="4" rx="1" fill="#251c38" fill-opacity=".5"/></svg>
+    <span class="__capsule"><b>•••</b><i></i><b>◎</b></span>
+  </span>
+</div>${bar}`;
+}
 const data = JSON.parse(readFileSync(dataPath, 'utf8'));
 const tree = parse(readFileSync(wxmlPath, 'utf8'));
 const body = renderChildren(tree, data);
@@ -292,9 +335,21 @@ const css = mapSelectors(rpx(readFileSync(appWxssPath, 'utf8')) + '\n' + rpx(rea
 writeFileSync(outPath, `<!doctype html><html><head><meta charset="utf-8">
 <style>
 html,body{margin:0;padding:0;width:375px;font-size:16px}
+/* 微信外壳（见 wxChrome） */
+.__status{height:44px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px 0 18px;background:#f6f0e7;font:600 15px -apple-system,"PingFang SC",sans-serif;color:#251c38}
+.__status .__icons{display:flex;align-items:center;gap:5px}
+.__capsule{display:inline-flex;align-items:center;gap:7px;margin-left:6px;height:32px;padding:0 11px;
+  border-radius:999px;background:rgba(255,255,255,.92);border:.5px solid rgba(0,0,0,.07);
+  box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:12px;color:#251c38}
+.__capsule i{width:.5px;height:15px;background:rgba(0,0,0,.12)}
+.__nav{height:44px;display:flex;align-items:center;justify-content:center;position:relative;
+  background:#f6f0e7;border-bottom:.5px solid rgba(37,28,56,.06)}
+.__nav .__back{position:absolute;left:14px;font-size:24px;line-height:1;color:#251c38}
+.__nav .__title{font:600 17px -apple-system,"PingFang SC",sans-serif;color:#251c38}
 image{display:block;background:#e6ded2}
 *{box-sizing:border-box}
 ${css}
 .__label{position:fixed;top:0;left:0;background:#000;color:#fff;font:11px monospace;padding:2px 6px;z-index:99}
-</style></head><body><div class="__label">${title}</div>${body}</body></html>`);
+</style></head><body>${wxChrome(chromeTitle)}${body}</body></html>`);
 console.log('written', outPath);
