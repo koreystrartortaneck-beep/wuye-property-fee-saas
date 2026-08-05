@@ -1,0 +1,7 @@
+*.aux
+*.log
+*.out
+*.toc
+b1.log
+b2.log
+build*.log

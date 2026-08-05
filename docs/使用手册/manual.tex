@@ -1,0 +1,499 @@
+% ============================================================================
+%  金港城物业费小程序 · 使用手册（业主篇 / 员工篇）
+%
+%  编译： xelatex manual.tex        （跑两遍，第二遍生成目录页码）
+%  依赖： TeXLive 2023+ 的 ctex / tcolorbox / titlesec / fontspec
+%  插图： img/ 目录，全部取自当前代码渲染；换成真机截图只需同名覆盖，无需改本文件
+% ============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[UTF8,fontset=macnew]{ctex}
+\usepackage[margin=2.1cm,top=2.3cm,bottom=2.2cm,headsep=0.7cm]{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{tikz}
+\tcbuselibrary{skins,breakable}
+
+% ── 取小程序自己的配色，手册和界面是同一家人 ───────────────────────────────
+\definecolor{plum}{HTML}{3B2B57}      % 主色：深紫
+\definecolor{deepink}{HTML}{251C38}
+\definecolor{gold}{HTML}{C9A66B}      % 强调：金
+\definecolor{golddeep}{HTML}{B8862F}
+\definecolor{cream}{HTML}{FBF7F0}     % 底：暖白
+\definecolor{cream2}{HTML}{F3EDE3}
+\definecolor{inkgray}{HTML}{55496B}
+\definecolor{subgray}{HTML}{7C7288}
+\definecolor{danger}{HTML}{C45656}
+\definecolor{okgreen}{HTML}{4F7D44}
+\definecolor{rule}{HTML}{E2DDD4}
+
+\hypersetup{colorlinks=true,linkcolor=plum,urlcolor=golddeep,pdftitle={金港城物业费小程序使用手册},pdfauthor={港城物业}}
+
+% ── 版式 ─────────────────────────────────────────────────────────────────
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.35em}
+\linespread{1.28}
+
+\titleformat{\section}[block]
+  {\normalfont\LARGE\bfseries\color{plum}}{\thesection}{0.6em}{}
+\titleformat{\subsection}[block]
+  {\normalfont\large\bfseries\color{deepink}}{}{0em}{}
+\titlespacing{\section}{0pt}{1.4em}{0.8em}
+\titlespacing{\subsection}{0pt}{1.1em}{0.4em}
+
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{rule}\leaders\hrule height \headrulewidth\hfill}}
+\fancyhead[L]{\small\color{subgray}金港城物业费小程序 · 使用手册}
+\fancyhead[R]{\small\color{subgray}\leftmark}
+\fancyfoot[C]{\small\color{subgray}\thepage}
+
+% ── 步骤块：左图右文，比例固定，全篇统一 ──────────────────────────────────
+%   \step{图片文件名}{步骤标题}{正文}
+%   图片按高度对齐（手机截图都是竖的），所以每一步的视觉重量一致。
+% 插图全部预处理成 375×760(见 scratchpad/manual-shots.mjs 与裁切脚本),
+% 所以这里按**宽度**定尺寸即可 —— 每一步的图大小完全一致，版面才真的统一。
+% 早先按高度对齐:手机截图太瘦长，被压成一条细缝，字根本看不清。
+\newlength{\shotW}\setlength{\shotW}{5.15cm}  % 左栏宽度（含边框留白）
+\newlength{\shotIW}\setlength{\shotIW}{4.85cm} % 图片净宽
+\newcounter{stepno}[section]
+
+\newtcolorbox{shotframe}{
+  enhanced, sharp corners=downhill, arc=3pt, boxrule=0.5pt,
+  colback=cream, colframe=rule, boxsep=0pt, left=2pt, right=2pt, top=2pt, bottom=2pt,
+  drop shadow={black!12}
+}
+
+\newcommand{\stepbadge}[1]{%
+  \begin{tikzpicture}[baseline=(n.base)]
+    \node[circle, fill=plum, text=cream, font=\bfseries\small, inner sep=2.4pt, minimum size=6.4mm] (n) {#1};
+  \end{tikzpicture}%
+}
+
+\newcommand{\step}[3]{%
+  \par\vspace{0.55em}\noindent
+  \refstepcounter{stepno}%
+  \begin{minipage}[t]{\shotW}
+    \vspace{0pt}
+    \begin{shotframe}
+      \includegraphics[width=\shotIW]{img/#1}
+    \end{shotframe}
+  \end{minipage}%
+  \hfill
+  \begin{minipage}[t]{\dimexpr\textwidth-\shotW-0.7cm\relax}
+    \vspace{0pt}
+    {\stepbadge{\thestepno}\hspace{0.35em}\textbf{\large\color{deepink}#2}}\par
+    \vspace{0.45em}
+    #3
+  \end{minipage}%
+  \par\vspace{1.0em}
+}
+
+% ── 三种提示框：为什么这么设计 / 注意 / 这是钱 ─────────────────────────────
+\newtcolorbox{why}{
+  enhanced, breakable, colback=cream2, colframe=gold, boxrule=0pt,
+  leftrule=2.4pt, arc=2pt, left=8pt, right=8pt, top=5pt, bottom=5pt,
+  fontupper=\small\color{inkgray}
+}
+\newtcolorbox{warn}{
+  enhanced, breakable, colback=danger!5, colframe=danger, boxrule=0pt,
+  leftrule=2.4pt, arc=2pt, left=8pt, right=8pt, top=5pt, bottom=5pt,
+  fontupper=\small\color{inkgray}
+}
+\newcommand{\kw}[1]{\textbf{\color{plum}#1}}
+% 行内的「按钮」标签:内边距压到最小 —— 否则一行里出现一个按钮就把整段行距顶开
+\newcommand{\btn}[1]{\tcbox[on line, colback=plum, colframe=plum, boxsep=0pt,
+  left=2.5pt, right=2.5pt, top=0.6pt, bottom=0.6pt, arc=1.6pt]{\color{cream}\footnotesize\textbf{#1}}}
+\newcommand{\gbtn}[1]{\tcbox[on line, colback=gold!30, colframe=gold, boxsep=0pt,
+  left=2.5pt, right=2.5pt, top=0.6pt, bottom=0.6pt, arc=1.6pt]{\color{deepink}\footnotesize\textbf{#1}}}
+
+\begin{document}
+
+% ══════════════════════════════ 封面 ══════════════════════════════
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{tikzpicture}[remember picture, overlay]
+  \fill[plum] (current page.north west) rectangle ([yshift=-11.5cm]current page.north east);
+  \fill[gold] ([yshift=-11.5cm]current page.north west) rectangle ([yshift=-11.72cm]current page.north east);
+\end{tikzpicture}
+
+\vspace*{2.6cm}
+{\color{cream}\fontsize{31}{38}\selectfont\bfseries 物业费小程序}\par
+\vspace{0.5em}
+{\color{gold}\fontsize{31}{38}\selectfont\bfseries 使用手册}\par
+\vspace{1.6em}
+{\color{cream!85}\large 业主篇 · 物业员工篇}\par
+\vspace{0.7em}
+{\color{cream!60}\normalsize 交物业费、看账单、报维修；发账单、收现金、催缴、管员工}\par
+
+\vspace{6.6cm}
+{\color{inkgray}\large 金港城 · 港城物业}\par
+\vspace{0.3em}
+{\color{subgray}\small 适用版本 1.4.0 \quad|\quad 界面指纹 \texttt{87bac18} \quad|\quad 2026 年 8 月}\par
+
+\vfill
+\begin{why}
+本手册的界面图取自当前代码渲染，与你手机上看到的一致。若某一步的界面与图不符，
+说明小程序版本比手册新 —— 请以\kw{手机上的实际提示文字}为准，那些文字是随功能一起写的。
+\end{why}
+\end{titlepage}
+
+% ══════════════════════════════ 目录 ══════════════════════════════
+\thispagestyle{empty}
+{\color{plum}\Large\bfseries 目录}\par\vspace{0.6em}
+{\color{rule}\hrule height 0.6pt}\vspace{0.9em}
+\begingroup
+\hypersetup{linkcolor=deepink}
+\makeatletter
+\@starttoc{toc}
+\makeatother
+\endgroup
+\newpage
+
+% ══════════════════════════════ 业主篇 ══════════════════════════════
+\section{业主篇：交费只有一件事}
+\markboth{业主篇}{业主篇}
+
+\begin{why}
+业主要做的事只有一件：\kw{看到自己家的账单，把它交掉}。所以整个流程被压到
+「授权手机号 → 看账单 → 缴费」三步，中间不需要注册、不需要记密码、不需要填房号 ——
+房号是物业登记好的，系统按手机号自动对上。
+\end{why}
+
+\step{o-mine-admin}{第一次进来：授权手机号}{%
+打开小程序，底部点\kw{「我的」}，按提示\kw{授权手机号}。
+这是唯一一次需要你点确认的地方 —— 微信会问「是否允许获取你的手机号」，点允许。
+
+授权之后，页面上会出现\kw{「我的房屋」}，显示你家的小区与房号。
+这说明物业已经把这个号码登记到你家名下了，账单会自动出现，不用再做任何事。
+
+\vspace{0.4em}
+{\small\color{subgray}页面最下面那行「版本 xxxxxxx」是代码版本号，报问题时告诉物业这串字符，
+他们能立刻判断你用的是哪一版。}
+}
+
+\step{o-bind}{如果提示「物业未登记此号码」}{%
+说明物业那边登记的是另一个号（比如买房时留的号）。两种办法：
+
+\begin{enumerate}[leftmargin=1.4em, itemsep=0.2em]
+  \item \kw{告诉物业你现在的号码}，他们在后台加一下，你重新进小程序就能看到账单 —— 最快；
+  \item 自己\kw{申请绑定}：选小区 → 输房号 → 填姓名 → 提交，等物业审核通过。
+\end{enumerate}
+
+房号支持多种写法，\mbox{「1栋101」}\mbox{「1-101」}\mbox{「101」}都能搜到，不用纠结格式。
+
+\begin{why}
+为什么手机号能直接对上房屋：物业在系统里给每套房登记了\kw{授权手机号}。
+凡是在名单里的号码，微信授权后立刻看到那套房的账单；一旦物业把号码移除，
+你也立刻看不到 —— 这样换租、换房主都不用等谁去解绑。
+\end{why}
+}
+
+\step{o-bill}{看账单：按年度分组，一眼看出还欠多少}{%
+底部\kw{「账单」}进来。最上面深色卡片里的数字是\kw{待缴合计}，
+它取自系统的权威汇总，不受你当前翻到第几页影响。
+
+下面按\kw{年度}分组。每一笔写清费用名称、到期日、金额；
+待缴的那笔右边有金色的 \gbtn{缴费} 按钮，已缴的显示缴费日期。
+
+上方三个标签\kw{全部 / 待缴 / 已缴}用来筛选；如果物业收多种费用（物业费、车位费…），
+还会多出一行按费用种类的筛选。
+}
+
+\step{o-bill-detail}{点开一笔，能看到钱是怎么算出来的}{%
+点账单任意一行进入详情。这里给出\kw{完整的计算依据}：
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.15em]
+  \item 计费方式（按建筑面积 / 固定金额）
+  \item 建筑面积、单价、月数
+  \item 账期起止（\texttt{2026-08-05 \textasciitilde{} 2027-08-04}）
+\end{itemize}
+
+\begin{why}
+为什么把算式摊开：物业费最常见的纠纷是「这个数怎么来的」。
+面积 × 单价 × 月数三个数都摆在这里，你可以拿着房本自己核一遍。
+账期按\kw{你家的放户日期}起算，所以邻居的账期和你不一定一样 —— 这是正常的。
+\end{why}
+}
+
+\step{o-ticket}{报事报修：写清楚哪里坏了}{%
+「我的 → 我的报修」或首页的报修入口进来。选\kw{类型}（报修 / 投诉 / 建议），
+写清楚\kw{哪里、什么问题}，可以拍照上传。
+
+提交后能看到处理进度：\kw{待受理 → 处理中 → 已办结}。
+物业受理时会填处理人姓名，办结时会写回复 —— 这两样你都看得到，还能给这次服务评分。
+}
+
+\begin{warn}
+\textbf{缴费提醒收不到？}\quad 微信的订阅消息是\kw{一次性}的：每授权一次，才能收到一条。
+在「我的 → 缴费提醒」里点开启，可以多授权几次。没授权不影响你看账单和缴费，
+只是账单生成、到期前的提醒推不到你微信里。
+\end{warn}
+
+\newpage
+% ══════════════════════════════ 员工篇 ══════════════════════════════
+\section{员工篇：手机就是收费台}
+\markboth{员工篇}{员工篇}
+
+\begin{why}
+物业这一端全部做在\kw{手机上}，不需要电脑。判断你是不是员工靠\kw{手机号}：
+号码在管理员名单里，「我的」页底部就会多出\kw{「物业工作」}这一段；
+普通业主看不到它的任何痕迹。所以员工和业主用的是\kw{同一个小程序}，不用装两个。
+\end{why}
+
+\subsection{一、进入与总览}
+
+\step{s-entry}{进入管理端}{%
+用\kw{已登记为员工的手机号}的微信打开小程序 → 「我的」→ 最下面
+\kw{「物业工作 · 物业管理」}。
+
+这一段下面写着你的\kw{角色}：\kw{物业管理员}或\kw{收费员}。
+角色决定你能做什么，见本篇最后一节。
+
+\begin{warn}
+进不去、显示「没有管理权限」？先确认三件事：这个微信授权的是不是登记过的号码；
+这个员工账号是不是\kw{在职}状态；是不是\kw{还没在电脑后台改过初始密码}（新账号必须先改一次密码）。
+\end{warn}
+}
+
+\step{s-grid}{楼盘图：颜色就是状态}{%
+进来第一屏是\kw{楼盘图}。上面一排是楼栋，点一下切换；下面按\kw{层}铺开房间，
+\kw{顶层在上}，和你站在楼前看到的一样。
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.15em]
+  \item 灰白格 = 正常；\textcolor{danger}{\textbf{红格}} = 有待缴，格子上直接写欠多少
+  \item 半透明格 = 已停用的房屋（不出账、不进欠费）
+\end{itemize}
+
+顶上四个标签是今天的四件事：\kw{楼盘图 / 欠费 / 报修 / 待发布}，
+数字角标告诉你哪一块有事。最上面的搜索框用来\kw{接电话查户}：房号、业主姓名、手机号都能搜。
+}
+
+\step{s-arrears}{欠费与催缴：先打电话}{%
+切到\kw{「欠费」}标签。最上面是全小区欠费合计与户数，下面逐户列出欠几笔、逾期几天。
+
+\kw{每一行都有「打电话」} —— 催缴最有效的手段是打电话，所以它排在最前面。
+需要群发时，勾选若干户，底部\btn{给选中的 N 户发提醒}。
+
+\begin{warn}
+群发的是\kw{微信订阅提醒}，业主没授权过就收不到；
+而且同一张账单的同一类提醒\kw{系统只发一次}（微信本身也不允许重复推送）。
+所以发完如果提示「这次没有新提醒发出」，不是坏了 —— 是这几户已经提醒过了，
+接下来只能打电话。
+\end{warn}
+}
+
+\subsection{二、一户人家的全部事情}
+
+\step{s-house}{点房间 = 进这一户}{%
+在楼盘图上点任意一个房间，进入\kw{这一户的作业台}。头卡是这户的身份与欠缴，
+下面四个标签把事情分开，\kw{一屏一件事}：
+
+\vspace{0.3em}
+\begin{tabular}{@{}>{\bfseries\color{plum}}l@{\hspace{0.8em}}l@{}}
+账单 & 每一笔的状态，以及这笔钱该做的动作\\
+住户 & 谁能看到这套房的账单（换租就改这里）\\
+标准 & 这户按哪条收费标准出账\\
+信息 & 面积、放户日期、启用/停用\\
+\end{tabular}
+\vspace{0.3em}
+
+账单那一栏里，动作跟着状态给：待缴 → \gbtn{收到现金·登记}；
+微信已缴 → \btn{退款}；线下已缴 → \btn{冲正线下收款}。
+底部金色按钮是\kw{只给这一户发账单}。
+}
+
+\step{s-house-contacts}{换租、换房主：删旧号 + 加新号}{%
+切到\kw{「住户」}。这里列的是\kw{能看到这套房账单的手机号}。
+
+换住户就两步，十秒钟：
+\begin{enumerate}[leftmargin=1.4em, itemsep=0.2em]
+  \item \btn{移除}旧住户的号 —— 他\kw{立刻}看不到这套房的账单；
+  \item 填新住户的手机号，\kw{＋ 添加授权手机号} —— 他在小程序授权手机号后立刻能看到。
+\end{enumerate}
+
+移除时系统会告诉你「已同时解除 N 人的绑定」，做了什么一目了然。
+姓名只是备注，写不写都行。
+
+\begin{why}
+为什么不做「过户流程」：现实里房子频繁出租出售，等前一位住户自己去解绑是等不到的。
+所以权限完全由\kw{物业手里的名单}决定 —— 名单里有就看得到，删掉就看不到，不需要谁配合。
+\end{why}
+}
+
+\step{s-house-info}{面积和放户日期：它们直接决定收多少}{%
+切到\kw{「信息」}→\kw{编辑这些信息}。四项可改：房号、建筑面积、放户日期、启用/停用。
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.15em]
+  \item \kw{建筑面积} —— 按面积收费时，它乘进金额里
+  \item \kw{放户日期} —— 决定这户\kw{每年几月出账}，页面上直接写着「每年 8 月出账」
+  \item \kw{停用} —— 停用的房屋不出账、不进欠费、楼盘图里变灰（空置就该这样）
+\end{itemize}
+
+改面积或放户日期时会先弹一句话说清后果，保存后留审计痕迹。
+
+\begin{warn}
+\textbf{删房屋}在这一屏最下面的红色区域。出过账单的房屋\kw{删不掉} ——
+账单是审计凭据，得能回答「这房去年收过多少」。这种情况请改成\kw{停用}。
+确实是测试房要清干净，可以升级到「彻底删除」，那一步要求\kw{原样打出房号}才执行。
+\end{warn}
+}
+
+\subsection{三、出账与收钱}
+
+\step{s-billone}{给一户补账单：零选择}{%
+房屋详情底部\gbtn{给这户发账单}进来。这一页\kw{不需要你做任何选择}：
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.15em]
+  \item 收费标准 = 这户挂着的那条
+  \item 月份 = 按这户的\kw{放户日}自动推出来（按年收费只在放户那个月出账）
+  \item 金额与算式直接摆出来：\texttt{92.08㎡ × 1.4 元 × 12 个月}
+\end{itemize}
+
+确认无误 → \btn{生成这户的账单}（这是\kw{草稿}，业主还看不到）→ 再确认一次才\kw{发布}。
+
+\begin{warn}
+如果这张账单被放进了一个\kw{含多户的草稿批次}，页面会告诉你「这一批共 N 户」，
+并让你去整批核对后一起发 —— 发布是\kw{整批}发布，不会在单户页面上悄悄把几十户一起发出去。
+\end{warn}
+}
+
+\step{s-billing}{批量出账：默认全出，点掉不该出的}{%
+楼盘图底部\btn{发账单}进来。三步：选\kw{标准 + 月份 + 范围（全部 / 按楼栋）}
+→ \kw{预览}→ 生成草稿 → 发布。
+
+预览页逐户列出金额和依据。\kw{默认全部都出}，点一行就是\kw{本次不给这户出}
+（那一行变灰并标「本次不出」）。顶上的合计\kw{跟着实时变} ——
+剔掉几户，数字立刻减下去。
+
+\begin{why}
+为什么要能点掉：每月总有几户线下已经交过了。
+剔掉的户会记进「跳过」并写明原因，下个月有人问「这户为什么没账单」，那里就是答案。
+\end{why}
+}
+
+\step{s-batches}{待发布：发布前最后一次核对}{%
+首页\kw{「待发布」}标签，或点首页待办条进来。这里是所有\kw{草稿批次}
+（业主还看不到的账单）。
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.15em]
+  \item \btn{逐户核对} —— 展开这一批的每一户
+  \item \kw{剔除} —— 这户本期不发（要填原因：线下已收 / 不该出）
+  \item \btn{发布(N 户)} —— 按钮上的户数取自库里的真实条数，不是生成时的数字
+  \item \kw{这批整个不发} —— 算错了就整批作废，重新出
+\end{itemize}
+
+\begin{warn}
+发布是\kw{不可逆}的一步：业主立刻能看到并缴费。所以按钮上永远写着真实户数，
+点下去还要再确认一次。
+\end{warn}
+}
+
+\step{s-collect}{业主拿现金来交：登记收款}{%
+房屋详情的待缴账单行 → \gbtn{收到现金·登记}。
+
+金额\kw{不给改} —— 收多少是账单说的。你要填的是：
+\kw{收款方式}（现金 / 微信收款码 / 银行转账 / 其他）、\kw{单据号}（收据本编号，必填）、
+收款日期、付款人（选填）。
+
+\begin{why}
+为什么单据号必填：这是这笔现金\kw{唯一的线下痕迹}。以后对账对不上，
+只能靠这个编号回到纸质收据本。系统给了个默认值（如 \texttt{CASH-0805-A-3-702}），
+改成你收据本上的真实编号即可。
+\end{why}
+}
+
+\step{s-collect-done}{收完给凭证}{%
+确认后立刻拿到\kw{收据号}和订单号。业主那边这笔账单当场变「已缴」，
+并能看到电子收据。
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.15em]
+  \item 手抖点了两下\kw{不会重复收款}（同一张账单 + 同一个单据号算同一次）
+  \item 收错了户 → 回那笔账单点\btn{冲正线下收款}（限管理员），账单回到待缴
+\end{itemize}
+}
+
+\subsection{四、日常事务}
+
+\step{s-tickets}{报事报修：受理和办结都要填字}{%
+首页\kw{「报修」}标签。\kw{待受理}排在最上面 —— 业主在等。
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.15em]
+  \item \btn{受理(填处理人)} —— 填谁去处理，\kw{业主会看到这个名字}
+  \item \gbtn{办结(填回复)} —— 写清怎么解决的，\kw{业主会看到这段话，还能评分}
+\end{itemize}
+
+\begin{why}
+为什么没有「一键办结」：一键办结留下的是一条没人看得懂的记录，
+业主只会再报一次。填一句话的成本，换的是不用再来第二遍。
+\end{why}
+}
+
+\step{s-announce}{发公告}{%
+楼盘图底部\btn{发公告}。填标题和正文，两个开关：
+\kw{发给全部小区}（多小区时用）、\kw{置顶}。
+
+发布前的确认框会写清\kw{受众范围}。下面是已发布列表，每条可\kw{撤回} ——
+但撤回只是让它不再显示，\kw{已经看过的人收不回来}。
+}
+
+\step{s-housenew}{新增房屋}{%
+楼盘图下面虚线的\kw{＋ 新增房屋}。一屏填完：房号、显示名、类型（住宅/门市/车位）、
+建筑面积、放户日期、住户手机、收费标准。
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.15em]
+  \item 房号在本小区内\kw{唯一}。填了已有的房号是\kw{更新}那套房，不会出现两套同号
+  \item 面积和放户日期可以以后补，但\kw{补齐之前这套房出不了账}
+  \item 住宅\kw{必须}填面积（按面积收费算不出金额）
+  \item 填了住户手机，对方在小程序授权手机号后立刻能看到这套房的账单
+\end{itemize}
+}
+
+\subsection{五、员工与权限（仅物业管理员）}
+
+\step{s-staff}{加人、改角色、停用}{%
+楼盘图底部\kw{「员工与权限」}（只有\kw{物业管理员}看得到这个入口）。
+
+\vspace{0.3em}
+\begin{tabular}{@{}>{\bfseries\color{plum}}l@{\hspace{0.9em}}p{0.62\linewidth}@{}}
+收费员 & 收钱、催缴、出账、报修 —— \textbf{退款与整批作废做不了}\\[0.25em]
+物业管理员 & 什么都能做，含退款、整批作废、彻底删房、管员工\\
+\end{tabular}
+\vspace{0.4em}
+
+每个人一行，可以改\kw{手机号}、\kw{切换角色}、\kw{重置密码}、\kw{停用/恢复}。
+}
+
+\begin{warn}
+\textbf{三件必须知道的事}
+\begin{enumerate}[leftmargin=1.4em, itemsep=0.25em]
+  \item \kw{初始密码只显示一次}（系统不留明文）。忘了只能重置，重置会生成新的一次性密码。
+  \item 填了手机号\kw{也不能立刻手机登录}：新账号必须\kw{先在电脑后台用初始密码登录一次并改密码}，
+        之后才能用手机授权手机号免密进入。名单上会写「待首次改密」提示你。
+  \item \kw{停用是即时的} —— 他手里的登录状态当场失效，不用等过期。改角色同理：
+        刚被降为收费员的人，退款按钮当场就没了。
+\end{enumerate}
+\end{warn}
+
+\begin{why}
+系统\kw{不允许}你把自己停用或降级，也\kw{不允许}拿掉公司里最后一个在职管理员 ——
+否则一次手滑就没人能管员工、退款、发布账单了，恢复得找开发改数据库。
+想交接管理员：先把接手的人\kw{设成管理员}，再把自己降成收费员。
+\end{why}
+
+\vspace{1.2em}
+{\color{rule}\hrule height 0.6pt}
+\vspace{0.8em}
+{\small\color{subgray}
+遇到界面上的文字和本手册不一致时，\textbf{以手机上的文字为准} —— 那些提示是随功能一起写的，
+比手册更新得快。报问题时请一并告诉「我的」页底部那串\texttt{版本}指纹，
+以及你当时点的是哪个按钮。}
+
+\end{document}

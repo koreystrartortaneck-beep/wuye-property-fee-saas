@@ -20,3 +20,8 @@ output/
 # 物业提供的原始表格：含数百户业主真实姓名与手机号，绝不入库
 物业费缴费规则/
 design-预览/
+
+# 根目录下 xelatex 误跑留下的日志
+b1.log
+b2.log
+texput.log
