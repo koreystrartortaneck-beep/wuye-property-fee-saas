@@ -3,7 +3,7 @@
 %
 %  编译： xelatex manual.tex        （跑两遍，第二遍生成目录页码）
 %  依赖： TeXLive 2023+ 的 ctex / tcolorbox / titlesec / fontspec
-%  插图： img/ 目录，全部取自当前代码渲染；换成真机截图只需同名覆盖，无需改本文件
+%  插图： img/ 目录；换图只需同名覆盖，无需改本文件
 % ============================================================================
 \documentclass[11pt,a4paper]{article}
 
@@ -18,7 +18,7 @@
 \usepackage{enumitem}
 \usepackage{hyperref}
 \usepackage{tikz}
-\tcbuselibrary{skins,breakable}
+\tcbuselibrary{skins}
 
 % ── 取小程序自己的配色，手册和界面是同一家人 ───────────────────────────────
 \definecolor{plum}{HTML}{3B2B57}      % 主色：深紫
@@ -47,6 +47,7 @@
 \titlespacing{\section}{0pt}{1.4em}{0.8em}
 \titlespacing{\subsection}{0pt}{1.1em}{0.4em}
 
+\setlength{\headheight}{22pt}
 \pagestyle{fancy}
 \fancyhf{}
 \renewcommand{\headrulewidth}{0.4pt}
@@ -97,13 +98,15 @@
 }
 
 % ── 三种提示框：为什么这么设计 / 注意 / 这是钱 ─────────────────────────────
+% 注意:这两个框会用在 \step 的 minipage 里,那里**不能** breakable ——
+% tcolorbox 会把框拆成多段而正文一段都放不下,页面上只剩几条空色条(2026-08-05 修)。
 \newtcolorbox{why}{
-  enhanced, breakable, colback=cream2, colframe=gold, boxrule=0pt,
+  enhanced, colback=cream2, colframe=gold, boxrule=0pt,
   leftrule=2.4pt, arc=2pt, left=8pt, right=8pt, top=5pt, bottom=5pt,
   fontupper=\small\color{inkgray}
 }
 \newtcolorbox{warn}{
-  enhanced, breakable, colback=danger!5, colframe=danger, boxrule=0pt,
+  enhanced, colback=danger!5, colframe=danger, boxrule=0pt,
   leftrule=2.4pt, arc=2pt, left=8pt, right=8pt, top=5pt, bottom=5pt,
   fontupper=\small\color{inkgray}
 }
@@ -133,17 +136,13 @@
 \vspace{0.7em}
 {\color{cream!60}\normalsize 交物业费、看账单、报维修；发账单、收现金、催缴、管员工}\par
 
-\vspace{6.6cm}
+% 版权行压到页脚 —— 原来靠 \vspace{6.6cm} 顶下去,是因为下面还有一段说明文字;
+% 那段删了之后固定值就把它吊在半空,改成 \vfill 让它自己贴底。
+\vfill
 {\color{inkgray}\large 金港城 · 港城物业}\par
 \vspace{0.3em}
-{\color{subgray}\small 适用版本 1.4.0 \quad|\quad 界面指纹 \texttt{87bac18} \quad|\quad 2026 年 8 月}\par
-
-\vfill
-\begin{why}
-本手册的界面图\kw{按当前代码渲染}而成（含微信状态栏与导航栏），与你手机上看到的一致；
-但它不是手机截屏，个别字体与图标可能略有差别。若某一步的界面与图不符，
-说明小程序版本比手册新 —— 请以\kw{手机上的实际提示文字}为准，那些文字是随功能一起写的。
-\end{why}
+{\color{subgray}\small 适用版本 1.4.0 \quad|\quad 2026 年 8 月}\par
+\vspace{1.4cm}
 \end{titlepage}
 
 % ══════════════════════════════ 目录 ══════════════════════════════
@@ -174,10 +173,6 @@
 
 授权之后，页面上会出现\kw{「我的房屋」}，显示你家的小区与房号。
 这说明物业已经把这个号码登记到你家名下了，账单会自动出现，不用再做任何事。
-
-\vspace{0.4em}
-{\small\color{subgray}页面最下面那行「版本 xxxxxxx」是代码版本号，报问题时告诉物业这串字符，
-他们能立刻判断你用的是哪一版。}
 }
 
 \step{o-bind}{如果提示「物业未登记此号码」}{%
@@ -459,42 +454,33 @@
 
 \subsection{五、员工与权限（仅物业管理员）}
 
-\step{s-staff}{加人、改角色、停用}{%
-楼盘图底部\kw{「员工与权限」}（只有\kw{物业管理员}看得到这个入口）。
-
-\vspace{0.3em}
-\begin{tabular}{@{}>{\bfseries\color{plum}}l@{\hspace{0.9em}}p{0.62\linewidth}@{}}
-收费员 & 收钱、催缴、出账、报修 —— \textbf{退款与整批作废做不了}\\[0.25em]
-物业管理员 & 什么都能做，含退款、整批作废、彻底删房、管员工\\
-\end{tabular}
-\vspace{0.4em}
-
-每个人一行，可以改\kw{手机号}、\kw{切换角色}、\kw{重置密码}、\kw{停用/恢复}。
-}
-
-\begin{warn}
-\textbf{三件必须知道的事}
-\begin{enumerate}[leftmargin=1.4em, itemsep=0.25em]
-  \item \kw{初始密码只显示一次}（系统不留明文）。忘了只能重置，重置会生成新的一次性密码。
-  \item 填了手机号\kw{也不能立刻手机登录}：新账号必须\kw{先在电脑后台用初始密码登录一次并改密码}，
-        之后才能用手机授权手机号免密进入。名单上会写「待首次改密」提示你。
-  \item \kw{停用是即时的} —— 他手里的登录状态当场失效，不用等过期。改角色同理：
-        刚被降为收费员的人，退款按钮当场就没了。
-\end{enumerate}
-\end{warn}
-
 \begin{why}
 系统\kw{不允许}你把自己停用或降级，也\kw{不允许}拿掉公司里最后一个在职管理员 ——
 否则一次手滑就没人能管员工、退款、发布账单了，恢复得找开发改数据库。
 想交接管理员：先把接手的人\kw{设成管理员}，再把自己降成收费员。
 \end{why}
 
-\vspace{1.2em}
-{\color{rule}\hrule height 0.6pt}
-\vspace{0.8em}
-{\small\color{subgray}
-遇到界面上的文字和本手册不一致时，\textbf{以手机上的文字为准} —— 那些提示是随功能一起写的，
-比手册更新得快。报问题时请一并告诉「我的」页底部那串\texttt{版本}指纹，
-以及你当时点的是哪个按钮。}
+\step{s-staff}{加人、改角色、停用}{%
+楼盘图底部\kw{「员工与权限」}（只有\kw{物业管理员}看得到这个入口）。
+
+\vspace{0.3em}
+\begin{tabular}{@{}>{\bfseries\color{plum}}l@{\hspace{0.7em}}p{\dimexpr\linewidth-6.2em\relax}@{}}
+收费员 & 收钱、催缴、出账、报修；\textbf{退款、整批作废做不了}\\[0.3em]
+物业管理员 & 什么都能做：退款、整批作废、彻底删房、管员工\\
+\end{tabular}
+\vspace{0.7em}
+
+每个人一行，可以改\kw{手机号}、\kw{切换角色}、\kw{重置密码}、\kw{停用/恢复}。
+
+\begin{warn}
+\textbf{三件必须知道的事}
+\begin{enumerate}[leftmargin=1.4em, itemsep=0.2em, topsep=0.25em]
+  \item \kw{初始密码只显示一次}，忘了只能重置。
+  \item 填了手机号也\kw{不能立刻手机登录}：新账号要先在电脑后台改一次密码。
+        名单上写着「待首次改密」。
+  \item \kw{停用和改角色即时生效}，他手里的登录状态当场失效。
+\end{enumerate}
+\end{warn}
+}
 
 \end{document}
