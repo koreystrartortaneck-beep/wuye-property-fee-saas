@@ -236,11 +236,15 @@ export class StaffService {
     if (Object.keys(data).length === 0) return { id: target.id, changed: [] };
 
     /*
-     * 角色或状态一变,就把 tokenVersion 加一 —— 已经发出去的令牌立刻失效。
-     * 不这么做的话:刚被降级的收费员手里那张管理员令牌还能用满 12 小时,
+     * 角色、状态、**手机号**一变,就把 tokenVersion 加一 —— 已经发出去的令牌立刻失效。
+     * 角色/状态的理由:刚被降级的收费员手里那张管理员令牌还能用满 12 小时,
      * 而「降级」这个动作在他看来什么也没发生。
+     * 手机号的理由(2026-08-05 补):换号往往就是「人换了」(收费员离职,号给新人)。
+     * 不吊销的话,旧号那个人手里经手机授权换来的令牌照样用到过期 ——
+     * 「已经把他的号换掉了」看起来完成了,权限却没收回。吊销后他重新换发,
+     * 手机号已对不上名单,自然被拒。
      */
-    if (data.role !== undefined || data.status !== undefined) {
+    if (data.role !== undefined || data.status !== undefined || data.phone !== undefined) {
       data.tokenVersion = { increment: 1 };
     }
 

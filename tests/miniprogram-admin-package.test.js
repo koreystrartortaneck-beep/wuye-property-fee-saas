@@ -469,3 +469,18 @@ test('新建房屋:房号实时预览归入位置,解析规则不在小程序里
   const wxml = read('packageAdmin/pages/house-new/house-new.wxml');
   assert.match(wxml, /gridHint/, '预览提示没有渲染');
 });
+
+test('已退款/已作废的账单在手机上有出路:重开', () => {
+  /*
+   * 没有重开的话手机端是死局:退了款想重新收这一年,
+   * 批量/单户出账都会被「同年已有非 CANCELED 账单」的查重挡住,
+   * 而重开原来只在电脑后台有 —— 物业员工可能根本不用电脑。
+   */
+  const js = stripJs(read('packageAdmin/pages/house/house.js'));
+  assert.match(js, /canReissue: b\.status === 'REFUNDED' \|\| b\.status === 'CANCELED'/, '重开没有跟着状态给');
+  assert.match(js, /bills\/\$\{id\}\/reissue/, '没有调重开接口');
+  assert.match(js, /askText\('重开原因'/, '重开没有问原因');
+  assert.match(js, /showModal[\s\S]{0,600}业主立刻能看到/, '重开前没有说清业主立刻可见');
+  const wxml = read('packageAdmin/pages/house/house.wxml');
+  assert.match(wxml, /canReissue[\s\S]{0,200}重开账单/, '重开按钮没有渲染');
+});

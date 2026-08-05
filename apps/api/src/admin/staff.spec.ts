@@ -170,6 +170,17 @@ describe('权限变更要立刻生效', () => {
     expect(updates[0].tokenVersion).toBeUndefined();
   });
 
+  it('换手机号也要顶掉旧令牌——换号往往就是换人,旧号的手机会话不能继续有效', async () => {
+    /*
+     * 场景:收费员离职,他的账号手机号换成新人的。不吊销的话,
+     * 离职那位手里经手机授权换来的令牌照样用到过期(最长 12 小时)——
+     * 他重新换发时手机号才对不上名单。吊销让这一刻提前到「换号即失效」。
+     */
+    const { svc, updates } = make([admin('me'), admine()]);
+    await svc.update(ME, 'a2', { phone: '13900002222' } as never);
+    expect(updates[0]).toMatchObject({ phone: '13900002222', tokenVersion: { increment: 1 } });
+  });
+
   it('重置密码也顶掉旧令牌(常见场景就是手机丢了/人已离职),且口令不入审计', async () => {
     const { svc, updates, audits } = make([admin('me'), admine()]);
     const r = await svc.resetPassword(ME, 'a2');

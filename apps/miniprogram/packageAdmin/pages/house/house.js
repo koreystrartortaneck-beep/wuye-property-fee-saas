@@ -142,6 +142,12 @@ Page({
              */
             canRefund: isAdmin && b.status === 'PAID' && pay && pay.channel === 'WXPAY' && pay.status === 'SUCCESS',
             canReverse: isAdmin && b.status === 'PAID' && pay && pay.channel === 'OFFLINE' && pay.status === 'SUCCESS',
+            /*
+             * 已退款/已作废 → 重开。没有这条出路的话,手机端是死局:
+             * 退了款想重新收这一年,「给这户发账单」会被查重挡住
+             * (同年已有非 CANCELED 账单),而「重开」原来只在电脑后台有。
+             */
+            canReissue: b.status === 'REFUNDED' || b.status === 'CANCELED',
           };
         }),
         payments: profile.payments || [],
@@ -424,6 +430,44 @@ Page({
     } catch (err) {
       if (err && err.code === 40300) {
         wx.showModal({ title: '权限不够', content: '冲正只有物业管理员账号能做。请让管理员操作。', showCancel: false });
+      }
+    }
+  },
+
+  /**
+   * 重开:已退款/已作废的账单重新出一张。
+   * 没有它手机端是死局 —— 退了款想重新收这一年,批量/单户出账都会被
+   * 「同年已有账单」的查重挡住;重开原来只在电脑后台有。
+   * 服务端有链式重开守卫(同房同期同费用项只允许一张存活),重复点不会出两张。
+   */
+  async reissue(e) {
+    const { id, amount, title } = e.currentTarget.dataset;
+    const reason = await askText('重开原因', '必填,例如「误退款,重新收取」');
+    if (!reason) return;
+    const ok = await new Promise((resolve) =>
+      wx.showModal({
+        title: '确认重开',
+        content: `按原账单(${title} ¥${amount})重新出一张待缴账单,业主立刻能看到并缴费。原账单保持现状,两张会互相关联。`,
+        confirmText: '确认重开',
+        success: (r) => resolve(r.confirm),
+        // 弹窗失败也必须把 Promise 收掉,否则界面永久卡在「处理中」
+        fail: () => resolve(false),
+      }),
+    );
+    if (!ok) return;
+    try {
+      // silent:拒绝原因(如「本期已有存活账单」)整句放进 modal,不用 toast 一闪而过
+      await adminRequest(`/admin/bills/${id}/reissue`, {
+        method: 'POST',
+        silent: true,
+        data: { reason, requestId: `mp-reissue-${id}` },
+      });
+      wx.showToast({ title: '已重开,业主可见', icon: 'none', duration: 2500 });
+      await this.load();
+    } catch (err) {
+      // 常见拒绝:本期已有存活账单(先作废它)。服务端的话已经说得很清楚,原样给人看。
+      if (err && err.message) {
+        wx.showModal({ title: '没有重开', content: err.message, showCancel: false });
       }
     }
   },

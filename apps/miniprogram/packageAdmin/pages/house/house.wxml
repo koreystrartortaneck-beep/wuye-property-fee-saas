@@ -51,10 +51,11 @@
               <view class="bill-st {{item.status === 'UNPAID' ? 'adm-danger' : ''}}">{{item.statusLabel}}</view>
             </view>
           </view>
-          <view wx:if="{{item.canCollect || item.canRefund || item.canReverse}}" class="bill-acts">
+          <view wx:if="{{item.canCollect || item.canRefund || item.canReverse || item.canReissue}}" class="bill-acts">
             <view wx:if="{{item.canCollect}}" class="adm-pill adm-pill-ok" data-id="{{item.id}}" bindtap="goCollect">收到现金 · 登记</view>
             <view wx:if="{{item.canRefund}}" class="adm-pill adm-pill-danger" data-order="{{item.orderNo}}" data-amount="{{item.amount}}" bindtap="refund">退款</view>
             <view wx:if="{{item.canReverse}}" class="adm-pill adm-pill-danger" data-order="{{item.orderNo}}" data-amount="{{item.amount}}" bindtap="reverse">冲正线下收款</view>
+            <view wx:if="{{item.canReissue}}" class="adm-pill" data-id="{{item.id}}" data-amount="{{item.amount}}" data-title="{{item.title}}" bindtap="reissue">重开账单</view>
           </view>
         </view>
       </view>
