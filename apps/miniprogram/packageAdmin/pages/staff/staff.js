@@ -13,8 +13,8 @@ const { adminRequest, currentAdmin } = require('../../../utils/admin');
  *
  * 界面上必须说清的三件事(都是实测里人会卡住的地方):
  *   ① 初始密码只显示这一次 —— 关掉就再也看不到,只能重置
- *   ② 填了手机号也不能立刻手机登录:得先在电脑后台用初始密码登录一次改密
- *      (免密通道会拒绝「须改密」的受限会话)
+ *   ② 填了手机号、在职,授权手机号就能进 —— 手机通道不受「首次改密」限制
+ *      (那是密码通道的卫生要求;初始密码只在用电脑后台时才用得上)
  *   ③ 停用是即时的:他手里的令牌当场失效,不用等 12 小时
  */
 
@@ -52,8 +52,8 @@ Page({
           // 「他为什么登不上」得能一眼看出来,而不是靠猜
           blockedReason: x.status !== 'ACTIVE'
             ? '已停用'
-            : x.mustChangePassword
-              ? '待首次改密(还不能手机登录)'
+            : x.mustChangePassword && !x.phoneTail
+              ? '还没法登录:填手机号,或先在电脑后台改密'
               : x.lockedUntil && new Date(x.lockedUntil) > new Date()
                 ? '密码连错被临时锁定'
                 : '',
@@ -194,7 +194,7 @@ Page({
       const r = await adminRequest(`/admin/staff/${x.id}/reset-password`, { method: 'POST' });
       wx.showModal({
         title: '请抄下新密码',
-        content: `登录名 ${r.username}\n新密码 ${r.password}\n\n只显示这一次。请他在电脑后台登录并改密。`,
+        content: `登录名 ${r.username}\n新密码 ${r.password}\n\n只显示这一次,只在电脑后台用得上(手机授权手机号即可进入,不用密码)。`,
         showCancel: false,
         confirmText: '已抄下',
       });

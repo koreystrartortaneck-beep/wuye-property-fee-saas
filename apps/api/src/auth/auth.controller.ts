@@ -102,14 +102,22 @@ export class AuthController {
       const tenant = await this.prisma.raw.tenant.findUnique({ where: { id: admin.tenantId }, select: { status: true } });
       if (tenant?.status !== 'ACTIVE') return { admin: null };
     }
-    // mustChangePassword 的受限会话不给小程序:那是密码体系的状态,免密通道直接拒
-    if (admin.mustChangePassword) return { admin: null };
-
+    /*
+     * mustChangePassword **不拦**这条通道(2026-08-05 改)。
+     *
+     * 「须先改初始密码」是密码通道的卫生要求 —— 初始密码创建者见过,
+     * 改掉之前密码登录的行为无法归属到本人,所以电脑后台只放行改密端点。
+     * 而这里的凭据是微信授权手机号:运营商核验的本人持有,强度与密码体系无关。
+     * 之前把它也拦掉的后果是:物业加了员工、填了手机号,对方手机上死活
+     * 看不到「物业工作」,唯一的解法是去找一台电脑 —— 而物业员工可能根本不用电脑。
+     * 令牌带 pv 标记,AdminGuard 据此对受限会话放行(密码令牌仍然只能改密)。
+     */
     const token = await this.auth.signAdminToken({
       sub: admin.id,
       tenantId: admin.tenantId,
       role: admin.role,
       ver: admin.tokenVersion,
+      pv: true,
     });
     if (admin.tenantId) {
       await runWithTenant(admin.tenantId, () =>

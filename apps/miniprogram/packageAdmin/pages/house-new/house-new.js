@@ -35,6 +35,8 @@ Page({
     pickingRule: false,
     today: '',
     saving: false,
+    gridHint: '',
+    gridWarn: false,
   },
 
   onLoad(q) {
@@ -61,12 +63,48 @@ Page({
 
   onInput(e) {
     this.setData({ [e.currentTarget.dataset.k]: e.detail.value });
+    if (e.currentTarget.dataset.k === 'code') this.previewGrid();
   },
   onHandover(e) {
     this.setData({ handoverDate: e.detail.value });
   },
   pickType(e) {
     this.setData({ type: e.currentTarget.dataset.v });
+    this.previewGrid();
+  },
+
+  /*
+   * 房号 → 楼盘图位置的实时预览。规则只在后端一处(parseHouseCode),
+   * 这里现问,不复制一份 —— 复制的那份早晚和真的对不上。
+   * 2026-08-05 用户建「003-013」进了「其他」组,以为没绑定到楼盘。
+   */
+  previewGrid() {
+    clearTimeout(this._gridTimer);
+    const code = this.data.code.trim();
+    if (!code) return this.setData({ gridHint: '', gridWarn: false });
+    this._gridTimer = setTimeout(async () => {
+      try {
+        const p = await adminRequest(
+          `/admin/houses-grid/parse?type=${this.data.type}&code=${encodeURIComponent(code)}`,
+          { silent: true },
+        );
+        if (p.code !== undefined && p.recognized === undefined) return; // 形状不对的响应,不装懂
+        if (this.data.code.trim() !== code) return; // 回来时已经改了,别用旧答案
+        this.setData(
+          p.recognized
+            ? {
+                gridHint: `楼盘图归入:${p.building}${p.unit ? ' · ' + p.unit : ''}${p.floor > 0 ? ' · ' + p.floor + ' 层' : ''}`,
+                gridWarn: false,
+              }
+            : {
+                gridHint: '这个写法认不出楼栋,会归入「其他」。参考:A-3-702 / 2-1-1-1102 / G-001 / 商场M111',
+                gridWarn: true,
+              },
+        );
+      } catch (e) {
+        this.setData({ gridHint: '', gridWarn: false }); // 预览挂了不挡建房
+      }
+    }, 350);
   },
   togglePickRule() {
     this.setData({ pickingRule: !this.data.pickingRule });

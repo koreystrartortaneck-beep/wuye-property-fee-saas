@@ -4,6 +4,8 @@
       <view class="f-lab">房号 <text class="req">*</text></view>
       <input class="adm-input f-in" data-k="code" value="{{code}}" bindinput="onInput" placeholder="如 A-3-702" />
     </view>
+    <!-- 实时说清这个房号会落到楼盘图的哪里 —— 认不出的进「其他」,建完就「找不到」 -->
+    <view wx:if="{{gridHint}}" class="grid-hint {{gridWarn ? 'grid-hint-warn' : ''}}">{{gridHint}}</view>
     <view class="f-row">
       <view class="f-lab">显示名</view>
       <input class="adm-input f-in" data-k="displayName" value="{{displayName}}" bindinput="onInput" placeholder="留空就用房号" />

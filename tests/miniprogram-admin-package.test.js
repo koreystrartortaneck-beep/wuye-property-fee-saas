@@ -451,5 +451,21 @@ test('员工与权限:收费员看不到会 403 的按钮,且界面显隐只是�
   assert.match(staffJs, /admin\/staff/, '没有调员工接口');
   assert.match(staffJs, /当场失效/, '停用/重置没有说清旧登录状态立刻失效');
   const staffWxml = read('packageAdmin/pages/staff/staff.wxml').replace(/<!--[\s\S]*?-->/g, '');
-  assert.match(staffWxml, /先在电脑后台登录一次改密/, '没有说清填了手机号还不能立刻免密登录');
+  // 2026-08-05 起手机通道不再受「首次改密」限制(pv 令牌),文案必须说的是这个新事实
+  assert.match(staffWxml, /授权手机号即可进入管理端/, '没有说清「填了号授权即可进入」');
+  assert.ok(!/也要先在电脑后台登录一次改密/.test(staffWxml), '还在说旧规则(填了号也要先电脑改密)');
+});
+
+test('新建房屋:房号实时预览归入位置,解析规则不在小程序里复制一份', () => {
+  /*
+   * 2026-08-05 用户建「003-013」,认不出的形状进了「其他」组 ——
+   * 房建成了,但楼盘图上找不到,看起来就像「没绑定到楼盘」。
+   * 预览必须问后端(/admin/houses-grid/parse):规则只在 parseHouseCode 一处,
+   * 小程序复制一份的话,早晚和真的对不上。
+   */
+  const js = stripJs(read('packageAdmin/pages/house-new/house-new.js'));
+  assert.match(js, /houses-grid\/parse/, '房号没有实时问「会归到哪」');
+  assert.ok(!/期\\d|\[A-Z\]\)-\(/.test(js), '解析规则被复制进了小程序');
+  const wxml = read('packageAdmin/pages/house-new/house-new.wxml');
+  assert.match(wxml, /gridHint/, '预览提示没有渲染');
 });

@@ -78,14 +78,17 @@ describe('员工名单', () => {
     const { svc } = make([
       admin('a1', { phone: '13800001111' }),
       admin('a2', { role: 'STAFF', phone: '13900002222', mustChangePassword: true }),
+      admin('a3', { role: 'STAFF', status: 'DISABLED', phone: '13700003333' }),
     ]);
     const r = await svc.list(ME);
     expect(r.items[0].phoneTail).toBe('1111');
     expect(JSON.stringify(r.items)).not.toContain('13800001111');
     expect(r.items[0].canPhoneLogin).toBe(true);
-    // 还没首次改密 → 免密通道会拒(受限会话),名单上必须看得出来
-    expect(r.items[1].canPhoneLogin).toBe(false);
+    // 待首次改密**不影响**手机通道(那是密码通道的卫生要求)——填了号、在职就能进
+    expect(r.items[1].canPhoneLogin).toBe(true);
     expect(r.items[1].roleLabel).toBe('收费员');
+    // 停用才是真的进不来
+    expect(r.items[2].canPhoneLogin).toBe(false);
   });
 });
 

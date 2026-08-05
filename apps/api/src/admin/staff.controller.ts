@@ -119,7 +119,8 @@ export class StaffService {
         roleLabel: ROLE_LABEL[r.role] ?? r.role,
         status: r.status,
         phoneTail: r.phone ? r.phone.slice(-4) : null,
-        canPhoneLogin: !!r.phone && r.status === 'ACTIVE' && !r.mustChangePassword,
+        // 手机通道与密码状态无关:填了号、在职,授权手机号就能进(见 auth.controller 的 pv)
+        canPhoneLogin: !!r.phone && r.status === 'ACTIVE',
         mustChangePassword: r.mustChangePassword,
         // 连错密码被锁的账号:名单上要看得出来,否则「他说登不上」无从判断
         lockedUntil: r.lockedUntil,
@@ -189,9 +190,8 @@ export class StaffService {
     });
 
     /*
-     * 手机号填了但还不能用手机登录 —— 因为 mustChangePassword 为真时
-     * /auth/admin-exchange 会拒绝(受限会话)。这句必须说出来,
-     * 否则物业会以为「填了号就能进」,然后对着「没有管理权限」猜半天。
+     * 填了手机号的员工不需要碰电脑:授权手机号即进(手机通道不受首改密限制)。
+     * 初始密码只在他要用**电脑后台**时才用得上,那条路仍然强制首次改密。
      */
     return {
       id: created.id,
@@ -199,8 +199,8 @@ export class StaffService {
       password,
       needsFirstLogin: true,
       hint: phone
-        ? '请他先在电脑后台用这个初始密码登录一次并改密码,之后手机授权手机号即可免密进入'
-        : '请他先在电脑后台用这个初始密码登录一次并改密码',
+        ? '他在小程序里授权手机号即可进入管理端;初始密码只在用电脑后台时需要(首次登录会要求改密)'
+        : '请他先在电脑后台用这个初始密码登录一次并改密码;或给他填手机号,手机授权即可进入',
     };
   }
 

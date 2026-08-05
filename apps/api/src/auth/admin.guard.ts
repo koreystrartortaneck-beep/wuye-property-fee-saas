@@ -36,13 +36,17 @@ export class AdminGuard implements CanActivate {
     /*
      * 受限会话：必须先改初始密码时，仅放行改密端点。
      *
+     * 只约束**密码**通道：pv 令牌（微信授权手机号换发）不受限 ——
+     * 那条通道的身份证明是运营商核验的手机号持有，与密码是否改过无关；
+     * 拦它等于强迫不用电脑的物业员工去找一台电脑。
+     *
      * 用 endsWith 精确匹配而不是 includes：includes 的判据是「路径里出现过这个串」，
      * 而 req.path 取不到时回退的 req.url **带查询串** ——
      * `/admin/tenants?next=/admin/auth/change-password` 就会被放行。
      * Express 下 req.path 始终有值，所以这不是已存在的漏洞；
      * 但一个「靠上游恰好总有值」才安全的判据，不该留在鉴权路径里。
      */
-    if (admin.mustChangePassword) {
+    if (admin.mustChangePassword && !payload.pv) {
       const rawPath = (req.path || req.url || '').split('?')[0];
       if (!rawPath.endsWith('/admin/auth/change-password')) {
         throw new BizException(ErrorCode.UNAUTHORIZED, '请先修改初始密码');

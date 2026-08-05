@@ -75,7 +75,7 @@
     <view wx:else class="adm-btn adm-btn-ghost add-btn" bindtap="toggleAdd">＋ 新建员工账号</view>
 
     <view class="adm-hint">初始密码只显示一次(系统不留明文),忘了只能重置。</view>
-    <view class="adm-hint">填了手机号也要先在电脑后台登录一次改密,之后才能用手机授权手机号免密进入。</view>
+    <view class="adm-hint">填了手机号的员工,微信授权手机号即可进入管理端;初始密码只在用电脑后台时需要。</view>
     <view class="adm-hint">停用是即时的 —— 他手里的登录状态当场失效,不用等过期。</view>
   </block>
 </view>

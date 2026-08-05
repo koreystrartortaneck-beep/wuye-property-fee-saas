@@ -41,3 +41,11 @@
 }
 .em { font-weight: 800; color: var(--text, #251c38); }
 .act { margin-top: 30rpx; }
+
+/* 房号 → 楼盘图位置的实时预览 */
+.grid-hint {
+  margin: 4rpx 0 10rpx 186rpx; /* 对齐输入列(标签 168 + 间距 18) */
+  font-size: 24rpx;
+  color: var(--text-2, #55496b);
+}
+.grid-hint-warn { color: var(--danger, #c45656); }

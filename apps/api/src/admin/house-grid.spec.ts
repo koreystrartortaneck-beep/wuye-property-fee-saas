@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { HouseGridService, floorOf, parseHouseCode } from './house-grid.controller';
+import { HouseGridController, HouseGridService, floorOf, parseHouseCode } from './house-grid.controller';
 
 /**
  * 楼盘图。核心是房号解析:金港城 555 套的三种真实形状必须逐一认对,
@@ -83,5 +83,29 @@ describe('网格聚合', () => {
     const svc = makeService([H('h1', 'A-1-502', 'RESIDENCE', 'DISABLED')], []);
     const { buildings } = await svc.grid('c1');
     expect(buildings[0].units[0].floors[0].cells[0].disabled).toBe(true);
+  });
+});
+
+describe('parse 预览端点(新建房屋页「会归到哪」)', () => {
+  /*
+   * 2026-08-05 用户建「003-013」进了「其他」组,在楼盘图上找不到,
+   * 以为「新建房屋没有绑定到楼盘」。规则只在 parseHouseCode 一处,
+   * 小程序填号时现问 —— 这个端点是它问的地方。
+   */
+  const c = new HouseGridController(null as never);
+
+  it('认得出的房号给出准确归位', () => {
+    expect(c.parse({ type: 'RESIDENCE', code: '2-1-1-1102' } as never)).toEqual({
+      building: '2期1栋',
+      unit: '1单元',
+      room: '1102',
+      floor: 11,
+      recognized: true,
+    });
+  });
+
+  it('认不出的形状如实说 recognized:false,而不是编一个位置', () => {
+    const r = c.parse({ type: 'RESIDENCE', code: '003-013' } as never);
+    expect(r).toMatchObject({ building: '其他', recognized: false });
   });
 });

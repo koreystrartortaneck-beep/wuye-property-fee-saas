@@ -22,6 +22,7 @@ export interface AdminJwtPayload {
   role: string;
   ver: number; // tokenVersion，改密/吊销时递增使旧令牌失效
   mcp?: boolean; // mustChangePassword：受限会话（仅可改密）
+  pv?: boolean; // phone-verified：经微信授权手机号换发（免密通道），不受「须先改密」限制
 }
 
 /** 规范化手机号：去空白与常见前缀，用于精确匹配 House.ownerPhone。 */

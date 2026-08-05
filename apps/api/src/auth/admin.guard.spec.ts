@@ -165,6 +165,17 @@ describe('强制改密的受限会话', () => {
     await expect(guard.canActivate(ctx)).rejects.toMatchObject({ code: ErrorCode.UNAUTHORIZED.code });
   });
 
+  it('pv 令牌(微信授权手机号换发)不受限 —— 受限的是密码通道,不是这个人', async () => {
+    /*
+     * 首改密约束的是密码体系(初始密码创建者见过);手机通道的身份证明
+     * 是运营商核验的手机号持有。把 pv 也拦掉的真实后果:
+     * 不用电脑的物业员工永远进不了管理端(2026-08-05 用户真机撞上)。
+     */
+    const { guard } = makeGuard({ admin: mustChange, payload: { pv: true } });
+    const { ctx } = ctxFor({}, '/api/v1/admin/tickets');
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+  });
+
   it('把改密路径塞进查询串不能绕过', async () => {
     /*
      * 原判据是 includes：req.path 取不到时回退的 req.url 带查询串，

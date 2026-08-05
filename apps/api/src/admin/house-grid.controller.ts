@@ -147,6 +147,16 @@ export class HouseGridService {
   }
 }
 
+class ParseQuery {
+  @IsString()
+  @IsNotEmpty()
+  type!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  code!: string;
+}
+
 @Controller('admin/houses-grid')
 @UseGuards(AdminGuard, RolesGuard)
 export class HouseGridController {
@@ -155,5 +165,18 @@ export class HouseGridController {
   @Get()
   grid(@Query() q: GridQuery) {
     return this.service.grid(q.communityId);
+  }
+
+  /*
+   * 新建房屋页的实时预览:「这个房号会归到楼盘图的哪里」。
+   *
+   * 2026-08-05 用户建了「003-013」,认不出的形状进了「其他」组 ——
+   * 房是建成了,但在楼盘图上找不到,看起来就像「没绑定到楼盘」。
+   * 解析规则只在这一处(parseHouseCode),小程序不复制一份,填的时候现问。
+   */
+  @Get('parse')
+  parse(@Query() q: ParseQuery) {
+    const parsed = parseHouseCode(q.type, q.code.trim());
+    return { ...parsed, floor: floorOf(parsed.room), recognized: parsed.building !== '其他' };
   }
 }
