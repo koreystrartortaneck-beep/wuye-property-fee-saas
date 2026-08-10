@@ -484,3 +484,15 @@ test('已退款/已作废的账单在手机上有出路:重开', () => {
   const wxml = read('packageAdmin/pages/house/house.wxml');
   assert.match(wxml, /canReissue[\s\S]{0,200}重开账单/, '重开按钮没有渲染');
 });
+
+test('单户出账失败时,只许解释这一户自己的原因', () => {
+  /*
+   * 2026-08-09 实测:A-1-1002 页面顶着「放户 2026-08-10」,弹窗却说
+   * 「这户没填放户日期」—— 那是 skippedDetail[0],另一套房的原因。
+   * 必须按 houseId 找自己的那条;同期账单已存在也要说人话并指路。
+   */
+  const js = stripJs(read('packageAdmin/pages/bill-one/bill-one.js'));
+  assert.match(js, /\.find\(\(x\) => x\.houseId === this\.data\.id\)/, '没按 houseId 找自己的跳过原因');
+  assert.ok(!/skippedDetail\[0\]\.reason/.test(js), '又在拿 skippedDetail[0] 当自己的原因');
+  assert.match(js, /PERIOD_ALREADY_EXISTS: '[^']*已经存在[^']*账单/, '「这期账单已存在」没有人话解释');
+});

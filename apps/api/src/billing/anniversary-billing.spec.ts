@@ -240,7 +240,14 @@ describe('周年出账选房与幂等', () => {
     expect(r.skippedDetail?.[0]).toMatchObject({ reason: 'ANNIVERSARY_ALREADY_BILLED' });
   });
 
-  it('同 period 的已有账单不算冲突——那是重跑补漏的正常路径,交给唯一键幂等', async () => {
+  it('同 period 的已有账单:重跑不出第二张,且**留痕** PERIOD_ALREADY_EXISTS', async () => {
+    /*
+     * 幂等本身一直有(createMany skipDuplicates 撞唯一键即跳过),但它不留痕:
+     * generated=0 而 skippedDetail 里没有这户。2026-08-09 实测的后果 ——
+     * 单户出账页拿 skippedDetail[0] 解释「为什么没生成」,取到的却是
+     * **另一套房**的「没填放户日期」,而真相是「这户这期账单早就在了」。
+     * 现在同期已有账单的户在入池前就如实记一条,页面能说真话。
+     */
     const { prisma, created } = makePrisma({
       attachments: [
         { houseId: 'h1', startDate: null, endDate: null, house: makeHouse('h1', 'A-1', new Date(2019, 2, 15)) },
@@ -248,9 +255,9 @@ describe('周年出账选房与幂等', () => {
       recentBills: [{ houseId: 'h1', period: '2026-03-15' }],
     });
     const r = await svc(prisma).generate('rule-1', '2026-03');
-    // 重新入池,由 createMany skipDuplicates 幂等跳过(mock 里表现为照常 stage)
-    expect(created[0][0]).toMatchObject({ period: '2026-03-15' });
-    expect(r.skippedDetail ?? []).toHaveLength(0);
+    expect(created).toHaveLength(0); // 不再入池,也就不依赖 skipDuplicates 兜底
+    expect(r.generated).toBe(0);
+    expect(r.skippedDetail?.[0]).toMatchObject({ houseId: 'h1', reason: 'PERIOD_ALREADY_EXISTS' });
   });
 
   it('legacy 规则历史上的月账单标签(2026-03)不会被误判成周年冲突', async () => {

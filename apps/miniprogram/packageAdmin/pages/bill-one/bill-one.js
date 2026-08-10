@@ -20,6 +20,7 @@ const SKIP_REASON = {
   HANDOVER_DATE_MISSING: '这户没填放户日期,算不出账期',
   AREA_MISSING: '这户没填建筑面积,按面积的标准算不出金额',
   ANNIVERSARY_ALREADY_BILLED: '本年度已经出过账单了',
+  PERIOD_ALREADY_EXISTS: '这期的账单已经存在(可能是草稿待发布,或已发布)。回房屋详情的「账单」栏就能看到它,不会重复生成。',
   EXCLUDED_BY_ADMIN: '本次已剔除',
   METER_READING_MISSING: '本期没有抄表读数',
 };
@@ -152,7 +153,15 @@ Page({
         return;
       }
       if (r.generated === 0) {
-        const reason = r.skippedDetail && r.skippedDetail[0] ? r.skippedDetail[0].reason : '';
+        /*
+         * 只认**这一户**的跳过记录。2026-08-09 实测:skippedDetail[0] 曾是
+         * 另一套房的「没填放户日期」,顶着本户「放户 2026-08-10」的标题弹出来。
+         * 服务端已把定向出账的 skippedDetail 收窄到本户,这里再按 houseId 对一次,
+         * 双保险 —— 解释别人家的原因比不解释更糟。
+         */
+        const detail = (r.skippedDetail && r.skippedDetail.samples ? r.skippedDetail.samples : r.skippedDetail) || [];
+        const mine = detail.find ? detail.find((x) => x.houseId === this.data.id) : null;
+        const reason = mine ? mine.reason : '';
         wx.showModal({
           title: '没有生成',
           content: SKIP_REASON[reason] || '这户本期不该出账,请核对放户日期与收费标准。',

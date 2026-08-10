@@ -178,13 +178,49 @@ export class BillRunService {
     let generated = 0;
     let skipped = 0;
     let generatedCents = 0;
-    const skippedDetail: SkipDetail[] = [...selection.skipped];
-    skipped += selection.skipped.length;
+    let selectionSkipped = selection.skipped;
 
     // 定向出账:先收窄到选中的户(不在选中列表里的不算「跳过」,是本次没打算出)
     if (opts?.onlyHouseIds?.length) {
       const only = new Set(opts.onlyHouseIds);
       targets = targets.filter((t) => only.has(t.house.id));
+      /*
+       * skippedDetail 也必须收窄(preview 早就这么做了,这里原来漏了)。
+       * 2026-08-09 实测:给 A-1-1002 单户出账,它这期账单已存在 → generated=0,
+       * 而 skippedDetail[0] 是**另一套房**的「没填放户日期」—— 页面顶着
+       * 「放户 2026-08-10」的标题弹出这句话,用户只能懵。
+       */
+      selectionSkipped = selectionSkipped.filter((s) => only.has(s.houseId));
+    }
+    const skippedDetail: SkipDetail[] = [...selectionSkipped];
+    skipped += selectionSkipped.length;
+
+    /*
+     * 同期已有账单的户,如实记「已存在」而不是静默消失。
+     * createMany 的 skipDuplicates 承担幂等(撞 @@unique 即跳过),但它不留痕:
+     * generated=0 而 skippedDetail 里没有这户,页面只能瞎猜原因。
+     * 注意口径:唯一键不分状态,连 CANCELED 也占着 (ruleId,houseId,period) ——
+     * 作废后想重出这一期,走的是「重开」,不是再跑一次出账。
+     */
+    if (targets.length > 0) {
+      const existing = await this.prisma.t.bill.findMany({
+        where: {
+          ruleId,
+          houseId: { in: targets.map((t) => t.house.id) },
+          period: { in: [...new Set(targets.map((t) => t.period))] },
+        },
+        select: { houseId: true, period: true },
+      });
+      const taken = new Set(existing.map((b) => `${b.houseId}|${b.period}`));
+      if (taken.size > 0) {
+        for (const t of targets) {
+          if (taken.has(`${t.house.id}|${t.period}`)) {
+            skipped++;
+            skippedDetail.push({ houseId: t.house.id, code: t.house.code, reason: 'PERIOD_ALREADY_EXISTS' });
+          }
+        }
+        targets = targets.filter((t) => !taken.has(`${t.house.id}|${t.period}`));
+      }
     }
 
     /*
