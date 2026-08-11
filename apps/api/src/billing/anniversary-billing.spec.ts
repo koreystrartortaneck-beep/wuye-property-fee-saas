@@ -143,6 +143,7 @@ function makePrisma(opts: {
         }),
         update: jest.fn(async () => ({})),
         updateMany: jest.fn(async () => ({ count: 1 })),
+        deleteMany: jest.fn(async () => ({ count: 0 })),
       },
       billRun: {
         upsert: jest.fn(async () => {
@@ -161,6 +162,7 @@ function makePrisma(opts: {
           return { count: data.length };
         }),
         aggregate: jest.fn(async () => ({ _sum: { amount: new Prisma.Decimal('0') }, _count: { _all: 0 } })),
+        count: jest.fn(async () => 0),
       },
       meterReading: { findMany: jest.fn(async () => []) },
       sharePool: { findUnique: jest.fn(async () => null) },
@@ -369,15 +371,20 @@ describe('定向出账(某一户 / 某几户 / 全部)', () => {
     expect(created[0]).toHaveLength(3);
   });
 
-  it('定向出账仍进同一批次——分几次补齐不该变成几个批次', async () => {
+  it('单户各回各的专属批次;多户定向共用这个月的主批次', async () => {
     /*
-     * 批次是「这条标准这个月的账」。若定向另建批次,发布要点好几次、
-     * 合计也对不上,而物业只会觉得「怎么又多出一批」。
+     * 2026-08-11 改:单户出账的发布不能被拴在整月批次上(用户原话
+     * 「我在单户上点生成账单,关整批什么事情」),所以 h1、h2 各自单发时
+     * 各回各的 -H 批次,发布互不牵连。多户定向(≥2)仍是「这个月的账」的
+     * 一部分,进同一个主批次 —— 分几次补齐不该变成几个批次。
      */
     const { prisma } = three();
     const a = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] });
     const b = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h2'] });
-    expect(a.batchId).toBe(b.batchId);
+    expect(a.batchId).not.toBe(b.batchId);
+    const c = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1', 'h3'] });
+    const d = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h2', 'h3'] });
+    expect(c.batchId).toBe(d.batchId); // 多户共用主批次
   });
 
   it('预览必须与出账同口径:选了几户就只预览几户', async () => {
@@ -408,23 +415,26 @@ describe('主批次已发布之后的定向补账', () => {
     expect(writes).toHaveLength(0); // 批次/run/账单一个都没写
   });
 
-  it('定向补一户 → 开补充批次,账单照样出得来', async () => {
+  it('单户出账进专属批次(-H<houseId>),主批次是否发布都不掺和', async () => {
     /*
-     * 真实场景:3 月该收的那户当时漏了,8 月新住户上门交钱。主批次早已发布,
-     * 但这户今年的账一张都没出过 —— 把人堵在这里,他就只能回电脑前。
+     * 2026-08-11 用户原话:「我在单户上点生成账单,关整批什么事情?」
+     * 他说得对 —— 单户草稿混进整月公共批次,发布就被拴在核对整批(可能 16 户)上。
+     * 专属批次 = 生成、发布都只管这一户;判据用「恰好一户」,旧小程序
+     * (它本来就在批次只有一户时给出当页发布按钮)不用发版就走上新路。
      */
     const { prisma, created } = one({ 'RULE-2026-03-rule-1': 'PUBLISHED' });
     const r = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] });
     expect(r.alreadyPublished).toBeUndefined();
     expect(created[0].map((b) => b.houseId)).toEqual(['h1']);
     expect(prisma.t.billBatch.create.mock.calls[0][0].data).toMatchObject({
-      batchNo: 'RULE-2026-03-rule-1-B2',
+      batchNo: 'RULE-2026-03-rule-1-Hh1',
+      title: expect.stringContaining('单户补账') as unknown as string,
       period: '2026-03',
       status: 'DRAFT',
     });
   });
 
-  it('补充批次还是草稿就复用它——一天补三户不该变成三个批次', async () => {
+  it('同一户重跑复用同一个专属批次,不堆批次', async () => {
     const { prisma } = one({ 'RULE-2026-03-rule-1': 'PUBLISHED' });
     const a = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] });
     const b = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] });
@@ -432,22 +442,53 @@ describe('主批次已发布之后的定向补账', () => {
     expect(prisma.t.billBatch.create).toHaveBeenCalledTimes(1);
   });
 
-  it('补充批次也发布了 → 再补落到下一个号,不往已发布的批次里塞', async () => {
-    const { prisma } = one({
-      'RULE-2026-03-rule-1': 'PUBLISHED',
-      'RULE-2026-03-rule-1-B2': 'PUBLISHED',
+  it('这户的专属批次已发布 → alreadyPublished,不开新批次堆空壳', async () => {
+    const { prisma, writes } = one({ 'RULE-2026-03-rule-1-Hh1': 'PUBLISHED' });
+    const r = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] });
+    expect(r.alreadyPublished).toBe(true);
+    expect(writes).toHaveLength(0);
+  });
+
+  it('多户定向(≥2)仍走补充批次 -B2 —— 群补是月账的一部分,不拆散', async () => {
+    const two = one({ 'RULE-2026-03-rule-1': 'PUBLISHED' });
+    two.prisma.t.houseStandard.findMany = jest.fn(async () => [
+      { houseId: 'h1', startDate: null, endDate: null, house: makeHouse('h1', 'A-1', new Date(2019, 2, 15)) },
+      { houseId: 'h2', startDate: null, endDate: null, house: makeHouse('h2', 'A-2', new Date(2020, 2, 20)) },
+    ]) as typeof two.prisma.t.houseStandard.findMany;
+    await svc(two.prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1', 'h2'] });
+    expect(two.prisma.t.billBatch.create.mock.calls[0][0].data).toMatchObject({
+      batchNo: 'RULE-2026-03-rule-1-B2',
     });
+  });
+
+  it('单户撞上「这期账单已存在」→ 刚开的空壳批次要删掉,不在待发布里堆 0 户批次', async () => {
+    const { prisma } = one({});
+    prisma.t.bill.findMany = jest.fn(async () => [{ houseId: 'h1', period: '2026-03-15' }]) as typeof prisma.t.bill.findMany;
+    prisma.t.bill.count = jest.fn(async () => 0) as never;
+    prisma.t.billBatch.deleteMany = jest.fn(async () => ({ count: 1 })) as never;
+    const r = await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] });
+    expect(r.generated).toBe(0);
+    expect(r.skippedDetail?.[0]).toMatchObject({ houseId: 'h1', reason: 'PERIOD_ALREADY_EXISTS' });
+    expect(prisma.t.billBatch.deleteMany).toHaveBeenCalledWith({
+      where: { id: expect.any(String) as unknown as string, status: 'DRAFT' },
+    });
+  });
+
+  it('专属批次里躺着上次的草稿时,重跑不删批次', async () => {
+    const { prisma } = one({ 'RULE-2026-03-rule-1-Hh1': 'DRAFT' });
+    prisma.t.bill.findMany = jest.fn(async () => [{ houseId: 'h1', period: '2026-03-15' }]) as typeof prisma.t.bill.findMany;
+    prisma.t.bill.count = jest.fn(async () => 1) as never;
+    prisma.t.billBatch.deleteMany = jest.fn(async () => ({ count: 0 })) as never;
     await svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] });
-    expect(prisma.t.billBatch.create.mock.calls[0][0].data).toMatchObject({
-      batchNo: 'RULE-2026-03-rule-1-B3',
-    });
+    expect(prisma.t.billBatch.deleteMany).not.toHaveBeenCalled();
   });
 
   it('补充批次用满 20 个 → 明确报错,不无限开批次', async () => {
     const full: Record<string, string> = { 'RULE-2026-03-rule-1': 'PUBLISHED' };
     for (let n = 2; n <= 20; n++) full[`RULE-2026-03-rule-1-B${n}`] = 'PUBLISHED';
     const { prisma } = one(full);
-    await expect(svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1'] })).rejects.toThrow(BizException);
+    // 用两户触发补充批次路径(单户走 -H 专属批次,不占 -B 号)
+    await expect(svc(prisma).generate('rule-1', '2026-03', { onlyHouseIds: ['h1', 'h2'] })).rejects.toThrow(BizException);
   });
 
   it('防双账单的防线不在批次上:换批次也出不了同一户同一年的第二张', async () => {

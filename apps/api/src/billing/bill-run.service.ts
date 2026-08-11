@@ -32,8 +32,10 @@ export interface GenerateOptions {
   /*
    * 只给这些房屋出账（户/群定向）。手机端「给某一户/某几户发账单」用它 ——
    * 与 excludeHouseIds 是同一件事的两种表达:全量减去几户 / 只要这几户。
-   * 定向出账仍进同一个批次(RULE-<期>-<规则>):批次是「这条标准这个月的账」,
+   * 多户定向仍进同一个批次(RULE-<期>-<规则>):批次是「这条标准这个月的账」,
    * 分几次补齐不该变成几个批次,否则发布要点好几次、合计也对不上。
+   * **恰好一户**则进专属批次(-H<houseId>):单户页「生成→发布」必须只管这一户,
+   * 不能把人支去核对整月的批次(见 generate 内注释)。
    * 未选中的户不计入 skippedDetail —— 它们不是「被跳过」,是本次没打算出。
    */
   onlyHouseIds?: string[];
@@ -121,9 +123,33 @@ export class BillRunService {
     }
     this.assertSchemeSupported(rule);
 
-    const batchNo = `RULE-${period}-${ruleId}`;
+    /*
+     * 单户出账进**专属批次**(2026-08-11 改)。
+     *
+     * 之前单户生成的草稿会混进整月的公共批次:用户在单户页点「生成」,
+     * 发布却要求他去核对整批(可能是 16 户)——「我在单户上点生成账单,
+     * 关整批什么事情?」他说得对:批次是内部记账单位,不该漏进单户流程。
+     * 批次号带 houseId,同户重跑复用同一个批次;发布这批 = 只发这一户。
+     * 判据用「恰好一户」而不是新参数:旧小程序不用发版就能走上新路
+     * (它本来就会在「批次里只有这一户」时给出当页发布按钮)。
+     */
+    const single = opts?.onlyHouseIds?.length === 1 ? opts.onlyHouseIds[0] : null;
+    const batchNo = single ? `RULE-${period}-${ruleId}-H${single}` : `RULE-${period}-${ruleId}`;
     const existingBatch = await this.prisma.t.billBatch.findFirst({ where: { batchNo } });
     let batch = existingBatch;
+    if (single && existingBatch && existingBatch.status === 'PUBLISHED') {
+      /*
+       * 这户的专属批次已发布 → 说明这期账单已经出过并发布了,
+       * 幂等路径会以 PERIOD_ALREADY_EXISTS 解释;不再开新批次堆空壳。
+       */
+      return {
+        batchId: existingBatch.id,
+        status: 'PUBLISHED' as const,
+        generated: 0,
+        skipped: 0,
+        alreadyPublished: true,
+      };
+    }
     if (existingBatch && existingBatch.status === 'PUBLISHED') {
       if (!opts?.onlyHouseIds?.length) {
         // 全量重跑撞上已发布批次：调用方需据 alreadyPublished 给出正确提示，
@@ -147,19 +173,28 @@ export class BillRunService {
       batch = await this.openSupplementaryBatch(rule, period, ruleId);
     }
     if (!batch) {
-      batch = await this.prisma.t.billBatch.create({
-        data: {
-          communityId: rule.communityId,
-          batchNo,
-          period,
-          title: `${rule.name} ${period}`,
-          source: 'RULE',
-          ruleId,
-          status: 'DRAFT',
-          // 不整体转 never：tenantId 由租户扩展注入，只需把它从类型里 Omit 掉，
-          // 其余字段的校验必须留着 —— 这里写的是账单批次，字段错就是钱错。
-        } as Omit<Prisma.BillBatchUncheckedCreateInput, 'tenantId'> as Prisma.BillBatchUncheckedCreateInput,
-      });
+      try {
+        batch = await this.prisma.t.billBatch.create({
+          data: {
+            communityId: rule.communityId,
+            batchNo,
+            period,
+            title: single ? `${rule.name} ${period} 单户补账` : `${rule.name} ${period}`,
+            source: 'RULE',
+            ruleId,
+            status: 'DRAFT',
+            // 不整体转 never：tenantId 由租户扩展注入，只需把它从类型里 Omit 掉，
+            // 其余字段的校验必须留着 —— 这里写的是账单批次，字段错就是钱错。
+          } as Omit<Prisma.BillBatchUncheckedCreateInput, 'tenantId'> as Prisma.BillBatchUncheckedCreateInput,
+        });
+      } catch (e) {
+        // 并发建同一个批次号(手机上连点两下「生成」):撞唯一键就用对方刚建的那个。
+        // 账单本身另有 (ruleId,houseId,period) 唯一键,钱不会重 —— 这里只是别把 500 抛给人。
+        if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002') {
+          batch = await this.prisma.t.billBatch.findFirst({ where: { batchNo } });
+        }
+        if (!batch) throw e;
+      }
     }
 
     const run = await this.prisma.t.billRun.upsert({
@@ -471,6 +506,17 @@ export class BillRunService {
         totalAmount: batchTotal,
       },
     });
+    /*
+     * 单户批次一张账单都没落下(这期账单早已在别的批次里)→ 把刚开的空壳删掉。
+     * 不删的话,每次对「已出过账的房」点一下生成,「待发布」里就多一个 0 户批次。
+     * 只删确实为空的:复用的批次里若躺着上次的草稿,一张不动。
+     */
+    if (single && generated === 0) {
+      const hasBills = await this.prisma.t.bill.count({ where: { batchId: batch.id } });
+      if (hasBills === 0) {
+        await this.prisma.t.billBatch.deleteMany({ where: { id: batch.id, status: 'DRAFT' } });
+      }
+    }
     this.logger.log(`草稿出账 rule=${rule.name} period=${period} batch=${batch.id} generated=${generated} skipped=${skipped}`);
     return { batchId: batch.id, status: 'DRAFT', generated, skipped, skippedDetail };
   }

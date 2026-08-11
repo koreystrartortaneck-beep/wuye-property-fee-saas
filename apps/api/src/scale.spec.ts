@@ -147,7 +147,7 @@ describe('聚合下推：不得把账单整表拉进内存累加', () => {
 describe('循环里不得发数据库请求', () => {
   it('出账的抄表读数一次批量取回，不是每户一次 getDiff', () => {
     const src = read('billing/bill-run.service.ts');
-    const body = methodBody(src, 'async generate', 8000);
+    const body = methodBody(src, 'async generate', 14000);
     /*
      * 原实现在 for (const house of houses) 里调 this.meter.getDiff(house.id, ...)，
      * 3000 户就是 3000 次额外往返。每日 02:00 的 cron 串行跑 4 条规则，
@@ -172,7 +172,7 @@ describe('循环里不得发数据库请求', () => {
      * 单价 3.5 元/吨时开出 ¥4319，而该户当月实际应约 ¥105。这不是边界情况，
      * 是新小区上线的必然路径。批量预取改写时必须保留这个判定。
      */
-    const body = methodBody(read('billing/bill-run.service.ts'), 'async generate', 8000);
+    const body = methodBody(read('billing/bill-run.service.ts'), 'async generate', 14000);
     expect(body).toMatch(/prevValue === null/);
     // 也不能写成 ?? 0 / || 0 这类兜底
     expect(body).not.toMatch(/prevValue\s*(\?\?|\|\|)\s*0/);
