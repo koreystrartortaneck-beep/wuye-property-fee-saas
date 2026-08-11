@@ -7,6 +7,7 @@ dist/
 outputs/*.zip
 # 工作日报含真实姓名/电话/门牌，属个人信息，不入库
 outputs/*.md
+outputs/*.csv
 # 上传结果含 appid、包体积等信息，不入库
 outputs/*.json
 .workbuddy/
