@@ -118,6 +118,8 @@
         <view class="adm-btn adm-btn-ghost entry-btn" bindtap="goApprovals">
           绑定审批<text wx:if="{{bindingCount > 0}}" class="entry-bd">{{bindingCount}}</text>
         </view>
+        <!-- 核销不限角色:前台发电影票/服务兑换是收费员的日常 -->
+        <view class="adm-btn adm-btn-ghost entry-btn" bindtap="goCouponVerify">核销卡券</view>
         <view wx:if="{{isAdmin}}" class="adm-btn adm-btn-ghost entry-btn" bindtap="goStaff">员工与权限</view>
       </view>
 

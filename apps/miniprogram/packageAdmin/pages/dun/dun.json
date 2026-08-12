@@ -5,5 +5,7 @@
   "navigationBarTextStyle": "black",
   "usingComponents": {
     "arrears-panel": "../../components/arrears-panel/index"
-  }
+  },
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark"
 }

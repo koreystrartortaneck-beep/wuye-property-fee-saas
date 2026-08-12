@@ -6,6 +6,16 @@
  */
 
 Page({
+
+  /* 下拉刷新:物业的肌肉记忆。管理端原来 13 页全没有,刷新只能杀掉重进 */
+  async onPullDownRefresh() {
+    try {
+      const p = this.selectComponent('#panel');
+    if (p) await p.load();
+    } finally {
+      wx.stopPullDownRefresh();
+    }
+  },
   onShow() {
     // 从别处返回(比如刚登记完收款)要重新拉一次,数字才是新的
     const panel = this.selectComponent('#panel');

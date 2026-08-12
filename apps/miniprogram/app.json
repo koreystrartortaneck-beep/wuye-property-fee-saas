@@ -81,7 +81,8 @@
         "pages/dun/dun",
         "pages/tickets/tickets",
         "pages/house-new/house-new",
-        "pages/staff/staff"
+        "pages/staff/staff",
+        "pages/coupon-verify/coupon-verify"
       ]
     }
   ]

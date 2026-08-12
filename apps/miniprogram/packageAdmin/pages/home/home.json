@@ -7,5 +7,7 @@
   },
   "navigationStyle": "default",
   "navigationBarBackgroundColor": "#f6f0e7",
-  "navigationBarTextStyle": "black"
+  "navigationBarTextStyle": "black",
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark"
 }

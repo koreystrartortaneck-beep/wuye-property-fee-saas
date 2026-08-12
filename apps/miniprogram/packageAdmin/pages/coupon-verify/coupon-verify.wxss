@@ -1,0 +1,28 @@
+@import "../../adm.wxss";
+
+.cv-row {
+  display: flex;
+  gap: 16rpx;
+  align-items: center;
+}
+.cv-in { flex: 1; min-width: 0; }
+.cv-btn { flex: 0 0 auto; padding: 0 34rpx; }
+.adm-btn-dim { opacity: 0.6; }
+
+.cv-found { margin-top: 20rpx; }
+.cv-name {
+  font-size: 34rpx;
+  font-weight: 900;
+  color: var(--text, #251c38);
+}
+.cv-meta {
+  display: flex;
+  gap: 12rpx;
+  margin: 14rpx 0 6rpx;
+}
+.cv-line {
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: var(--text-2, #55496b);
+}
+.cv-verify { margin-top: 26rpx; }

@@ -496,3 +496,42 @@ test('单户出账失败时,只许解释这一户自己的原因', () => {
   assert.ok(!/skippedDetail\[0\]\.reason/.test(js), '又在拿 skippedDetail[0] 当自己的原因');
   assert.match(js, /PERIOD_ALREADY_EXISTS: '[^']*已经存在[^']*账单/, '「这期账单已存在」没有人话解释');
 });
+
+test('卡券核销:先查后核、核前确认、并发被拒时给服务端原话', () => {
+  /*
+   * 核销不可逆(核了东西就发出去了):必须先把「这是什么券、还能不能用」
+   * 摆在眼前,再要一次确认。两个前台同时核同一张时,服务端只放行一个,
+   * 另一个必须看到「刚刚已被核销」原话 —— 不能含糊成「操作失败」。
+   */
+  const js = stripJs(read('packageAdmin/pages/coupon-verify/coupon-verify.js'));
+  assert.match(js, /adminRequest\(`\/admin\/coupons\/verify\//, '没走核销接口');
+  assert.match(js, /showModal[\s\S]{0,300}核销后立即失效/, '核销前没有确认弹窗');
+  assert.match(js, /found[\s\S]*usable/, '没有先查券再核');
+  assert.match(js, /(e && e\.message)/, '服务端拒绝原因没有透传给人');
+  // 入口全员可见(收费员就该能核销),不许挂 isAdmin
+  const wxml = read('packageAdmin/pages/home/home.wxml').replace(/<!--[\s\S]*?-->/g, '');
+  const i = wxml.indexOf('核销卡券');
+  assert.ok(i > 0, '首页没有核销入口');
+  const tag = wxml.slice(wxml.lastIndexOf('<view', i), i);
+  assert.ok(!/isAdmin/.test(tag), '核销入口被错误地限成了管理员');
+});
+
+test('管理端可刷新的页面都有下拉刷新,表单页没有', () => {
+  /*
+   * 下拉刷新是肌肉记忆;但表单页(收款/建房/单户出账)下拉会把填了一半的
+   * 内容刷掉 —— 那不是刷新,是事故。两边都要钉住。
+   */
+  const fs2 = require('node:fs');
+  const withPull = ['home', 'house', 'staff', 'approvals', 'tickets', 'dun', 'batches'];
+  const noPull = ['collect', 'house-new', 'bill-one', 'billing', 'announce', 'coupon-verify'];
+  for (const p of withPull) {
+    const cfg = JSON.parse(read(`packageAdmin/pages/${p}/${p}.json`));
+    assert.equal(cfg.enablePullDownRefresh, true, `${p} 缺下拉刷新`);
+    assert.match(stripJs(read(`packageAdmin/pages/${p}/${p}.js`)), /onPullDownRefresh/, `${p} 没接下拉回调`);
+    assert.match(read(`packageAdmin/pages/${p}/${p}.js`), /stopPullDownRefresh/, `${p} 下拉后不收起`);
+  }
+  for (const p of noPull) {
+    const cfg = JSON.parse(read(`packageAdmin/pages/${p}/${p}.json`));
+    assert.ok(!cfg.enablePullDownRefresh, `${p} 是表单页,下拉会刷掉填了一半的内容`);
+  }
+});

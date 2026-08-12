@@ -59,6 +59,15 @@ Page({
     deleting: false,
   },
 
+
+  /* 下拉刷新:物业的肌肉记忆。管理端原来 13 页全没有,刷新只能杀掉重进 */
+  async onPullDownRefresh() {
+    try {
+      await this.load();
+    } finally {
+      wx.stopPullDownRefresh();
+    }
+  },
   onLoad(query) {
     this.setData({ id: query.id });
     /*

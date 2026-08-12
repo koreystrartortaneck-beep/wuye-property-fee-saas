@@ -1,0 +1,34 @@
+<view class="page adm-page">
+  <view class="adm-card pad">
+    <view class="cv-row">
+      <input
+        class="adm-input cv-in"
+        placeholder="输入或粘贴业主的券码"
+        value="{{code}}"
+        confirm-type="search"
+        bindinput="onInput"
+        bindconfirm="lookup"
+      />
+      <view class="adm-btn cv-btn {{checking ? 'adm-btn-dim' : ''}}" bindtap="lookup">{{checking ? '查询中…' : '查券'}}</view>
+    </view>
+    <view class="adm-hint">业主的券码在「我的 → 我的卡券」里,点一下即可复制</view>
+  </view>
+
+  <view wx:if="{{error}}" class="adm-hint adm-error">{{error}}</view>
+
+  <view wx:if="{{found}}" class="adm-card pad cv-found">
+    <view class="cv-name">{{found.name}}</view>
+    <view class="cv-meta">
+      <text class="adm-pill adm-pill-quiet">{{found.typeLabel}}</text>
+      <text class="adm-pill {{found.usable ? 'adm-pill-ok' : 'adm-pill-quiet'}}">{{found.statusLabel}}</text>
+    </view>
+    <view wx:if="{{found.faceValue}}" class="cv-line">面额 ¥{{found.faceValue}}</view>
+    <view wx:if="{{found.validTo}}" class="cv-line">有效期至 {{found.validTo}}</view>
+    <view wx:if="{{found.usedAt}}" class="cv-line">核销于 {{found.usedAt}}</view>
+
+    <view wx:if="{{found.usable}}" class="adm-btn cv-verify {{verifying ? 'adm-btn-dim' : ''}}" bindtap="verify">
+      {{verifying ? '核销中…' : '确认核销'}}
+    </view>
+    <view wx:else class="adm-hint">这张券不能核销了{{found.statusLabel === '已核销' ? '(已经用过)' : '(已过期)'}}。</view>
+  </view>
+</view>

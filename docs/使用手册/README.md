@@ -1,6 +1,6 @@
 # 使用手册（业主篇 / 员工篇）
 
-产物：`manual.pdf`（12 页，A4）。源文件：`manual.tex`，插图：`img/`。
+产物：`manual.pdf`（A4）。源文件：`manual.tex`，插图：`img/`。
 
 ## 重新编译
 
@@ -43,6 +43,7 @@ xelatex manual.tex && xelatex manual.tex      # 跑两遍，第二遍才有目�
 | `s-collect` / `s-collect-done` | 线下收款登记 / 收完 |
 | `s-tickets` | 报事报修（员工） |
 | `s-announce` | 发公告 |
+| `s-coupon` | 卡券核销 |
 | `s-housenew` | 新增房屋 |
 | `s-staff` | 员工与权限 |
 

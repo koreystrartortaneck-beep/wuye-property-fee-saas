@@ -61,6 +61,16 @@ Page({
     draftCount: 0,
   },
 
+
+  /* 下拉刷新:物业的肌肉记忆。管理端原来 13 页全没有,刷新只能杀掉重进 */
+  async onPullDownRefresh() {
+    try {
+      await Promise.all([this.loadGrid(), this.loadTodos()]);
+      this.refreshPanel();
+    } finally {
+      wx.stopPullDownRefresh();
+    }
+  },
   async onShow() {
     let s;
     try {
@@ -186,6 +196,10 @@ Page({
 
   goApprovals() {
     wx.navigateTo({ url: '/packageAdmin/pages/approvals/approvals' });
+  },
+
+  goCouponVerify() {
+    wx.navigateTo({ url: '/packageAdmin/pages/coupon-verify/coupon-verify' });
   },
 
   /* ── 搜索(保留:接电话查户仍是它快) ── */

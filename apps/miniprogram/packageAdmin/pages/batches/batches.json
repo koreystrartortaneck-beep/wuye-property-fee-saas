@@ -5,5 +5,7 @@
   "navigationBarTextStyle": "black",
   "usingComponents": {
     "batch-panel": "../../components/batch-panel/index"
-  }
+  },
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark"
 }

@@ -3,5 +3,7 @@
   "navigationBarTitleText": "员工与权限",
   "navigationBarBackgroundColor": "#f6f0e7",
   "navigationBarTextStyle": "black",
-  "usingComponents": {}
+  "usingComponents": {},
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark"
 }
