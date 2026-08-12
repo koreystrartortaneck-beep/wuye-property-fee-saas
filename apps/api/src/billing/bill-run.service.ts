@@ -39,6 +39,20 @@ export interface GenerateOptions {
    * 未选中的户不计入 skippedDetail —— 它们不是「被跳过」,是本次没打算出。
    */
   onlyHouseIds?: string[];
+  /*
+   * 周年窗口上限(2026-08-11,「提前 7 天出账」):只出「周年起始日 ≤ 这一天」的户。
+   * 每日 cron 传 now+7 天 —— 周年日在窗口外的户**不算跳过**,是还没轮到;
+   * 当月已过周年但还没账单的户天然在窗口内,月中导入的房不再漏掉当月这班车。
+   * 不传 = 整月全出(手动批量出账的语义不变)。
+   */
+  anniversaryUpTo?: Date;
+  /*
+   * 主批次已发布时继续开补充批次(而不是返回 alreadyPublished)。
+   * 每日 cron 必须带上它:物业月中发布过一次后,月内后续到周年的户
+   * 不能再也得不到草稿 —— 那正是「8 月漏了 15 户」的第二种复发方式。
+   * 手动全量重跑不传:后台的「已发布不能追加」提示挂在 alreadyPublished 上。
+   */
+  supplementOnPublished?: boolean;
 }
 
 /** 每户一个出账目标：周年方案下 period/dueDate 因户而异，legacy 全批相同 */
@@ -151,7 +165,7 @@ export class BillRunService {
       };
     }
     if (existingBatch && existingBatch.status === 'PUBLISHED') {
-      if (!opts?.onlyHouseIds?.length) {
+      if (!opts?.onlyHouseIds?.length && !opts?.supplementOnPublished) {
         // 全量重跑撞上已发布批次：调用方需据 alreadyPublished 给出正确提示，
         // 否则会把「无法补账」显示成「已生成 0 户，请核对后发布」。
         return {
@@ -206,7 +220,7 @@ export class BillRunService {
       update: { status: 'RUNNING', finishedAt: null },
     });
 
-    const selection = await this.selectTargets(rule, period);
+    const selection = await this.selectTargets(rule, period, opts?.anniversaryUpTo);
     let targets = selection.targets;
     const houses = targets.map((t) => t.house);
 
@@ -511,10 +525,14 @@ export class BillRunService {
      * 不删的话,每次对「已出过账的房」点一下生成,「待发布」里就多一个 0 户批次。
      * 只删确实为空的:复用的批次里若躺着上次的草稿,一张不动。
      */
-    if (single && generated === 0) {
+    if ((single || opts?.supplementOnPublished) && generated === 0) {
       const hasBills = await this.prisma.t.bill.count({ where: { batchId: batch.id } });
       if (hasBills === 0) {
-        await this.prisma.t.billBatch.deleteMany({ where: { id: batch.id, status: 'DRAFT' } });
+        try {
+          await this.prisma.t.billBatch.deleteMany({ where: { id: batch.id, status: 'DRAFT' } });
+        } catch (e) {
+          // 计数与删除之间被并发塞了账单 → 外键挡住删除,留着这批就是,不值得报错
+        }
       }
     }
     this.logger.log(`草稿出账 rule=${rule.name} period=${period} batch=${batch.id} generated=${generated} skipped=${skipped}`);
@@ -594,6 +612,7 @@ export class BillRunService {
       'id' | 'name' | 'communityId' | 'houseType' | 'dueDays' | 'periodScheme'
     >,
     runKey: string,
+    anniversaryUpTo?: Date,
   ): Promise<{ targets: BillTarget[]; skipped: SkipDetail[] }> {
     if (rule.periodScheme !== 'ANNIVERSARY') {
       const houses = await this.prisma.t.house.findMany({
@@ -638,6 +657,8 @@ export class BillRunService {
       }
       const ap = anniversaryPeriod(anchor, runKey);
       if (!ap) continue; // 锚点月份不是扫描月:这个月不该给这户出账,不算跳过
+      // 周年窗口:还没进入「提前 7 天」窗口的户不出、也不算跳过 —— 明后天的 cron 会轮到它
+      if (anniversaryUpTo && ap.start > anniversaryUpTo) continue;
       if (att.endDate && ap.start > att.endDate) continue;
 
       const dueDate = new Date(ap.start);

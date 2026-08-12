@@ -70,24 +70,47 @@ export class ScheduleService {
     }
   }
 
+  /** 周年草稿的提前量:周年日前 7 天自动出草稿(2026-08-11 用户定) */
+  static readonly ANNIVERSARY_ADVANCE_DAYS = 7;
+
   @Cron('0 0 2 * * *')
   async runDailyBilling(now: Date = new Date()): Promise<void> {
     const tenants = await this.prisma.raw.tenant.findMany({ where: { status: 'ACTIVE' } });
     for (const tenant of tenants) {
       await runWithTenant(tenant.id, async () => {
-        const rules = await this.prisma.t.feeRule.findMany({
-          where: { enabled: true, billDay: now.getDate() },
-        });
+        const rules = await this.prisma.t.feeRule.findMany({ where: { enabled: true } });
         for (const rule of rules) {
           /*
-           * 周年方案:billDay 复用为「每月自动生成草稿的触发日」,扫描键 = 当月。
+           * 周年方案(2026-08-11 改):**每天**扫,窗口 = [今天, 今天+7天]。
+           * 之前只在 billDay(每月 1 号)扫当月一次,两个真窟窿:
+           *   ① 提前量不固定 —— 1 号周年的户 0 天,31 号的 30 天;
+           *   ② 错过就永远错过 —— 8 月 2 号导入的房,8 月 1 号那班车已开走,
+           *      当月 15 户就是这么漏的(手工补的)。
+           * 现在:每户在周年日前 7 天准时出草稿;当月已过周年没账单的也捞回来;
+           * 月底最后几天窗口跨月,把下月初的户一起扫到。
            * 只生成草稿(业主不可见),发布仍是物业过目后手动 —— 自动化的是准备,不是决定。
-           * legacy 三种周期照旧走 currentPeriod(锚点月为 null 时跳过)。
+           * legacy 三种周期照旧:billDay 当天、currentPeriod(锚点月为 null 时跳过)。
            */
-          const period =
-            rule.periodScheme === 'ANNIVERSARY'
-              ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-              : currentPeriod(now, rule.period as RulePeriod);
+          if (rule.periodScheme === 'ANNIVERSARY') {
+            const horizon = new Date(now);
+            horizon.setDate(horizon.getDate() + ScheduleService.ANNIVERSARY_ADVANCE_DAYS);
+            const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const periods = [...new Set([ym(now), ym(horizon)])];
+            for (const period of periods) {
+              try {
+                await this.billRun.generate(rule.id, period, {
+                  anniversaryUpTo: horizon,
+                  // 物业月中发布过主批次后,月内后续到周年的户进补充批次,不能被「已发布」堵死
+                  supplementOnPublished: true,
+                });
+              } catch (e) {
+                this.logger.error(`出账失败 rule=${rule.id} period=${period}: ${e instanceof Error ? e.message : e}`);
+              }
+            }
+            continue;
+          }
+          if (rule.billDay !== now.getDate()) continue;
+          const period = currentPeriod(now, rule.period as RulePeriod);
           if (!period) continue;
           try {
             await this.billRun.generate(rule.id, period);

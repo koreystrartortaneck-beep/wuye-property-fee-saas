@@ -173,6 +173,82 @@ function makePrisma(opts: {
 
 const svc = (prisma: unknown) => new BillRunService(prisma as never, {} as never);
 
+describe('提前 7 天窗口(anniversaryUpTo)与每日补扫', () => {
+  const att = (id: string, code: string, d: Date) =>
+    ({ houseId: id, startDate: null, endDate: null, house: makeHouse(id, code, d) });
+
+  it('窗口内(≤7天)与当月已过周年的出;窗口外的不出、也不算跳过', async () => {
+    /*
+     * 2026-08-11 用户定「每户周年日前 7 天出账」。假设今天 3-08,窗口到 3-15:
+     *   3-02 已过周年没账单 → 捞回来(月中导入的房不再漏)
+     *   3-15 恰好在窗口边上 → 出
+     *   3-25 还有 17 天 → 不出,也不是「跳过」—— 过几天的 cron 自然轮到它
+     */
+    const { prisma, created } = makePrisma({
+      attachments: [
+        att('h1', 'A-1', new Date(2019, 2, 2)),
+        att('h2', 'A-2', new Date(2019, 2, 15)),
+        att('h3', 'A-3', new Date(2019, 2, 25)),
+      ],
+    });
+    const r = await svc(prisma).generate('rule-1', '2026-03', { anniversaryUpTo: new Date(2026, 2, 15) });
+    expect(created[0].map((b) => b.houseId).sort()).toEqual(['h1', 'h2']);
+    expect(r.skipped).toBe(0); // h3 不算跳过
+  });
+
+  it('不传窗口 = 整月全出,手动批量出账语义不变', async () => {
+    const { prisma, created } = makePrisma({
+      attachments: [att('h1', 'A-1', new Date(2019, 2, 2)), att('h3', 'A-3', new Date(2019, 2, 25))],
+    });
+    await svc(prisma).generate('rule-1', '2026-03');
+    expect(created[0]).toHaveLength(2);
+  });
+
+  it('主批次已发布 + supplementOnPublished → 进补充批次,不被 alreadyPublished 堵死', async () => {
+    /*
+     * 物业月中发布过主批次后,月内后续到周年的户必须还能拿到草稿 ——
+     * 否则就是「8 月漏 15 户」的复发路径②。
+     */
+    const { prisma, created } = makePrisma({
+      attachments: [att('h1', 'A-1', new Date(2019, 2, 10))],
+      existingBatches: { 'RULE-2026-03-rule-1': 'PUBLISHED' },
+    });
+    const r = await svc(prisma).generate('rule-1', '2026-03', {
+      anniversaryUpTo: new Date(2026, 2, 15),
+      supplementOnPublished: true,
+    });
+    expect(r.alreadyPublished).toBeUndefined();
+    expect(created[0].map((b) => b.houseId)).toEqual(['h1']);
+    expect(prisma.t.billBatch.create.mock.calls[0][0].data).toMatchObject({ batchNo: 'RULE-2026-03-rule-1-B2' });
+  });
+
+  it('补扫无新户时不留 0 户的空壳补充批次', async () => {
+    const { prisma } = makePrisma({
+      attachments: [att('h1', 'A-1', new Date(2019, 2, 10))],
+      existingBatches: { 'RULE-2026-03-rule-1': 'PUBLISHED' },
+      recentBills: [{ houseId: 'h1', period: '2026-03-10' }], // 已出过 → 本次 0 张
+    });
+    prisma.t.bill.count = jest.fn(async () => 0) as never;
+    prisma.t.billBatch.deleteMany = jest.fn(async () => ({ count: 1 })) as never;
+    const r = await svc(prisma).generate('rule-1', '2026-03', {
+      anniversaryUpTo: new Date(2026, 2, 15),
+      supplementOnPublished: true,
+    });
+    expect(r.generated).toBe(0);
+    expect(prisma.t.billBatch.deleteMany).toHaveBeenCalled();
+  });
+
+  it('手动全量重跑不带 supplementOnPublished → 照旧 alreadyPublished(后台提示挂在它上面)', async () => {
+    const { prisma, writes } = makePrisma({
+      attachments: [att('h1', 'A-1', new Date(2019, 2, 10))],
+      existingBatches: { 'RULE-2026-03-rule-1': 'PUBLISHED' },
+    });
+    const r = await svc(prisma).generate('rule-1', '2026-03');
+    expect(r.alreadyPublished).toBe(true);
+    expect(writes).toHaveLength(0);
+  });
+});
+
 describe('周年出账选房与幂等', () => {
   it('只出「放户月 == 扫描月」的户;每户各自的 period/dueDate/年度标题', async () => {
     const { prisma, created } = makePrisma({

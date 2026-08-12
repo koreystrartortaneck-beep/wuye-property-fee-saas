@@ -6,16 +6,15 @@ describe('ScheduleService：每日出账与催缴扫描（mock 依赖）', () =>
       { id: 'r1', period: 'MONTHLY', billDay: 3, enabled: true },
       { id: 'r2', period: 'MONTHLY', billDay: 5, enabled: true },
       { id: 'r3', period: 'QUARTERLY', billDay: 3, enabled: true },
+      // 周年规则:billDay 对它不再是门 —— 每天扫「7 天内到周年」的窗口
+      { id: 'r4', period: 'MONTHLY', periodScheme: 'ANNIVERSARY', billDay: 1, enabled: true },
     ];
     const bills: unknown[] = [];
     const prisma = {
       raw: { tenant: { findMany: jest.fn().mockResolvedValue([{ id: 't1' }]) } },
       t: {
-        feeRule: {
-          findMany: jest.fn().mockImplementation(({ where }: { where: { billDay: number } }) =>
-            Promise.resolve(rules.filter((r) => r.billDay === where.billDay)),
-          ),
-        },
+        // billDay 的过滤在服务里(周年规则不看 billDay),mock 只按 enabled 返回全部
+        feeRule: { findMany: jest.fn().mockResolvedValue(rules) },
         bill: { findMany: jest.fn().mockResolvedValue(bills) },
       },
     };
@@ -25,26 +24,57 @@ describe('ScheduleService：每日出账与催缴扫描（mock 依赖）', () =>
     return { svc, prisma, billRun, notifier, bills };
   };
 
-  it('2026-07-03：billDay=3 的 MONTHLY 与 QUARTERLY(7月锚点) 规则触发，billDay=5 不触发', async () => {
+  it('2026-07-03：billDay=3 的 MONTHLY 与 QUARTERLY(7月锚点) 触发,billDay=5 不触发;周年规则每天都扫', async () => {
     const { svc, billRun } = makeMocks();
     await svc.runDailyBilling(new Date(2026, 6, 3));
     expect(billRun.generate).toHaveBeenCalledWith('r1', '2026-07');
     expect(billRun.generate).toHaveBeenCalledWith('r3', '2026-Q3');
-    expect(billRun.generate).toHaveBeenCalledTimes(2);
+    // 周年:窗口 [7-03, 7-10],同月一次调用,带窗口上限与「已发布也补」
+    expect(billRun.generate).toHaveBeenCalledWith('r4', '2026-07', {
+      anniversaryUpTo: new Date(2026, 6, 10),
+      supplementOnPublished: true,
+    });
+    expect(billRun.generate).toHaveBeenCalledTimes(3);
   });
 
-  it('2026-08-03：QUARTERLY 非锚点月不触发', async () => {
+  it('2026-08-03：QUARTERLY 非锚点月不触发;周年照扫', async () => {
     const { svc, billRun } = makeMocks();
     await svc.runDailyBilling(new Date(2026, 7, 3));
     expect(billRun.generate).toHaveBeenCalledWith('r1', '2026-08');
+    expect(billRun.generate).toHaveBeenCalledWith('r4', '2026-08', expect.anything());
+    expect(billRun.generate).toHaveBeenCalledTimes(2);
+  });
+
+  it('非 billDay 的日子:legacy 一个不跑,周年照扫——「每户周年日前 7 天」靠的就是天天扫', async () => {
+    const { svc, billRun } = makeMocks();
+    await svc.runDailyBilling(new Date(2026, 6, 17));
     expect(billRun.generate).toHaveBeenCalledTimes(1);
+    expect(billRun.generate).toHaveBeenCalledWith('r4', '2026-07', expect.anything());
+  });
+
+  it('月底窗口跨月:当月与下月各扫一次,下月初的户不用等到 1 号', async () => {
+    /*
+     * 2026-07-28 + 7 天 = 8-04:8 月 1~4 号周年的户今天就该出草稿。
+     * 之前的「每月 1 号一趟车」对它们的提前量最多 3 天 —— 不到 7。
+     */
+    const { svc, billRun } = makeMocks();
+    await svc.runDailyBilling(new Date(2026, 6, 28));
+    const horizon = new Date(2026, 7, 4);
+    expect(billRun.generate).toHaveBeenCalledWith('r4', '2026-07', {
+      anniversaryUpTo: horizon,
+      supplementOnPublished: true,
+    });
+    expect(billRun.generate).toHaveBeenCalledWith('r4', '2026-08', {
+      anniversaryUpTo: horizon,
+      supplementOnPublished: true,
+    });
   });
 
   it('单规则异常不阻断其余规则', async () => {
     const { svc, billRun } = makeMocks();
     billRun.generate.mockRejectedValueOnce(new Error('boom'));
     await expect(svc.runDailyBilling(new Date(2026, 6, 3))).resolves.not.toThrow();
-    expect(billRun.generate).toHaveBeenCalledTimes(2);
+    expect(billRun.generate).toHaveBeenCalledTimes(3);
   });
 
   it('催缴扫描：到期前3天与逾期分别通知', async () => {
