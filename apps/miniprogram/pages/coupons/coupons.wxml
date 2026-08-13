@@ -72,6 +72,8 @@
           </view>
           <view class="ticket-right">
             <view class="ticket-status ts-{{item.status}}">{{item.statusLabel}}</view>
+            <!-- 亮码:到物业前台兑换时给员工扫 -->
+            <view wx:if="{{item.status === 'UNUSED'}}" class="ticket-qr-btn" data-id="{{item.id}}" bindtap="showQr">亮码核销</view>
           </view>
         </view>
       </block>
@@ -82,4 +84,15 @@
     </view>
   </block>
 </block>
+</view>
+
+<!-- 亮码浮层:大二维码,员工扫完即可收起 -->
+<view wx:if="{{qr}}" class="qr-mask" bindtap="hideQr">
+  <view class="qr-card" catchtap="noop">
+    <view class="qr-name">{{qr.name}}</view>
+    <image class="qr-img" src="{{qr.dataUrl}}" mode="widthFix" />
+    <view class="qr-code-text">券码 {{qr.code}}</view>
+    <view class="qr-tip">把二维码给物业工作人员扫;核销后立即失效</view>
+    <view class="qr-close" bindtap="hideQr">收起</view>
+  </view>
 </view>

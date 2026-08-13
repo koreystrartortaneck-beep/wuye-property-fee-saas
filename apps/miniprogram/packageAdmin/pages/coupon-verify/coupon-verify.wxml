@@ -1,5 +1,8 @@
 <view class="page adm-page">
   <view class="adm-card pad">
+    <!-- 扫码是主动线:业主亮码,扫一下直达查券 -->
+    <view class="adm-btn cv-scan" bindtap="scan">扫业主的券码</view>
+    <view class="cv-or">或手动输入</view>
     <view class="cv-row">
       <input
         class="adm-input cv-in"

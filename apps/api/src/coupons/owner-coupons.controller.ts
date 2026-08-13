@@ -31,4 +31,15 @@ export class OwnerCouponsController {
   mine(@Current() cur: CurrentOwner, @Query() q: PageQuery) {
     return this.service.myCoupons(cur.ownerId, q);
   }
+
+  /*
+   * 亮码核销的二维码(2026-08-13,物业拍板:券到前台兑奖品,员工扫码核销)。
+   * 服务端生成而不是小程序里手搓 QR 算法 —— 编码矩阵错一位就是扫不出来,
+   * 用成熟库。限流:图是算出来的(CPU),不该被脚本白嫖。
+   */
+  @RateLimit({ limit: 30, windowMs: 60_000, message: '请求过于频繁，请稍后再试' })
+  @Get('my/coupons/:id/qr')
+  qr(@Current() cur: CurrentOwner, @Param('id') id: string) {
+    return this.service.myCouponQr(cur.ownerId, id);
+  }
 }

@@ -195,3 +195,52 @@ describe('核销码不能用可预测的随机源', () => {
     for (const c of ['0', 'O', '1', 'I']) expect(chars).not.toContain(c);
   });
 });
+
+describe('亮码核销的二维码(myCouponQr)', () => {
+  /*
+   * 物业拍板(2026-08-13):券到前台兑奖品,员工扫码核销。
+   * 三条不能破的线:①只给本人的券出码(查询条件必须带 wxUserId ——
+   * 否则拿到任意券 id 就能出别人的码);②已核销/过期不出码(前台空欢喜);
+   * ③码内容带 PFC: 前缀,员工端据此拒绝一切别家的二维码。
+   */
+  function qrSvc(uc: Record<string, unknown> | null) {
+    const findFirst = jest.fn(async () => uc);
+    const prisma = { raw: { userCoupon: { findFirst } } };
+    return { svc: new CouponsService(prisma as never, {} as never), findFirst };
+  }
+  const LIVE = {
+    id: 'uc1',
+    code: 'GC7K2M9Q',
+    status: 'UNUSED',
+    coupon: { name: '电影票兑换券', validTo: new Date(Date.now() + 86_400_000) },
+  };
+
+  it('本人的未使用券 → dataUrl 是内嵌 PNG,内容带 PFC: 前缀', async () => {
+    const { svc, findFirst } = qrSvc(LIVE);
+    const r = await svc.myCouponQr('owner-1', 'uc1');
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'uc1', wxUserId: 'owner-1' } }),
+    );
+    expect(r.dataUrl).toMatch(/^data:image\/png;base64,/);
+    expect(r.code).toBe('GC7K2M9Q');
+    // 前缀真的编进了码里:解码回来验证(qrcode 库自带的往返即可)
+    const src = require('node:fs')
+      .readFileSync(require('node:path').join(__dirname, 'coupons.service.ts'), 'utf8');
+    expect(src).toContain("`PFC:${uc.code}`");
+  });
+
+  it('不是自己的券 → NOT_FOUND(连存在都不确认)', async () => {
+    const { svc } = qrSvc(null);
+    await expect(svc.myCouponQr('owner-2', 'uc1')).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND.code });
+  });
+
+  it.each([
+    ['已核销', { ...LIVE, status: 'USED' }],
+    ['已过期', { ...LIVE, coupon: { ...LIVE.coupon, validTo: new Date(Date.now() - 1000) } }],
+  ])('%s 的券不出码', async (_n, uc) => {
+    const { svc } = qrSvc(uc as never);
+    await expect(svc.myCouponQr('owner-1', 'uc1')).rejects.toMatchObject({
+      code: ErrorCode.COUPON_STATE_INVALID.code,
+    });
+  });
+});

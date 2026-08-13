@@ -497,6 +497,23 @@ test('单户出账失败时,只许解释这一户自己的原因', () => {
   assert.match(js, /PERIOD_ALREADY_EXISTS: '[^']*已经存在[^']*账单/, '「这期账单已存在」没有人话解释');
 });
 
+test('扫码核销:只认 PFC: 前缀,业主端亮码与员工端扫码前缀一致', () => {
+  /*
+   * 物业拍板:券到前台兑奖品,扫码核销。前缀是两端的握手协议 ——
+   * 员工端扫到不带前缀的码(付款码/网址)必须明确拒绝,
+   * 不拿陌生字符串去撞券库;业主端出的码必须带同一个前缀。
+   */
+  const staff = stripJs(read('packageAdmin/pages/coupon-verify/coupon-verify.js'));
+  assert.match(staff, /wx\.scanCode/, '员工端没有扫码入口');
+  assert.match(staff, /startsWith\('PFC:'\)/, '扫码没有校验前缀');
+  assert.match(staff, /不是本系统的券码/, '扫到别家的码没有人话拒绝');
+  const owner = stripJs(read('pages/coupons/coupons.js'));
+  assert.match(owner, /\/owner\/my\/coupons\/\$\{id\}\/qr/, '业主端没有取码接口');
+  const ownerWxml = read('pages/coupons/coupons.wxml');
+  assert.match(ownerWxml, /亮码核销/, '业主端没有亮码入口');
+  assert.match(ownerWxml, /item\.status === 'UNUSED'[^<]*showQr/, '已核销/过期的券也能亮码');
+});
+
 test('卡券核销:先查后核、核前确认、并发被拒时给服务端原话', () => {
   /*
    * 核销不可逆(核了东西就发出去了):必须先把「这是什么券、还能不能用」

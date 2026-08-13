@@ -30,6 +30,8 @@ function fmtValue(c) {
 
 Page({
   data: {
+    /** 亮码浮层:{name, code, dataUrl} */
+    qr: null,
     tab: 0, // 0 可领取 1 我的
     available: [],
     mine: [],
@@ -146,4 +148,24 @@ Page({
   copyCode(e) {
     wx.setClipboardData({ data: e.currentTarget.dataset.code });
   },
+
+  /* ── 亮码核销:到物业前台兑换时给员工扫 ── */
+  async showQr(e) {
+    const id = e.currentTarget.dataset.id;
+    if (this._qrLoading) return;
+    this._qrLoading = true;
+    try {
+      const qr = await request(`/owner/my/coupons/${id}/qr`);
+      this.setData({ qr });
+    } catch (err) {
+      // 已核销/已过期会被服务端明确拒绝,request 统一提示;顺手刷新列表让状态对上
+      void this.loadMine();
+    } finally {
+      this._qrLoading = false;
+    }
+  },
+  hideQr() {
+    this.setData({ qr: null });
+  },
+  noop() {},
 });

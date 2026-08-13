@@ -26,6 +26,27 @@ Page({
     this.setData({ code: e.detail.value, found: null, error: '' });
   },
 
+  /*
+   * 扫码核销 —— 前台主动线:业主在「我的卡券 → 亮码核销」出示二维码,扫一下直达查券。
+   * 码内容带 PFC: 前缀,扫到别的码(付款码/网址)明确拒绝,不拿陌生字符串去撞券库。
+   */
+  scan() {
+    wx.scanCode({
+      onlyFromCamera: true,
+      scanType: ['qrCode'],
+      success: (r) => {
+        const raw = (r.result || '').trim();
+        if (!raw.startsWith('PFC:')) {
+          this.setData({ found: null, error: '这不是本系统的券码 —— 请让业主打开「我的卡券 → 亮码核销」' });
+          return;
+        }
+        this.setData({ code: raw.slice(4), found: null, error: '' });
+        void this.lookup();
+      },
+      fail: () => {}, // 取消扫码不是错误
+    });
+  },
+
   async lookup() {
     const code = this.data.code.trim();
     if (!code) return wx.showToast({ title: '请输入券码', icon: 'none' });

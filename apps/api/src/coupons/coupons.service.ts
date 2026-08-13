@@ -1,4 +1,5 @@
 import { randomInt } from 'node:crypto';
+import * as QRCode from 'qrcode';
 import { Injectable } from '@nestjs/common';
 import { ErrorCode } from '@pf/shared';
 import { BizException } from '../common/biz.exception';
@@ -117,6 +118,20 @@ export class CouponsService {
       }
     }
     throw new BizException(ErrorCode.COUPON_LIMIT_REACHED);
+  }
+
+  /*
+   * 亮码核销:券码渲染成二维码。内容带 PFC: 前缀 —— 员工端扫到不带前缀的码
+   * (随便什么付款码/网址)会明确拒绝,不会拿别人的字符串去撞券库。
+   * 只给「本人、未使用」的券出码:已核销/过期的券出码只会让前台空欢喜一场。
+   */
+  async myCouponQr(ownerId: string, id: string) {
+    const uc = await this.prisma.raw.userCoupon.findFirst({ where: { id, wxUserId: ownerId }, include: { coupon: true } });
+    if (!uc) throw new BizException(ErrorCode.NOT_FOUND, '未找到该券');
+    if (uc.status === 'USED') throw new BizException(ErrorCode.COUPON_STATE_INVALID, '该券已核销');
+    if (uc.coupon.validTo < new Date()) throw new BizException(ErrorCode.COUPON_STATE_INVALID, '该券已过期');
+    const dataUrl = await QRCode.toDataURL(`PFC:${uc.code}`, { margin: 1, width: 480 });
+    return { code: uc.code, name: uc.coupon.name, dataUrl };
   }
 
   async myCoupons(ownerId: string, q: PageQuery) {

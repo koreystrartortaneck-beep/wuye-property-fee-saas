@@ -222,3 +222,63 @@
   padding: 0 40rpx;
   font-size: 26rpx;
 }
+
+/* ── 亮码核销 ── */
+.ticket-qr-btn {
+  margin-top: 10rpx;
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  background: var(--plum, #3b2b57);
+  color: var(--white, #fff);
+  font-size: 22rpx;
+  font-weight: 700;
+  text-align: center;
+}
+.qr-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 14, 34, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99;
+}
+.qr-card {
+  width: 560rpx;
+  padding: 44rpx 36rpx 32rpx;
+  border-radius: 32rpx;
+  background: var(--white, #fff);
+  text-align: center;
+}
+.qr-name {
+  font-size: 32rpx;
+  font-weight: 900;
+  color: var(--text, #251c38);
+  margin-bottom: 22rpx;
+}
+.qr-img {
+  width: 440rpx;
+  height: 440rpx;
+  display: block;
+  margin: 0 auto;
+}
+.qr-code-text {
+  margin-top: 18rpx;
+  font-size: 26rpx;
+  color: var(--text-2, #55496b);
+  font-variant-numeric: tabular-nums;
+}
+.qr-tip {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: var(--text-4, #8b8199);
+}
+.qr-close {
+  margin-top: 24rpx;
+  padding: 18rpx 0;
+  border-radius: 999rpx;
+  background: rgba(59, 43, 87, 0.08);
+  font-size: 27rpx;
+  font-weight: 700;
+  color: var(--text, #251c38);
+}
