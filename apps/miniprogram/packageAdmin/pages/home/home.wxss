@@ -1,29 +1,41 @@
 @import "../../adm.wxss";
 
-/* ── 底部入口:绑定审批(+角标) / 员工与权限 ── */
-.entry-row {
+/* ── 功能箱:两列卡片,名字大、说明小,一眼找得到按钮 ── */
+.tools {
   display: flex;
-  gap: 16rpx;
-  margin-top: 16rpx;
+  flex-wrap: wrap;
+  gap: 18rpx;
+  margin-top: 22rpx;
 }
-.entry-btn {
-  flex: 1;
-  position: relative;
-}
-.entry-bd {
-  margin-left: 10rpx;
-  min-width: 34rpx;
-  height: 34rpx;
-  padding: 0 8rpx;
-  border-radius: 999rpx;
-  background: var(--danger, #c45656);
-  color: #fff;
-  font-size: 22rpx;
-  font-weight: 800;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.tool {
+  width: calc((100% - 18rpx) / 2);
   box-sizing: border-box;
+  padding: 30rpx 26rpx;
+  border-radius: 26rpx;
+  background: linear-gradient(180deg, var(--white, #fff), #f8f4ed);
+  border: 1rpx solid rgba(59, 43, 87, 0.1);
+  box-shadow: 0 6rpx 18rpx rgba(70, 52, 29, 0.05), inset 0 1rpx 0 var(--white, #fff);
+}
+.tool-main {
+  width: 100%;
+  background: linear-gradient(150deg, #4a3768, var(--plum, #3b2b57) 45%, #2c2043);
+  border-color: rgba(201, 166, 107, 0.55);
+}
+.tool-main .tool-name { color: var(--cream-2, #fdfbf7); }
+.tool-main .tool-desc { color: rgba(253, 251, 247, 0.66); }
+.tool-name {
+  font-size: 31rpx;
+  font-weight: 900;
+  color: var(--text, #251c38);
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+.tool-desc {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: var(--text-4, #8b8199);
 }
 
 /* ── 楼栋条 ── */
@@ -193,14 +205,6 @@
 }
 .cell-off .cno { color: #b6aec2; font-weight: 700; }
 
-/* 底部快捷动作 */
-.quick {
-  display: flex;
-  gap: 16rpx;
-  margin-top: 28rpx;
-}
-.quick-btn { flex: 1; }
-
 /* 欠费条:金额在左、动作在右,整条可点 */
 .ar-bar {
   display: flex;
@@ -228,19 +232,5 @@
   font-size: 26rpx;
   font-weight: 800;
   color: #b23f3f;
-}
-
-/* 新增房屋:虚线,和楼盘图排在一起 */
-.add-house {
-  margin-top: 18rpx;
-  height: 92rpx;
-  border-radius: 24rpx;
-  border: 2rpx dashed rgba(184, 134, 47, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28rpx;
-  font-weight: 800;
-  color: var(--gold-deep, #b8862f);
 }
 

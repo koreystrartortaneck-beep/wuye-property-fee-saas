@@ -33,6 +33,7 @@ xelatex manual.tex && xelatex manual.tex      # 跑两遍，第二遍才有目�
 | `o-ticket` | 报事报修（提交） |
 | `s-entry` | 我的 → 物业工作入口 |
 | `s-grid` | 楼盘图 |
+| `s-tools` | 「功能」页签 |
 | `s-arrears` | 欠费与催缴 |
 | `s-house` | 房屋详情 · 账单 |
 | `s-house-contacts` | 房屋详情 · 住户 |

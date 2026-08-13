@@ -45,9 +45,40 @@
         <view class="tab {{tab === 'batches' ? 'tab-on' : ''}}" data-t="batches" bindtap="pickTab">
           待发布<text wx:if="{{draftCount > 0}}" class="tab-bd">{{draftCount}}</text>
         </view>
+        <view class="tab {{tab === 'tools' ? 'tab-on' : ''}}" data-t="tools" bindtap="pickTab">
+          功能<text wx:if="{{bindingCount > 0}}" class="tab-bd">{{bindingCount}}</text>
+        </view>
       </view>
 
       <!-- ② 欠费 / ③ 报修 / ④ 待发布:与各自的独立页面共用同一个组件 -->
+      <!-- ⑤ 功能箱:原来堆在楼盘图底部的一排排按钮,收进并列页签(用户:「在哪找按钮啊」) -->
+      <view wx:if="{{tab === 'tools'}}" class="tools">
+        <view class="tool tool-main" bindtap="goBilling">
+          <view class="tool-name">发账单</view>
+          <view class="tool-desc">按标准批量出账,先草稿后发布</view>
+        </view>
+        <view class="tool" bindtap="goNewHouse">
+          <view class="tool-name">新增房屋</view>
+          <view class="tool-desc">建房、登记住户手机、挂收费标准</view>
+        </view>
+        <view class="tool" bindtap="goApprovals">
+          <view class="tool-name">绑定审批<text wx:if="{{bindingCount > 0}}" class="tab-bd">{{bindingCount}}</text></view>
+          <view class="tool-desc">业主自助申请绑房的审核</view>
+        </view>
+        <view class="tool" bindtap="goCouponVerify">
+          <view class="tool-name">核销卡券</view>
+          <view class="tool-desc">扫业主的券码,当面兑奖品</view>
+        </view>
+        <view class="tool" bindtap="goAnnounce">
+          <view class="tool-name">发公告</view>
+          <view class="tool-desc">停水停电、缴费通知,可置顶</view>
+        </view>
+        <view wx:if="{{isAdmin}}" class="tool" bindtap="goStaff">
+          <view class="tool-name">员工与权限</view>
+          <view class="tool-desc">加人、改角色、停用(仅管理员)</view>
+        </view>
+      </view>
+
       <arrears-panel wx:if="{{tab === 'arrears'}}" id="arrears" active="{{true}}" />
       <ticket-panel wx:if="{{tab === 'tickets'}}" id="tickets" active="{{true}}" />
       <batch-panel wx:if="{{tab === 'batches'}}" id="batches" active="{{true}}" />
@@ -110,24 +141,7 @@
           </view>
         </view>
       </view>
-      <view wx:if="{{units.length > 0}}" class="adm-hint">点房间 = 进这一户:改面积/放户日期、换住户手机号、只给这一户发账单</view>
-      <view wx:if="{{communityId}}" class="add-house" bindtap="goNewHouse">＋ 新增房屋</view>
-      <!-- 绑定审批是自助申请的唯一出口(原来只在待办条里,待办条删了它不能跟着消失);
-           员工与权限只有管理员看得到 —— 收费员点进去也是 403,不给死入口 -->
-      <view class="entry-row">
-        <view class="adm-btn adm-btn-ghost entry-btn" bindtap="goApprovals">
-          绑定审批<text wx:if="{{bindingCount > 0}}" class="entry-bd">{{bindingCount}}</text>
-        </view>
-        <!-- 核销不限角色:前台发电影票/服务兑换是收费员的日常 -->
-        <view class="adm-btn adm-btn-ghost entry-btn" bindtap="goCouponVerify">核销卡券</view>
-        <view wx:if="{{isAdmin}}" class="adm-btn adm-btn-ghost entry-btn" bindtap="goStaff">员工与权限</view>
-      </view>
-
-      <!-- 批量动作:一屏一个主动作(发账单),其余用素色 -->
-      <view class="quick" wx:if="{{buildings.length > 0}}">
-        <view class="adm-btn adm-btn-ghost quick-btn" bindtap="goAnnounce">发公告</view>
-        <view class="adm-btn quick-btn" bindtap="goBilling">发账单</view>
-      </view>
+      <view wx:if="{{units.length > 0}}" class="adm-hint">点房间 = 进这一户:改面积/放户日期、换住户手机号、只给这一户发账单。发账单、建房、核销等都在「功能」页签。</view>
     </block>
   </block>
 </view>
