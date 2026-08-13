@@ -170,11 +170,23 @@ Page({
     if (id) wx.navigateTo({ url: `/packageAdmin/pages/house/house?id=${id}` });
   },
 
+  /*
+   * 「功能」页签的卡片一进来就可点,而 communityId 要等楼盘图接口回来才有 ——
+   * 这三个入口没有它就是带病打开(表单能填,提交才失败)。把门:缺就说等一下。
+   */
+  needCommunity() {
+    if (this.data.communityId) return true;
+    wx.showToast({ title: '数据还在加载,稍等两秒再点', icon: 'none' });
+    return false;
+  },
+
   goBilling() {
+    if (!this.needCommunity()) return;
     wx.navigateTo({ url: `/packageAdmin/pages/billing/billing?communityId=${this.data.communityId}` });
   },
 
   goAnnounce() {
+    if (!this.needCommunity()) return;
     wx.navigateTo({ url: `/packageAdmin/pages/announce/announce?communityId=${this.data.communityId}` });
   },
 
@@ -187,11 +199,8 @@ Page({
   },
 
   goNewHouse() {
+    if (!this.needCommunity()) return;
     wx.navigateTo({ url: `/packageAdmin/pages/house-new/house-new?communityId=${this.data.communityId}` });
-  },
-
-  goTickets() {
-    wx.navigateTo({ url: '/packageAdmin/pages/tickets/tickets' });
   },
 
   goApprovals() {

@@ -497,6 +497,22 @@ test('单户出账失败时,只许解释这一户自己的原因', () => {
   assert.match(js, /PERIOD_ALREADY_EXISTS: '[^']*已经存在[^']*账单/, '「这期账单已存在」没有人话解释');
 });
 
+test('「功能」页签:要 communityId 的入口必须自己把门', () => {
+  /*
+   * 功能卡一进页面就可点,而 communityId 要等楼盘图接口回来才有 ——
+   * 发账单/新增房屋/发公告 没有它就是带病打开(表单能填,提交才失败)。
+   */
+  const js = stripJs(read('packageAdmin/pages/home/home.js'));
+  for (const fn of ['goBilling', 'goAnnounce', 'goNewHouse']) {
+    const i = js.indexOf(`${fn}()`);
+    assert.ok(i > 0, `${fn} 不见了`);
+    assert.match(js.slice(i, i + 200), /needCommunity\(\)/, `${fn} 没把 communityId 的门`);
+  }
+  const wxml = read('packageAdmin/pages/home/home.wxml').replace(/<!--[\s\S]*?-->/g, '');
+  assert.match(wxml, /tab === 'tools'/, '「功能」页签不见了');
+  assert.ok(!/class="quick"/.test(wxml) && !/entry-row/.test(wxml), '楼盘图底部的按钮堆又回来了');
+});
+
 test('扫码核销:只认 PFC: 前缀,业主端亮码与员工端扫码前缀一致', () => {
   /*
    * 物业拍板:券到前台兑奖品,扫码核销。前缀是两端的握手协议 ——

@@ -1,6 +1,10 @@
 .pp-mask {
   position: fixed;
-  inset: 0;
+  /* 不用 inset 简写:老基础库的 WebView 不认 —— 隐私弹窗失效是上架合规问题 */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 9999;
   background: rgba(20, 14, 32, 0.5);
   display: flex;

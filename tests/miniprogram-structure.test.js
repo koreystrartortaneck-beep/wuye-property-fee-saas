@@ -340,3 +340,33 @@ test('用了自动刷新的页面必须在离开时停掉定时器', () => {
   walk(MP);
   assert.deepStrictEqual(offenders, [], `自动刷新的定时器没收干净：\n  ${offenders.join('\n  ')}`);
 });
+
+test('WXSS 禁用 inset 简写——老基础库的 WebView 不认,浮层会静默失效', () => {
+  const offenders = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(path.join(MP, dir), { withFileTypes: true })) {
+      if (e.name.startsWith('.') || e.name === 'node_modules') continue;
+      const rel = path.join(dir, e.name);
+      if (e.isDirectory()) walk(rel);
+      else if (e.name.endsWith('.wxss')) {
+        const src = fs.readFileSync(path.join(MP, rel), 'utf8');
+        if (/[^-\w]inset\s*:/.test(src)) offenders.push(rel);
+      }
+    }
+  };
+  walk('.');
+  assert.deepEqual(offenders, [], `用 top/left/right/bottom 代替 inset:\n  ${offenders.join('\n  ')}`);
+});
+
+test('分包每一页都必须显式声明导航栏——全局是自定义导航,漏声明就顶进刘海', () => {
+  /*
+   * 2026-08-13 实测:核销页漏了 navigationStyle: default,
+   * 内容从屏幕最顶上开始画,按钮和胶囊挤在一起。
+   */
+  const app = JSON.parse(fs.readFileSync(path.join(MP, 'app.json'), 'utf8'));
+  const sub = app.subpackages.find((s) => s.root === 'packageAdmin');
+  for (const p of sub.pages) {
+    const cfg = JSON.parse(fs.readFileSync(path.join(MP, 'packageAdmin', p + '.json'), 'utf8'));
+    assert.equal(cfg.navigationStyle, 'default', `packageAdmin/${p}.json 没声明原生导航,内容会顶进刘海`);
+  }
+});

@@ -236,7 +236,11 @@
 }
 .qr-mask {
   position: fixed;
-  inset: 0;
+  /* 不用 inset 简写:老基础库的 WebView 不认,浮层会直接失效 */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: rgba(20, 14, 34, 0.6);
   display: flex;
   align-items: center;
