@@ -350,3 +350,24 @@ describe('自动发券(autoGrantOnPayment):线上缴费满足条件即发', () =
     expect(src.slice(i)).toContain('autoGrantOnPayment');
   });
 });
+
+describe('券有效期的时区(建券入口)', () => {
+  it('起止都按本地时区的当天 00:00:00 / 23:59:59——裸日期会被 JS 当成 UTC,凭空晚 8 小时', async () => {
+    /*
+     * 2026-08-17 实测:凌晨发的「今天开始领」的电影票,「可领取」里看不到 ——
+     * validFrom 存成了 UTC 零点 = 北京早上 8 点。起与止必须同一种解析方式。
+     */
+    const created: Record<string, unknown>[] = [];
+    const prisma = {
+      t: { coupon: { create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => (created.push(data), data)) } },
+      raw: { community: { findFirst: jest.fn(async () => ({ id: 'c1' })) } },
+    };
+    const { AdminCouponsController } = require('./admin-coupons.controller');
+    const c = new AdminCouponsController({} as never, prisma as never);
+    await c.create({ name: '测', type: 'GIFT', totalQty: 1, validFrom: '2026-08-17', validTo: '2026-08-21' } as never);
+    const from = created[0].validFrom as Date;
+    const to = created[0].validTo as Date;
+    expect([from.getHours(), from.getMinutes()]).toEqual([0, 0]); // 本地零点,不是 UTC 零点
+    expect([to.getHours(), to.getMinutes(), to.getSeconds()]).toEqual([23, 59, 59]);
+  });
+});

@@ -135,7 +135,12 @@ export class AdminCouponsController {
         ...rest,
         ...(autoGrant !== undefined ? { autoGrant } : {}),
         communityId: dto.communityId || null,
-        validFrom: new Date(dto.validFrom),
+        /*
+         * 两个都必须带上时分秒(按服务器的 Asia/Shanghai 解析)。
+         * 裸日期 '2026-08-17' 被 JS 按 UTC 解析 = 北京时间早上 8 点 ——
+         * 2026-08-17 实测:凌晨发的「今天开始领」的券,业主要到 8 点才看得见。
+         */
+        validFrom: new Date(`${dto.validFrom}T00:00:00`),
         validTo: new Date(`${dto.validTo}T23:59:59`),
       } as Omit<Prisma.CouponUncheckedCreateInput, 'tenantId'> as Prisma.CouponUncheckedCreateInput,
     });
