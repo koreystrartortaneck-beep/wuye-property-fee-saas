@@ -64,7 +64,7 @@
         加载失败，请检查网络后点此重试
       </view>
       <view wx:elif="{{keyword && communities.length === 0}}" class="list-hint">没有找到「{{keyword}}」，换个关键词试试</view>
-      <view wx:elif="{{!keyword}}" class="list-hint">物业管理的小区可能不止一个，先搜到您住的那个</view>
+      <view wx:elif="{{!keyword}}" class="list-hint">输入小区名称搜索，例如「金港城」</view>
 
       <view wx:if="{{communities.length > 0}}" class="option-list">
         <!--

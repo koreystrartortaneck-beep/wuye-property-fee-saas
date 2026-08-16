@@ -32,7 +32,7 @@ Page({
   onLoad(query) {
     const billId = (query && query.billId) || '';
     if (!billId) {
-      wx.showToast({ title: '缺少账单信息', icon: 'none' });
+      wx.showToast({ title: '没有选中账单,请从账单列表点「缴费」进入', icon: 'none', duration: 3000 });
       setTimeout(() => wx.navigateBack(), 800);
       return;
     }
@@ -63,7 +63,7 @@ Page({
       });
       this.recalc();
     } catch (e) {
-      wx.showToast({ title: '账单信息获取失败', icon: 'none' });
+      wx.showToast({ title: '账单加载失败,请返回上一页重试', icon: 'none', duration: 3000 });
       setTimeout(() => wx.navigateBack(), 800);
     }
   },

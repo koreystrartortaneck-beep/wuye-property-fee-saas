@@ -76,9 +76,19 @@ async function request(path, options = {}, retried = false) {
   try {
     body = await rawRequest(path, options);
   } catch (e) {
-    // 网络层失败必须可见，且显示原始原因便于定位（域名校验/无网络/服务器不可达）
-    const reason = (e && e.message) || '未知原因';
-    wx.showToast({ title: `网络失败: ${reason}`.slice(0, 60), icon: 'none', duration: 4000 });
+    /*
+     * 网络层失败必须可见,但业主看到的必须是人话 ——
+     * 「request:fail timeout」这种内部串只会让人拍照来问。
+     * 原始原因进 console(排查用),给人看的按场景翻译。
+     */
+    const raw = (e && e.message) || '';
+    console.error('[request] 网络层失败:', path, raw);
+    const human = /timeout|超时/i.test(raw)
+      ? '网络超时,请检查网络后重试'
+      : /fail/i.test(raw)
+        ? '连不上网络,请检查网络后重试'
+        : '网络出了点问题,请稍后重试';
+    wx.showToast({ title: human, icon: 'none', duration: 3500 });
     throw e;
   }
   if (body.code === 0) return body.data;

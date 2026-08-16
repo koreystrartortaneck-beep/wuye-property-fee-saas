@@ -41,7 +41,7 @@
   <!-- 分层暂停收款提示 -->
   <view wx:if="{{paused}}" class="paused-tip card">
     <view class="paused-title">当前收款已暂停</view>
-    <view class="paused-desc">{{pausedReason || '请稍后再试或联系物业'}}</view>
+    <view class="paused-desc">{{pausedReason || '物业暂停了线上收款，请联系物业了解恢复时间'}}</view>
   </view>
 
   <view wx:elif="{{!payable && pendingOrder}}" class="paused-tip card">

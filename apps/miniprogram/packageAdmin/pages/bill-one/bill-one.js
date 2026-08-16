@@ -164,7 +164,9 @@ Page({
         const reason = mine ? mine.reason : '';
         wx.showModal({
           title: '没有生成',
-          content: SKIP_REASON[reason] || '这户本期不该出账,请核对放户日期与收费标准。',
+          content:
+            SKIP_REASON[reason] ||
+            '本期没有可出的账单。最常见:这期账单已经存在(回房屋详情的「账单」栏看一眼);其次:房屋停用、标准被摘、放户月份不是本月。',
           showCancel: false,
         });
         return;
