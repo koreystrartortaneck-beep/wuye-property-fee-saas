@@ -370,3 +370,21 @@ test('分包每一页都必须显式声明导航栏——全局是自定义导�
     assert.equal(cfg.navigationStyle, 'default', `packageAdmin/${p}.json 没声明原生导航,内容会顶进刘海`);
   }
 });
+
+test('业主端每一页都能转发;管理端每一页都不能', () => {
+  /*
+   * 2026-08-15 实测:页面没定义 onShareAppMessage,「转发给朋友」是灰的,
+   * 物业想把小程序转发给业主群都做不到。业主端全部挂上(落点统一是首页);
+   * 管理端刻意不挂 —— 管理页面的链接不该在业主群里流传。
+   */
+  const app = JSON.parse(fs.readFileSync(path.join(MP, 'app.json'), 'utf8'));
+  for (const p of app.pages) {
+    const src = fs.readFileSync(path.join(MP, p + '.js'), 'utf8');
+    assert.match(src, /onShareAppMessage/, `${p} 不能转发(菜单里是灰的)`);
+  }
+  const sub = app.subpackages.find((s) => s.root === 'packageAdmin');
+  for (const p of sub.pages) {
+    const src = fs.readFileSync(path.join(MP, 'packageAdmin', p + '.js'), 'utf8');
+    assert.ok(!/onShareAppMessage/.test(src), `packageAdmin/${p} 不该可转发`);
+  }
+});

@@ -1,3 +1,4 @@
+const share = require('../../utils/share');
 const { createPoller } = require('../../utils/poller');
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
@@ -9,6 +10,10 @@ const THEMES = ['sapphire', 'emerald', 'amber'];
 const STATUS_BY_TAB = [undefined, 'UNPAID', 'PAID']; // 全部 / 待缴 / 已缴
 
 Page({
+  // 转发/朋友圈:没有这两个回调,菜单里的分享是灰的(2026-08-15 实测)
+  onShareAppMessage: share.onShareAppMessage,
+  onShareTimeline: share.onShareTimeline,
+
   data: {
     error: false, // 加载失败：必须与「真的没有账单」区分开
     nav: { spacerPx: 48, rowPx: 32 },

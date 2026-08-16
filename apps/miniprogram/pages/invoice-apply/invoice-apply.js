@@ -1,7 +1,12 @@
+const share = require('../../utils/share');
 const { request } = require('../../utils/request');
 const { canApplyInvoice, buildInvoicePayload } = require('../../utils/invoice');
 
 Page({
+  // 转发/朋友圈:没有这两个回调,菜单里的分享是灰的(2026-08-15 实测)
+  onShareAppMessage: share.onShareAppMessage,
+  onShareTimeline: share.onShareTimeline,
+
   data: {
     orderNo: '',
     amount: '',

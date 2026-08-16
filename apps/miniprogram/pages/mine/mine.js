@@ -1,3 +1,4 @@
+const share = require('../../utils/share');
 const config = require('../../config');
 const { request } = require('../../utils/request');
 const { bindPhone, loadMyHouses } = require('../../utils/auth');
@@ -10,6 +11,10 @@ const { exchangeAdmin } = require('../../utils/admin');
 const RELATION_LABEL = BINDING_RELATION;
 
 Page({
+  // 转发/朋友圈:没有这两个回调,菜单里的分享是灰的(2026-08-15 实测)
+  onShareAppMessage: share.onShareAppMessage,
+  onShareTimeline: share.onShareTimeline,
+
   data: {
     /*
      * 代码指纹。回答「我看到的是不是最新代码」——改完点了编译，

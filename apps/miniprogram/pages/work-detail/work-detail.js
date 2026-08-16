@@ -1,3 +1,4 @@
+const share = require('../../utils/share');
 const { request } = require('../../utils/request');
 const { imageUrl } = require('../../utils/upload');
 const { fmtDateTime } = require('../../utils/datetime');
@@ -9,6 +10,10 @@ const { WORK_CATEGORY } = require('../../utils/labels');
 const CATEGORY_LABEL = WORK_CATEGORY;
 
 Page({
+  // 转发/朋友圈:没有这两个回调,菜单里的分享是灰的(2026-08-15 实测)
+  onShareAppMessage: share.onShareAppMessage,
+  onShareTimeline: share.onShareTimeline,
+
   data: { log: null, loading: true, error: false },
 
   onLoad(options) {

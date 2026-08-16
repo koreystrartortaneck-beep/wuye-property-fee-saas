@@ -1,3 +1,4 @@
+const share = require('../../utils/share');
 const { request } = require('../../utils/request');
 const labels = require('../../utils/labels');
 const { fmtDateTime } = require('../../utils/datetime');
@@ -7,6 +8,10 @@ const TITLE_TYPE_LABEL = labels.INVOICE_TITLE_TYPE;
 
 
 Page({
+  // 转发/朋友圈:没有这两个回调,菜单里的分享是灰的(2026-08-15 实测)
+  onShareAppMessage: share.onShareAppMessage,
+  onShareTimeline: share.onShareTimeline,
+
   data: {
     list: [],
     loading: true,

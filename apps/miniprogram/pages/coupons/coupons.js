@@ -1,3 +1,4 @@
+const share = require('../../utils/share');
 const { request } = require('../../utils/request');
 const { loadMyHouses } = require('../../utils/auth');
 const labels = require('../../utils/labels');
@@ -29,6 +30,10 @@ function fmtValue(c) {
 }
 
 Page({
+  // 转发/朋友圈:没有这两个回调,菜单里的分享是灰的(2026-08-15 实测)
+  onShareAppMessage: share.onShareAppMessage,
+  onShareTimeline: share.onShareTimeline,
+
   data: {
     /** 亮码浮层:{name, code, dataUrl} */
     qr: null,

@@ -1,6 +1,11 @@
+const share = require('../../utils/share');
 const { loadMyHouses } = require('../../utils/auth');
 
 Page({
+  // 转发/朋友圈:没有这两个回调,菜单里的分享是灰的(2026-08-15 实测)
+  onShareAppMessage: share.onShareAppMessage,
+  onShareTimeline: share.onShareTimeline,
+
   data: {
     nav: { spacerPx: 48, rowPx: 32 },
     // 物业服务

@@ -1,3 +1,4 @@
+const share = require('../../utils/share');
 const { request } = require('../../utils/request');
 const labels = require('../../utils/labels');
 const { fmtDate, fmtDateTime } = require('../../utils/datetime');
@@ -8,6 +9,10 @@ const SHARE_LABEL = labels.SHARE_BY;
 
 
 Page({
+  // 转发/朋友圈:没有这两个回调,菜单里的分享是灰的(2026-08-15 实测)
+  onShareAppMessage: share.onShareAppMessage,
+  onShareTimeline: share.onShareTimeline,
+
   data: {
     bill: null,
     calcRows: [], // 计算依据 [{label, value}]

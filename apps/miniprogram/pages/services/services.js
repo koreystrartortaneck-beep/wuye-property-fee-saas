@@ -1,3 +1,4 @@
+const share = require('../../utils/share');
 const { request } = require('../../utils/request');
 const { imageUrl } = require('../../utils/upload');
 const { loadMyHouses } = require('../../utils/auth');
@@ -9,6 +10,10 @@ const { SERVICE_ORDER_STATUS } = require('../../utils/labels');
 const ORDER_STATUS = SERVICE_ORDER_STATUS;
 
 Page({
+  // 转发/朋友圈:没有这两个回调,菜单里的分享是灰的(2026-08-15 实测)
+  onShareAppMessage: share.onShareAppMessage,
+  onShareTimeline: share.onShareTimeline,
+
   data: {
     tab: 0, // 0 服务菜单 1 我的预约
     items: [],

@@ -1,3 +1,4 @@
+const share = require('../../utils/share');
 const config = require('../../config');
 const { request } = require('../../utils/request');
 const { bindPhone, loadMyHouses } = require('../../utils/auth');
@@ -30,6 +31,10 @@ function normalizeList(res) {
 }
 
 Page({
+  // 转发/朋友圈:没有这两个回调,菜单里的分享是灰的(2026-08-15 实测)
+  onShareAppMessage: share.onShareAppMessage,
+  onShareTimeline: share.onShareTimeline,
+
   _kwTimer: null,
   _houseTimer: null,
   /** 请求序号：只认最后一次搜索的结果，防止先发后到的响应覆盖新结果 */
