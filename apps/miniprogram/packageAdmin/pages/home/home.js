@@ -211,6 +211,10 @@ Page({
     wx.navigateTo({ url: '/packageAdmin/pages/coupon-verify/coupon-verify' });
   },
 
+  goCouponNew() {
+    wx.navigateTo({ url: `/packageAdmin/pages/coupon-new/coupon-new?communityId=${this.data.communityId}` });
+  },
+
   /* ── 搜索(保留:接电话查户仍是它快) ── */
   onKeywordInput(e) {
     const keyword = e.detail.value;

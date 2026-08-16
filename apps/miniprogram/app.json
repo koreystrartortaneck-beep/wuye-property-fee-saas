@@ -82,7 +82,8 @@
         "pages/tickets/tickets",
         "pages/house-new/house-new",
         "pages/staff/staff",
-        "pages/coupon-verify/coupon-verify"
+        "pages/coupon-verify/coupon-verify",
+        "pages/coupon-new/coupon-new"
       ]
     }
   ]

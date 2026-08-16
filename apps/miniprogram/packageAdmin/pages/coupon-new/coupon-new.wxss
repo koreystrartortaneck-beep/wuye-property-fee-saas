@@ -1,0 +1,4 @@
+@import "../../adm.wxss";
+@import "../house-new/house-new.wxss";
+
+.act { margin-top: 24rpx; }

@@ -73,6 +73,10 @@
           <view class="tool-name">发公告</view>
           <view class="tool-desc">停水停电、缴费通知,可置顶</view>
         </view>
+        <view wx:if="{{isAdmin}}" class="tool" bindtap="goCouponNew">
+          <view class="tool-name">发卡券</view>
+          <view class="tool-desc">电影票、抵扣券,业主自领(仅管理员)</view>
+        </view>
         <view wx:if="{{isAdmin}}" class="tool" bindtap="goStaff">
           <view class="tool-name">员工与权限</view>
           <view class="tool-desc">加人、改角色、停用(仅管理员)</view>

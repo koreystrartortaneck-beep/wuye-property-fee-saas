@@ -14,6 +14,7 @@ import {
 } from 'class-validator';
 import { COUPON_TYPES, CouponType } from '@pf/shared';
 import { AdminGuard } from '../auth/admin.guard';
+import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.decorator';
 import { PageQuery } from '../common/pagination';
 import { Prisma } from '@prisma/client';
@@ -97,6 +98,11 @@ export class AdminCouponsController {
     private readonly prisma: PrismaService,
   ) {}
 
+  /*
+   * 建券/改发行量限管理员(2026-08-16):发券是承诺成本的动作(发行量 × 奖品),
+   * 与员工管理同级。核销与查券不限 —— 那是收费员的前台日常。
+   */
+  @Roles('TENANT_ADMIN')
   @Post('coupons')
   async create(@Body() dto: CreateCouponDto) {
     await assertCommunityInTenant(this.prisma, dto.communityId);
@@ -115,6 +121,7 @@ export class AdminCouponsController {
     return this.service.adminList(q);
   }
 
+  @Roles('TENANT_ADMIN')
   @Patch('coupons/:id')
   update(@Param('id') id: string, @Body() dto: UpdateCouponDto) {
     return this.prisma.t.coupon.update({ where: { id }, data: dto });

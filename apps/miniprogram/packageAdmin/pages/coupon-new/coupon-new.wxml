@@ -1,0 +1,50 @@
+<view class="page adm-page">
+  <view class="adm-card pad">
+    <view class="f-row">
+      <view class="f-lab">类型</view>
+      <view class="seg f-in">
+        <view class="seg-i {{type === item.v ? 'seg-on' : ''}}" wx:for="{{types}}" wx:key="v" data-v="{{item.v}}" bindtap="pickType">{{item.label}}</view>
+      </view>
+    </view>
+    <view class="adm-hint">{{typeHint}}</view>
+    <view class="f-row">
+      <view class="f-lab">券名称 <text class="req">*</text></view>
+      <input class="adm-input f-in" data-k="name" value="{{name}}" maxlength="30" bindinput="onInput" placeholder="如 电影票兑换券" />
+    </view>
+    <view class="f-row" wx:if="{{type === 'DISCOUNT'}}">
+      <view class="f-lab">面额 <text class="req">*</text></view>
+      <input class="adm-input f-in" type="digit" data-k="faceValue" value="{{faceValue}}" bindinput="onInput" placeholder="抵多少元" />
+    </view>
+    <view class="f-row" wx:if="{{type === 'DISCOUNT'}}">
+      <view class="f-lab">满减门槛</view>
+      <input class="adm-input f-in" type="digit" data-k="threshold" value="{{threshold}}" bindinput="onInput" placeholder="选填,满多少元可用" />
+    </view>
+    <view class="f-row">
+      <view class="f-lab">发行总量 <text class="req">*</text></view>
+      <input class="adm-input f-in" type="number" data-k="totalQty" value="{{totalQty}}" bindinput="onInput" placeholder="一共发多少张" />
+    </view>
+    <view class="f-row">
+      <view class="f-lab">每人限领</view>
+      <input class="adm-input f-in" type="number" data-k="perUserLimit" value="{{perUserLimit}}" bindinput="onInput" placeholder="默认 1 张" />
+    </view>
+    <view class="f-row">
+      <view class="f-lab">开始领取</view>
+      <picker class="f-in" mode="date" value="{{validFrom}}" start="{{today}}" bindchange="onFrom">
+        <view class="adm-input pick-line">{{validFrom}} ›</view>
+      </picker>
+    </view>
+    <view class="f-row">
+      <view class="f-lab">有效期至 <text class="req">*</text></view>
+      <picker class="f-in" mode="date" value="{{validTo}}" start="{{validFrom}}" bindchange="onTo">
+        <view class="adm-input pick-line">{{validTo || '选截止日,过期不能领不能用'}} ›</view>
+      </picker>
+    </view>
+    <view class="f-row">
+      <view class="f-lab">说明</view>
+      <input class="adm-input f-in" data-k="description" value="{{description}}" maxlength="200" bindinput="onInput" placeholder="选填,业主领券时能看到" />
+    </view>
+  </view>
+
+  <view class="adm-hint">发布后业主在「我的 → 我的卡券」自助领取,先到先得;礼品券/服务券凭码到前台核销。</view>
+  <view class="adm-btn act {{saving ? 'adm-btn-busy' : ''}}" bindtap="submit">{{saving ? '发布中…' : '发布这张券'}}</view>
+</view>

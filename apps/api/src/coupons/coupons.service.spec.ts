@@ -244,3 +244,20 @@ describe('亮码核销的二维码(myCouponQr)', () => {
     });
   });
 });
+
+describe('建券的权限门', () => {
+  it('建券/改发行量限 TENANT_ADMIN;核销与查券不限', () => {
+    /*
+     * 发券是承诺成本的动作(发行量 × 奖品),与员工管理同级;
+     * 核销与查券是收费员的前台日常,不该拦。
+     * 用源码断言:@Roles 是控制器元数据,单测直调方法测不到它。
+     */
+    const src = require('node:fs')
+      .readFileSync(require('node:path').join(__dirname, 'admin-coupons.controller.ts'), 'utf8');
+    const posts = [...src.matchAll(/@Roles\('TENANT_ADMIN'\)\s*\n\s*@(Post|Patch)\('coupons/g)].map((m) => m[1]);
+    expect(posts.sort()).toEqual(['Patch', 'Post']);
+    // verify 两个端点前面不许出现 @Roles
+    const vi = src.indexOf("verify/:code");
+    expect(src.slice(vi - 200, vi)).not.toContain('@Roles');
+  });
+});

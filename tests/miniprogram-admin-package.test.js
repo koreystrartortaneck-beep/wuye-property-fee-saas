@@ -584,3 +584,22 @@ test('催缴的发送按钮是浮动操作条,不许再沉回列表底部', () =
   const js = stripJs(read('packageAdmin/components/arrears-panel/index.js'));
   assert.match(js, /clearPicked/, '没有「清空」——勾错了只能逐个取消');
 });
+
+test('发卡券:入口仅管理员,发布前必须把成本摆在眼前确认', () => {
+  /*
+   * 发行量 × 奖品就是钱。确认框必须写清共几张、每人限几张、有效期到哪天,
+   * 且说明「发行量只能改小,已领出的收不回来」。
+   */
+  const wxml = read('packageAdmin/pages/home/home.wxml').replace(/<!--[\s\S]*?-->/g, '');
+  const i = wxml.indexOf('发卡券');
+  assert.ok(i > 0, '功能页签没有发卡券入口');
+  // 往回找这张卡片的外层 <view class="tool">(lastIndexOf 只会摸到内层的 tool-name)
+  const cardStart = wxml.lastIndexOf('class="tool"', i);
+  const cardTag = wxml.slice(wxml.lastIndexOf('<view', cardStart), i);
+  assert.match(cardTag, /isAdmin/, '发卡券入口没有限管理员');
+  const js = stripJs(read('packageAdmin/pages/coupon-new/coupon-new.js'));
+  assert.match(js, /showModal[\s\S]{0,400}共 \$\{totalQty\} 张/, '确认框没有写发行总量');
+  assert.match(js, /已领出的收不回来/, '没有说清发行量的不可逆性');
+  assert.match(js, /DISCOUNT[\s\S]{0,200}必须填面额/, '抵扣券没有强制面额');
+  assert.match(js, /validTo < this\.data\.validFrom/, '有效期没有前后校验');
+});
