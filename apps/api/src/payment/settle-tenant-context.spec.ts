@@ -99,7 +99,8 @@ function makeService(opts: { tenantId?: string } = {}) {
     { assertOpenForUpdate: jest.fn(), resolveEffectiveStatus: jest.fn() } as never,
     { reserve: jest.fn(), complete: jest.fn(), fail: jest.fn() } as never,
     { append } as never,
-  );
+      { autoGrantOnPayment: jest.fn(async () => undefined) } as never,
+    );
   return { service, append, tx, tenantId };
 }
 

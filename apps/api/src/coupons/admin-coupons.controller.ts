@@ -6,13 +6,15 @@ import {
   IsInt,
   IsNotEmpty,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   Matches,
   MaxLength,
   Min,
 } from 'class-validator';
-import { COUPON_TYPES, CouponType } from '@pf/shared';
+import { COUPON_TYPES, CouponType, ErrorCode } from '@pf/shared';
+import { BizException } from '../common/biz.exception';
 import { AdminGuard } from '../auth/admin.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.decorator';
@@ -70,6 +72,14 @@ class CreateCouponDto {
 
   @Matches(DATE)
   validTo!: string;
+
+  /*
+   * 自动发放规则(可选;null = 业主自领)。业主**线上缴费成功**时逐条核对,全中即发。
+   * 只收白名单字段并逐个校验 —— Json 列不能让调用方塞任意结构进去。
+   */
+  @IsOptional()
+  @IsObject()
+  autoGrant?: { minAmount?: number; requireOnTime?: boolean; requireNoArrears?: boolean };
 }
 
 class UpdateCouponDto {
@@ -106,9 +116,24 @@ export class AdminCouponsController {
   @Post('coupons')
   async create(@Body() dto: CreateCouponDto) {
     await assertCommunityInTenant(this.prisma, dto.communityId);
+    // 白名单重建 autoGrant:Json 列,绝不透传调用方的原始对象
+    let autoGrant: Prisma.InputJsonValue | undefined;
+    if (dto.autoGrant) {
+      const g = dto.autoGrant;
+      if (g.minAmount != null && !(Number(g.minAmount) > 0)) {
+        throw new BizException(ErrorCode.VALIDATION, '自动发放的金额门槛要是大于 0 的数');
+      }
+      autoGrant = {
+        ...(g.minAmount != null ? { minAmount: Number(g.minAmount) } : {}),
+        ...(g.requireOnTime ? { requireOnTime: true } : {}),
+        ...(g.requireNoArrears ? { requireNoArrears: true } : {}),
+      };
+    }
+    const { autoGrant: _raw, ...rest } = dto;
     return this.prisma.t.coupon.create({
       data: {
-        ...dto,
+        ...rest,
+        ...(autoGrant !== undefined ? { autoGrant } : {}),
         communityId: dto.communityId || null,
         validFrom: new Date(dto.validFrom),
         validTo: new Date(`${dto.validTo}T23:59:59`),

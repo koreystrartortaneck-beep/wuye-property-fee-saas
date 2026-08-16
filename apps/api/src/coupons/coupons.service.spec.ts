@@ -1,5 +1,6 @@
 import { ErrorCode } from '@pf/shared';
 import { CouponsService } from './coupons.service';
+import { BizException } from '../common/biz.exception';
 
 /**
  * 券直接抵钱，这三处原本都是「读后写」——并发下都会多给钱。
@@ -259,5 +260,93 @@ describe('建券的权限门', () => {
     // verify 两个端点前面不许出现 @Roles
     const vi = src.indexOf("verify/:code");
     expect(src.slice(vi - 200, vi)).not.toContain('@Roles');
+  });
+});
+
+describe('自动发券(autoGrantOnPayment):线上缴费满足条件即发', () => {
+  /*
+   * 用户要的「满 X 元自动发」这类自定义规则。三条铁律:
+   * ① 挂在支付入账路径上,**任何失败都不许向外抛**(发券挂了不能影响钱落账);
+   * ② 条件之间是「且」,不满足 = 静默不发;
+   * ③ 发放复用 claim(库存/限领的原子保证),已达上限也算「正常的不发」。
+   */
+  function grantSvc(coupons: Array<Record<string, unknown>>, opts: { openBills?: number } = {}) {
+    const prisma = {
+      raw: {
+        coupon: { findMany: jest.fn(async () => coupons), findUnique: jest.fn(async () => coupons[0] ?? null) },
+        bill: { count: jest.fn(async () => opts.openBills ?? 0) },
+        houseBinding: { findFirst: jest.fn(async () => ({ id: 'b1' })) },
+        userCoupon: { findFirst: jest.fn(async () => null) },
+      },
+    };
+    const svc = new CouponsService(prisma as never, {} as never);
+    const claimed: string[] = [];
+    svc.claim = jest.fn(async (_o: string, id: string) => {
+      claimed.push(id);
+      return {} as never;
+    }) as typeof svc.claim;
+    return { svc, claimed, prisma };
+  }
+  const CPN = (autoGrant: Record<string, unknown>) => ({
+    id: 'c1', tenantId: 't1', enabled: true, perUserLimit: 1, totalQty: 10,
+    validFrom: new Date(Date.now() - 1000), validTo: new Date(Date.now() + 86_400_000),
+    autoGrant,
+  });
+  const PAY = (over: Record<string, unknown> = {}) => ({
+    tenantId: 't1', communityId: 'comm-1', wxUserId: 'wx-1',
+    paidAmount: 1547, paidAt: new Date('2026-08-16'),
+    bills: [{ houseId: 'h1', dueDate: new Date('2026-08-31') }],
+    ...over,
+  });
+
+  it('满足「实付满 1000」→ 发;差一分 → 不发', async () => {
+    const a = grantSvc([CPN({ minAmount: 1000 })]);
+    await a.svc.autoGrantOnPayment(PAY() as never);
+    expect(a.claimed).toEqual(['c1']);
+    const b = grantSvc([CPN({ minAmount: 1547.01 })]);
+    await b.svc.autoGrantOnPayment(PAY() as never);
+    expect(b.claimed).toEqual([]);
+  });
+
+  it('「按时缴」:这笔支付里任何一张账单过了到期日就不发', async () => {
+    const { svc, claimed } = grantSvc([CPN({ requireOnTime: true })]);
+    await svc.autoGrantOnPayment(PAY({ bills: [{ houseId: 'h1', dueDate: new Date('2026-08-01') }] }) as never);
+    expect(claimed).toEqual([]);
+  });
+
+  it('「名下无欠费」:付完这笔后该房还有待缴就不发', async () => {
+    const { svc, claimed } = grantSvc([CPN({ requireNoArrears: true })], { openBills: 2 });
+    await svc.autoGrantOnPayment(PAY() as never);
+    expect(claimed).toEqual([]);
+  });
+
+  it('claim 抛「已达上限」→ 静默不发,不向外抛(这是规则内的正常结果)', async () => {
+    const { svc } = grantSvc([CPN({ minAmount: 1 })]);
+    svc.claim = jest.fn(async () => {
+      throw new BizException(ErrorCode.COUPON_LIMIT_REACHED);
+    }) as typeof svc.claim;
+    await expect(svc.autoGrantOnPayment(PAY() as never)).resolves.toBeUndefined();
+  });
+
+  it('查券本身炸了也不向外抛——发券绝不影响支付入账', async () => {
+    const { svc, prisma } = grantSvc([]);
+    prisma.raw.coupon.findMany = jest.fn(async () => {
+      throw new Error('db down');
+    }) as typeof prisma.raw.coupon.findMany;
+    await expect(svc.autoGrantOnPayment(PAY() as never)).resolves.toBeUndefined();
+  });
+
+  it('自动发放的券不进业主「可领取」列表(它是缴费换来的,不能被白领库存)', () => {
+    const src = require('node:fs')
+      .readFileSync(require('node:path').join(__dirname, 'coupons.service.ts'), 'utf8');
+    const i = src.indexOf('async available');
+    expect(src.slice(i, src.indexOf('async claim'))).toContain('autoGrant: { equals: Prisma.DbNull }');
+  });
+
+  it('支付落账的成功出口必须调自动发券(源码钉住,防止重构时掉线)', () => {
+    const src = require('node:fs')
+      .readFileSync(require('node:path').join(__dirname, '../payment/payment.service.ts'), 'utf8');
+    const i = src.indexOf('settleWxPayInTenant(');
+    expect(src.slice(i)).toContain('autoGrantOnPayment');
   });
 });

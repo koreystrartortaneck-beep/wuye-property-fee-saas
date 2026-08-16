@@ -88,7 +88,8 @@ function makeService(opts: { freshStatus?: string; freshTxn?: string | null; fre
     { assertOpenForUpdate: jest.fn(), resolveEffectiveStatus: jest.fn() } as never,
     { reserve: jest.fn(), complete: jest.fn(), fail: jest.fn() } as never,
     { append: jest.fn() } as never,
-  );
+      { autoGrantOnPayment: jest.fn(async () => undefined) } as never,
+    );
   return { service, prisma, tx, findUnique };
 }
 

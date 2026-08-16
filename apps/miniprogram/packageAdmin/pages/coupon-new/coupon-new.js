@@ -30,6 +30,15 @@ Page({
     validTo: '',
     today: '',
     saving: false,
+    /*
+     * 发放方式:claim = 业主自领(先到先得);auto = 满足条件自动发。
+     * 自动发只统计**线上微信支付**,条件之间是「且」;
+     * 自动发的券不会出现在业主的「可领取」里(缴费换来的,不能被白领库存)。
+     */
+    grantMode: 'claim',
+    minAmount: '',
+    requireOnTime: false,
+    requireNoArrears: false,
   },
 
   onLoad(q) {
@@ -45,6 +54,16 @@ Page({
     const v = e.currentTarget.dataset.v;
     this.setData({ type: v, typeHint: TYPES.find((t) => t.v === v).hint });
   },
+  pickGrantMode(e) {
+    this.setData({ grantMode: e.currentTarget.dataset.v });
+  },
+  toggleOnTime() {
+    this.setData({ requireOnTime: !this.data.requireOnTime });
+  },
+  toggleNoArrears() {
+    this.setData({ requireNoArrears: !this.data.requireNoArrears });
+  },
+
   onFrom(e) {
     this.setData({ validFrom: e.detail.value });
   },
@@ -72,11 +91,21 @@ Page({
     if (this.data.type === 'DISCOUNT' && !(Number(faceValue) > 0)) {
       return wx.showToast({ title: '抵扣券必须填面额', icon: 'none' });
     }
+    const auto = this.data.grantMode === 'auto';
+    const minAmount = String(this.data.minAmount).trim();
+    if (auto && minAmount && !(Number(minAmount) > 0)) {
+      return wx.showToast({ title: '金额门槛要是大于 0 的数', icon: 'none' });
+    }
+    if (auto && !minAmount && !this.data.requireOnTime && !this.data.requireNoArrears) {
+      return wx.showToast({ title: '自动发至少要设一个条件', icon: 'none' });
+    }
 
     const ok = await new Promise((resolve) =>
       wx.showModal({
         title: '确认发券',
-        content: `「${name}」共 ${totalQty} 张,每人限领 ${perUserLimit} 张,有效期至 ${this.data.validTo}。发布后业主立刻能领取;发行量只能改小,已领出的收不回来。`,
+        content: auto
+          ? `「${name}」共 ${totalQty} 张,每人限领 ${perUserLimit} 张,有效期至 ${this.data.validTo}。业主线上缴费满足条件时自动发到他的卡券里${minAmount ? `(实付满 ${minAmount} 元)` : ''};发行量只能改小,已发出的收不回来。`
+          : `「${name}」共 ${totalQty} 张,每人限领 ${perUserLimit} 张,有效期至 ${this.data.validTo}。发布后业主立刻能领取;发行量只能改小,已领出的收不回来。`,
         confirmText: '发布',
         success: (r) => resolve(r.confirm),
         // 弹窗失败也必须把 Promise 收掉,否则界面永久卡在「处理中」
@@ -100,12 +129,23 @@ Page({
           ...(faceValue ? { faceValue: Number(faceValue) } : {}),
           ...(String(this.data.threshold).trim() ? { threshold: Number(this.data.threshold) } : {}),
           ...(this.data.description.trim() ? { description: this.data.description.trim() } : {}),
+          ...(auto
+            ? {
+                autoGrant: {
+                  ...(minAmount ? { minAmount: Number(minAmount) } : {}),
+                  ...(this.data.requireOnTime ? { requireOnTime: true } : {}),
+                  ...(this.data.requireNoArrears ? { requireNoArrears: true } : {}),
+                },
+              }
+            : {}),
         },
       });
       const again = await new Promise((resolve) =>
         wx.showModal({
           title: '已发布',
-          content: '业主现在就能在「我的 → 我的卡券」里领取了。',
+          content: auto
+            ? '规则已生效:业主线上缴费满足条件时,券会自动发到他的卡券里。'
+            : '业主现在就能在「我的 → 我的卡券」里领取了。',
           confirmText: '好',
           showCancel: true,
           cancelText: '再发一张',

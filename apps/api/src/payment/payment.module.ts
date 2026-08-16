@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { InvoiceModule } from '../invoice/invoice.module';
+import { CouponsModule } from '../coupons/coupons.module';
 import { AdminCollectionController } from './admin-collection.controller';
 import { AdminPaymentController, AdminPaymentsService } from './admin-payment.controller';
 import { AdminRefundController } from './admin-refund.controller';
@@ -18,7 +19,7 @@ import { WxPayRefundNotifyController } from './wxpay-refund-notify.controller';
 import { BILL_ORDER_CLOSER } from '../billing/bill-workflow.service';
 
 @Module({
-  imports: [InvoiceModule],
+  imports: [InvoiceModule, CouponsModule],
   controllers: [
     OwnerPaymentController,
     WxPayNotifyController,

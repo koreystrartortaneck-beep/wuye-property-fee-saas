@@ -8,5 +8,6 @@ import { OwnerCouponsController } from './owner-coupons.controller';
   imports: [OwnerModule],
   controllers: [OwnerCouponsController, AdminCouponsController],
   providers: [CouponsService],
+  exports: [CouponsService],
 })
 export class CouponsModule {}

@@ -603,3 +603,19 @@ test('发卡券:入口仅管理员,发布前必须把成本摆在眼前确认', 
   assert.match(js, /DISCOUNT[\s\S]{0,200}必须填面额/, '抵扣券没有强制面额');
   assert.match(js, /validTo < this\.data\.validFrom/, '有效期没有前后校验');
 });
+
+test('自动发券:至少一个条件、门槛校验、确认框写清触发方式', () => {
+  /*
+   * 「满 X 元自动发」这类规则挂在钱的路径上,表单端的三道闸:
+   * ① 自动发但一个条件都没设 = 人人缴费都发,大概率是手滑 —— 拦下;
+   * ② 金额门槛必须是正数;
+   * ③ 确认框必须说清「线上缴费满足条件时自动发」,不能让人以为还是自领。
+   */
+  const js = stripJs(read('packageAdmin/pages/coupon-new/coupon-new.js'));
+  assert.match(js, /自动发至少要设一个条件/, '没拦「零条件自动发」');
+  assert.match(js, /minAmount && !\(Number\(minAmount\) > 0\)/, '金额门槛没校验');
+  assert.match(js, /自动发到他的卡券里/, '确认框没说清自动发的触发方式');
+  assert.match(js, /autoGrant: \{/, '没把规则传给后端');
+  const wxml = read('packageAdmin/pages/coupon-new/coupon-new.wxml');
+  assert.match(wxml, /缴费自动发/, '表单没有发放方式选项');
+});

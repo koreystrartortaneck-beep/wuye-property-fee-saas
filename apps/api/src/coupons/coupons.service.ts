@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 import * as QRCode from 'qrcode';
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ErrorCode } from '@pf/shared';
 import { BizException } from '../common/biz.exception';
 import { PageQuery, pageArgs, pageResult } from '../common/pagination';
@@ -54,6 +55,8 @@ export class CouponsService {
         validFrom: { lte: now },
         validTo: { gte: now },
         OR: [{ communityId: house!.communityId }, { communityId: null }],
+        // 自动发放的券不进「可领取」:它是缴费换来的,不能被人白领走库存
+        autoGrant: { equals: Prisma.DbNull },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -199,6 +202,61 @@ export class CouponsService {
       throw new BizException(ErrorCode.COUPON_STATE_INVALID, '该券刚刚已被核销，请刷新后重试');
     }
     return { ...uc, status: 'USED' as const, usedAt: now };
+  }
+
+  /**
+   * 线上缴费成功 → 按券上的自动发放规则发券(2026-08-16,用户要「满 X 元自动发」这类自定义条件)。
+   *
+   * 铁律:这里**绝不向外抛错** —— 它挂在支付入账的路径上,发券挂了不能影响钱落账。
+   * 条件之间是「且」;发放复用 claim(库存/每人限领的原子保证都在那里),
+   * 已达上限/售罄/无绑定都按「正常的不发」静默跳过。
+   * 只统计线上(微信)支付:线下收现金是物业录的,拿它触发奖励没有意义。
+   */
+  async autoGrantOnPayment(input: {
+    tenantId: string;
+    communityId: string | null;
+    wxUserId: string | null;
+    /** 实付金额(元) */
+    paidAmount: number;
+    paidAt: Date;
+    bills: Array<{ houseId: string; dueDate: Date | null }>;
+  }): Promise<void> {
+    if (!input.wxUserId) return;
+    try {
+      const coupons = await this.prisma.raw.coupon.findMany({
+        where: {
+          tenantId: input.tenantId,
+          enabled: true,
+          validFrom: { lte: input.paidAt },
+          validTo: { gte: input.paidAt },
+          autoGrant: { not: Prisma.DbNull },
+          OR: [{ communityId: null }, { communityId: input.communityId ?? '__none__' }],
+        },
+      });
+      for (const c of coupons) {
+        const g = c.autoGrant as { minAmount?: number; requireOnTime?: boolean; requireNoArrears?: boolean } | null;
+        if (!g) continue;
+        if (g.minAmount != null && input.paidAmount < g.minAmount) continue;
+        // 按时缴:这笔支付里每一张账单都在到期日之前付清
+        if (g.requireOnTime && input.bills.some((b) => b.dueDate && b.dueDate < input.paidAt)) continue;
+        if (g.requireNoArrears) {
+          const houseIds = [...new Set(input.bills.map((b) => b.houseId))];
+          const open = await this.prisma.raw.bill.count({
+            where: { tenantId: input.tenantId, houseId: { in: houseIds }, status: 'UNPAID' },
+          });
+          if (open > 0) continue;
+        }
+        try {
+          await this.claim(input.wxUserId, c.id);
+        } catch (e) {
+          // 已达上限 / 售罄 / 无绑定 —— 都是规则内的「不发」,不是错误
+        }
+      }
+    } catch (e) {
+      // 发券失败绝不打断支付入账;留日志人查
+      // eslint-disable-next-line no-console
+      console.error('[coupons] 自动发券失败(不影响入账):', e instanceof Error ? e.message : e);
+    }
   }
 
   async findByCode(code: string) {

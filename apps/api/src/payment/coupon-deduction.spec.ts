@@ -53,7 +53,8 @@ describe('PaymentService 优惠券抵扣', () => {
     {} as never,
     {} as never,
     {} as never,
-  );
+      { autoGrantOnPayment: jest.fn(async () => undefined) } as never,
+    );
 
   it('正常抵扣：满门槛时扣券面额并把券置 USED', async () => {
     const tx = makeTx({ id: 'uc1', status: 'UNUSED', coupon: coupon() });
@@ -138,7 +139,7 @@ describe('PaymentService 优惠券抵扣', () => {
           userCoupon,
         },
       };
-      const svc = new PaymentService(prisma as never, {} as never, {} as never, {} as never, {} as never);
+      const svc = new PaymentService(prisma as never, {} as never, {} as never, {} as never, {} as never, { autoGrantOnPayment: jest.fn(async () => undefined) } as never);
       await release(svc, 'pay-1');
       expect(userCoupon.updateMany).toHaveBeenCalledWith({
         where: { id: 'uc9', status: 'USED' },
@@ -154,7 +155,7 @@ describe('PaymentService 优惠券抵扣', () => {
           userCoupon,
         },
       };
-      const svc = new PaymentService(prisma as never, {} as never, {} as never, {} as never, {} as never);
+      const svc = new PaymentService(prisma as never, {} as never, {} as never, {} as never, {} as never, { autoGrantOnPayment: jest.fn(async () => undefined) } as never);
       await release(svc, 'pay-1');
       expect(userCoupon.updateMany).not.toHaveBeenCalled();
     });

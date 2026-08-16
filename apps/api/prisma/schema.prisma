@@ -34,11 +34,10 @@ enum RulePeriod {
   YEARLY
 }
 
-/*
+/**
  * 账期方案。RulePeriod 的超集:前三个值与 RulePeriod 一一对应(迁移时按旧值回填),
  * ANNIVERSARY 是新增的「按户周年」—— 每户以自己的放户日期(House.handoverDate)
  * 为锚,账期是 2026-03-15 ~ 2027-03-14 这样的按户区间,而不是全小区统一的自然月/年。
- *
  * 为什么不复用 RulePeriod 加值:两者语义开始分叉 ——
  * RulePeriod 回答「多久出一次」,PeriodScheme 回答「账期怎么锚定、房屋怎么选」。
  * legacy 三个值仍走按 houseType 自动匹配的旧路径;ANNIVERSARY 只经 HouseStandard 挂接选房。
@@ -51,7 +50,7 @@ enum PeriodScheme {
   ANNIVERSARY
 }
 
-/*
+/**
  * 金额取整。物业的手工账本按整元记(100.24㎡ × 1.4 × 12 = 1684 元,不是 1684.03),
  * 系统必须能对上,否则 555 户每户差几分,对账对不齐。
  * CENT 为既有行为(分级精度),YUAN 半进到整元。取整方式随标准配置、随账单快照留痕。
@@ -313,16 +312,15 @@ model Tenant {
   bindingConfig    TenantBindingConfig?
 }
 
-/*
+/**
  * 绑定渠道开关(租户级)。形状抄 TenantCollectionPolicy 的先例:
  * 一租户一行,缺行 = 全默认(渠道全开、自助申请需审批)—— 懒解析,
  * 不需要为存量租户回填。将来要按小区细分时加一层 CommunityBindingConfig,
  * 解析器照 collection-policy 的 most-specific-wins 抄即可,不返工。
- *
  * 三个开关的含义(服务端强制,小程序 UI 只是跟着显隐):
- *   phoneMatch             关 → 授权手机号不再自动匹配房屋
- *   selfApply              关 → POST /owner/bindings 直接拒绝,小程序隐藏申请入口
- *   selfApplyNeedsApproval 关 → 申请即生效(直接 ACTIVE,写 BINDING_AUTO_APPROVE 审计)
+ * phoneMatch             关 → 授权手机号不再自动匹配房屋
+ * selfApply              关 → POST /owner/bindings 直接拒绝,小程序隐藏申请入口
+ * selfApplyNeedsApproval 关 → 申请即生效(直接 ACTIVE,写 BINDING_AUTO_APPROVE 审计)
  */
 model TenantBindingConfig {
   id                     String   @id @default(cuid())
@@ -347,7 +345,7 @@ model AdminUser {
   username     String       @unique
   passwordHash String
   name         String
-  /*
+  /**
    * 小程序免密登录的凭据:微信授权手机号(运营商核验过的本人号码)
    * 匹配此列即换发管理员令牌(见 auth.controller 的 admin-exchange)。
    * 全局唯一 —— 一号一账号,否则换发时无法确定给哪个租户的权限。
@@ -422,40 +420,40 @@ model Community {
 }
 
 model House {
-  id          String       @id @default(cuid())
-  tenantId    String
-  communityId String
-  type        HouseType    @default(RESIDENCE)
-  building    String?
-  unit        String?
-  room        String?
-  code        String // "8-1-2602" / "B2-118"
-  displayName String // "8 栋 1 单元 2602"
-  area        Decimal?     @db.Decimal(10, 2)
-  /*
+  id           String       @id @default(cuid())
+  tenantId     String
+  communityId  String
+  type         HouseType    @default(RESIDENCE)
+  building     String?
+  unit         String?
+  room         String?
+  code         String // "8-1-2602" / "B2-118"
+  displayName  String // "8 栋 1 单元 2602"
+  area         Decimal?     @db.Decimal(10, 2)
+  /**
    * ownerName/ownerPhone 已被 HouseContact 取代(一套房多个授权手机号),
    * 列冻结:回填进 HouseContact 后从写 DTO 与匹配查询移除,
    * 物理删列等真实数据导入验证后另行迁移 —— 加列删列分开,回滚才有路。
    */
-  ownerName   String?
-  ownerPhone  String?
-  /*
+  ownerName    String?
+  ownerPhone   String?
+  /**
    * 放户日期 —— 按户周年账期(PeriodScheme.ANNIVERSARY)的锚点。
    * 物业的收费规律:每家每户的物业费从各自交房那天起算年度,
    * 3/15 放户 → 账期 2026-03-15 ~ 2027-03-14,全小区没有统一的出账日。
    * 可空:缺失时该房在周年出账里报 HANDOVER_DATE_MISSING 跳过,绝不静默丢。
    */
-  handoverDate DateTime?   @db.Date
-  status      EntityStatus @default(ACTIVE)
-  createdAt   DateTime     @default(now())
+  handoverDate DateTime?    @db.Date
+  status       EntityStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
 
   community       Community       @relation("HouseCommunityTenant", fields: [tenantId, communityId], references: [tenantId, id])
   legacyCommunity Community       @relation("HouseCommunityLegacy", fields: [communityId], references: [id], onDelete: Restrict)
   bindings        HouseBinding[]
   contacts        HouseContact[]
   houseStandards  HouseStandard[]
-  bills           Bill[]         @relation("BillHouseTenant")
-  legacyBills     Bill[]         @relation("BillHouseLegacy")
+  bills           Bill[]          @relation("BillHouseTenant")
+  legacyBills     Bill[]          @relation("BillHouseLegacy")
   tickets         Ticket[]
   visitorPasses   VisitorPass[]
   serviceOrders   ServiceOrder[]
@@ -467,12 +465,10 @@ model House {
   @@index([ownerPhone])
 }
 
-/*
+/**
  * 房屋的授权手机号列表 —— 绑定房屋的主数据源。
- *
  * 取代 House.ownerPhone 单字段:一套房可以同时给业主、家属、租客看
  * (产品决策:不区分角色权限,所有授权的人看到的完全一样,name 只是物业的备注)。
- *
  * 物业加号 = 授权:该手机号的微信用户授权手机号后立即绑上(已授权过的当场绑上)。
  * 物业删号 = 解绑:该号对应的绑定在同一事务里立即失效 —— 换租就是「删旧号+加新号」。
  * 自助申请审批通过时,申请人手机号自动写入此表(单一数据源,两套机制不各存一份)。
@@ -549,33 +545,35 @@ model HouseBinding {
 // ---------- 计费与账单 ----------
 
 model FeeRule {
-  id          String     @id @default(cuid())
-  tenantId    String
-  communityId String
-  name        String
-  category    String?
-  /*
+  id           String         @id @default(cuid())
+  tenantId     String
+  communityId  String
+  name         String
+  category     String?
+  /**
    * 标准代号,如 "WYF-ZZ"(住宅物业费)。跨小区的「同一条标准」靠它对齐:
    * 开新楼盘时「复制收费标准」按 code 克隆目录、已存在的跳过。
    * 可空 —— legacy 规则没有 code(MySQL 唯一索引允许多个 NULL,旧行不受影响)。
    */
   code         String?
-  houseType   HouseType  @default(RESIDENCE)
-  ruleType    RuleType
-  params      Json
-  period      RulePeriod @default(MONTHLY)
-  /*
+  houseType    HouseType      @default(RESIDENCE)
+  ruleType     RuleType
+  params       Json
+  period       RulePeriod     @default(MONTHLY)
+  /**
    * 账期方案(见枚举注释)。回填 = 旧 period 值,行为不变;
    * ANNIVERSARY 时本行的 houseType 不再参与选房(选房走 HouseStandard 挂接),
    * billDay 复用为「每月自动生成草稿的触发日」,dueDays 仍是缴费期限天数。
    */
-  periodScheme PeriodScheme  @default(MONTHLY)
-  /* 金额取整(见枚举注释)。周年年费用 YUAN 对齐物业手工账本。 */
+  periodScheme PeriodScheme   @default(MONTHLY)
+  /**
+   * 金额取整(见枚举注释)。周年年费用 YUAN 对齐物业手工账本。
+   */
   rounding     AmountRounding @default(CENT)
-  billDay     Int        @default(1) // 1-28
-  dueDays     Int        @default(15)
-  enabled     Boolean    @default(true)
-  createdAt   DateTime   @default(now())
+  billDay      Int            @default(1) // 1-28
+  dueDays      Int            @default(15)
+  enabled      Boolean        @default(true)
+  createdAt    DateTime       @default(now())
 
   community      Community       @relation("FeeRuleCommunity", fields: [tenantId, communityId], references: [tenantId, id])
   bills          Bill[]          @relation("BillRuleTenant")
@@ -591,14 +589,12 @@ model FeeRule {
   @@index([communityId])
 }
 
-/*
+/**
  * 房屋 ↔ 收费标准的挂接 —— ANNIVERSARY 方案的选房依据。
- *
  * legacy 规则按「小区 + houseType」自动全选房屋,真实数据里每条例外
  * (2 期 4 号楼 1.2 元、商场包租固定额、免收)都落在这个粒度之外。
  * 挂接把选择权交给物业:挂了才出账,不挂 = 不出账(免收/空置就是不挂)。
  * 调价改标准那一条,挂着的房屋下次出账全部跟着变。
- *
  * startDate 覆盖 House.handoverDate 作为首个账期锚点(如年中新挂接);
  * endDate 是「摘除」:到期后不再生成,历史账单保留 —— 不做硬删,
  * 否则「这房去年按哪条标准收的」就无从回答。
@@ -1458,6 +1454,9 @@ model Coupon {
   validFrom    DateTime
   validTo      DateTime
   enabled      Boolean    @default(true)
+  /// 自动发放规则(null = 业主自领)。形如 {minAmount?, requireOnTime?, requireNoArrears?},
+  /// 业主线上缴费成功时逐条核对,全中即发(仍受总量/限领约束)。见 CouponsService.autoGrantOnPayment
+  autoGrant    Json?
   createdAt    DateTime   @default(now())
 
   userCoupons UserCoupon[]

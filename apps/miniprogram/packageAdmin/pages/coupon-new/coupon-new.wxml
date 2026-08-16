@@ -40,11 +40,33 @@
       </picker>
     </view>
     <view class="f-row">
+      <view class="f-lab">发放方式</view>
+      <view class="seg f-in">
+        <view class="seg-i {{grantMode === 'claim' ? 'seg-on' : ''}}" data-v="claim" bindtap="pickGrantMode">业主自领</view>
+        <view class="seg-i {{grantMode === 'auto' ? 'seg-on' : ''}}" data-v="auto" bindtap="pickGrantMode">缴费自动发</view>
+      </view>
+    </view>
+    <block wx:if="{{grantMode === 'auto'}}">
+      <view class="adm-hint">业主<text style="font-weight:700">线上缴费成功</text>且满足以下全部条件时,自动发到他的卡券里(不再开放自领):</view>
+      <view class="f-row">
+        <view class="f-lab">实付满(元)</view>
+        <input class="adm-input f-in" type="digit" data-k="minAmount" value="{{minAmount}}" bindinput="onInput" placeholder="如 1000,不填则不限金额" />
+      </view>
+      <view class="f-row" bindtap="toggleOnTime">
+        <view class="f-lab">须按时缴</view>
+        <view class="adm-input f-in pick-line">{{requireOnTime ? '是 —— 过了到期日再缴的不发' : '否'}} ›</view>
+      </view>
+      <view class="f-row" bindtap="toggleNoArrears">
+        <view class="f-lab">须无欠费</view>
+        <view class="adm-input f-in pick-line">{{requireNoArrears ? '是 —— 缴完名下还有待缴的不发' : '否'}} ›</view>
+      </view>
+    </block>
+    <view class="f-row">
       <view class="f-lab">说明</view>
       <input class="adm-input f-in" data-k="description" value="{{description}}" maxlength="200" bindinput="onInput" placeholder="选填,业主领券时能看到" />
     </view>
   </view>
 
-  <view class="adm-hint">发布后业主在「我的 → 我的卡券」自助领取,先到先得;礼品券/服务券凭码到前台核销。</view>
+  <view class="adm-hint">{{grantMode === 'auto' ? '自动发的券业主不能自领;发出后在他的「我的卡券」里,凭码到前台核销。' : '发布后业主在「我的 → 我的卡券」自助领取,先到先得;礼品券/服务券凭码到前台核销。'}}</view>
   <view class="adm-btn act {{saving ? 'adm-btn-busy' : ''}}" bindtap="submit">{{saving ? '发布中…' : '发布这张券'}}</view>
 </view>

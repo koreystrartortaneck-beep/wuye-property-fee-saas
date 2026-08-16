@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { BILL_STATUS_CN, ErrorCode, PAYMENT_STATUS_CN, cn } from '@pf/shared';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { CouponsService } from '../coupons/coupons.service';
 import { toCents } from '../billing/engine/money';
 import { BizException } from '../common/biz.exception';
 import { IdempotencyService } from '../common/idempotency.service';
@@ -24,6 +25,8 @@ type SettleablePayment = {
   // 审计需要租户与小区归属；调用方传的都是完整的 Payment 行，本就带这两列
   tenantId: string;
   communityId: string | null;
+  // 自动发券要认人;调用方传的完整 Payment 行本就带它
+  wxUserId?: string | null;
   paymentBills: Array<{ billId: string; bill?: ReceiptBill | null }>;
 };
 
@@ -31,6 +34,8 @@ interface ReceiptBill {
   title?: string | null;
   period?: string | null;
   amount?: unknown;
+  houseId?: string | null;
+  dueDate?: Date | null;
   house?: { displayName?: string | null; community?: { name?: string | null } | null } | null;
 }
 interface ReceiptPayment {
@@ -57,6 +62,7 @@ export class PaymentService {
     private readonly collectionPolicy: CollectionPolicyService,
     private readonly idempotency: IdempotencyService,
     private readonly audit: AuditService,
+    private readonly coupons: CouponsService,
   ) {}
 
   private resolveChannel(): 'WXPAY' | 'MOCK' {
@@ -582,6 +588,11 @@ export class PaymentService {
       );
     });
 
+    /*
+     * 入账成功后按规则自动发券(满 X 元/按时缴/无欠费)。
+     * 放在事务之外、并发跳过判定之前的这个位置不行 —— 必须确认真的入账了才发,
+     * 所以见下:两处 return SUCCESS 前各调一次不行(重复),统一放在最后的成功出口。
+     */
     if (skippedByConcurrentUpdate) {
       /*
        * 在事务之外重读：MySQL 默认 REPEATABLE READ，同一事务内的 SELECT 可能仍看
@@ -604,6 +615,16 @@ export class PaymentService {
       );
     }
 
+    await this.coupons.autoGrantOnPayment({
+      tenantId: payment.tenantId,
+      communityId: payment.communityId ?? null,
+      wxUserId: payment.wxUserId ?? null,
+      paidAmount: Number(payment.totalAmount),
+      paidAt,
+      bills: payment.paymentBills
+        .filter((item) => item.bill && item.bill.houseId)
+        .map((item) => ({ houseId: item.bill!.houseId as string, dueDate: item.bill!.dueDate ?? null })),
+    });
     return { orderNo: payment.orderNo, status: 'SUCCESS' };
   }
 

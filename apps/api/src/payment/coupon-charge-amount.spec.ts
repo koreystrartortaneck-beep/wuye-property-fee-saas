@@ -43,7 +43,8 @@ describe('券面额覆盖全额时的处理（真实代码路径）', () => {
     {} as never,
     {} as never,
     {} as never,
-  );
+      { autoGrantOnPayment: jest.fn(async () => undefined) } as never,
+    );
 
   function makeTx(faceYuan: string) {
     return {

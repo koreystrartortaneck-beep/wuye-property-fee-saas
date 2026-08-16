@@ -31,6 +31,7 @@ describe('PaymentService', () => {
       collectionPolicy,
       idempotency as never,
       audit as never,
+      { autoGrantOnPayment: jest.fn(async () => undefined) } as never,
     );
   }
 
