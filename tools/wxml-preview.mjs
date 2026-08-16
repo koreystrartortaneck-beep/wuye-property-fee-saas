@@ -351,5 +351,11 @@ image{display:block;background:#e6ded2}
 *{box-sizing:border-box}
 ${css}
 .__label{position:fixed;top:0;left:0;background:#000;color:#fff;font:11px monospace;padding:2px 6px;z-index:99}
-</style></head><body>${wxChrome(chromeTitle)}${body}</body></html>`);
+</style></head><body>
+<!-- 视口牢笼:无头 Chrome 的最小布局视口是 500px,--window-size=375 只裁截图不改排版,
+     position:fixed 的元素会锚到 500 宽的真视口、落进被裁掉的 125px 里(2026-08-15 用浮动
+     催缴条实测)。给 body 一个 transform,让 fixed 后代改锚到这个 375px 的容器上。 -->
+<div style="position:relative;width:375px;min-height:100vh;transform:translate(0,0)">
+${wxChrome(chromeTitle)}${body}
+</div></body></html>`);
 console.log('written', outPath);

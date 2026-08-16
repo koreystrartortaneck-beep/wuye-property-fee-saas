@@ -53,10 +53,17 @@
         </view>
       </view>
       <view wx:if="{{truncated}}" class="adm-hint adm-error">共 {{truncated}} 户欠费,这里只列出前 {{rows.length}} 户;要全量请在电脑后台导出。</view>
-      <view class="adm-hint">催缴的第一手段是打电话。下面这个按钮发的是微信订阅提醒,业主没授权就收不到。</view>
+      <view class="adm-hint">催缴的第一手段是打电话。勾选后底部会出现「发提醒」——发的是微信订阅提醒,业主没授权就收不到。</view>
 
-      <view class="adm-btn act {{dunning ? 'adm-btn-busy' : ''}}" bindtap="dun">
-        {{picked.length > 0 ? '给选中的 ' + picked.length + ' 户发提醒' : '发提醒(先勾选)'}}
+      <!-- 勾了人才浮出的底部操作条:67 户的列表里,按钮不能要求人滑到底去找(2026-08-15 实测) -->
+      <view wx:if="{{picked.length > 0}}" class="dun-bar">
+        <view class="dun-bar-info">
+          <view class="dun-bar-n">已选 {{picked.length}} 户</view>
+          <view class="dun-bar-clear" bindtap="clearPicked">清空</view>
+        </view>
+        <view class="adm-btn dun-bar-btn {{dunning ? 'adm-btn-busy' : ''}}" bindtap="dun">发提醒</view>
       </view>
+      <!-- 操作条浮着时给列表底部留出高度,最后一行不被盖住 -->
+      <view wx:if="{{picked.length > 0}}" class="dun-bar-pad"></view>
     </block>
   </block>

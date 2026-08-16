@@ -568,3 +568,19 @@ test('管理端可刷新的页面都有下拉刷新,表单页没有', () => {
     assert.ok(!cfg.enablePullDownRefresh, `${p} 是表单页,下拉会刷掉填了一半的内容`);
   }
 });
+
+test('催缴的发送按钮是浮动操作条,不许再沉回列表底部', () => {
+  /*
+   * 2026-08-15 实测:67 户欠费的列表里,发送按钮在最底下 ——
+   * 勾完人还得滑十几屏去找按钮。改成勾了人就浮出的底部操作条,
+   * 且必须给列表垫底(不然最后一行被条盖住勾不着)。
+   */
+  const wxml = read('packageAdmin/components/arrears-panel/index.wxml');
+  assert.match(wxml, /wx:if="\{\{picked\.length > 0\}\}"[\s\S]{0,80}dun-bar/, '操作条没有跟着勾选显隐');
+  assert.match(wxml, /dun-bar-pad/, '没给列表垫底,最后一行会被操作条盖住');
+  const wxss = read('packageAdmin/components/arrears-panel/index.wxss');
+  assert.match(wxss, /\.dun-bar \{[\s\S]{0,120}position: fixed/, '操作条不是固定在屏幕底部');
+  assert.match(wxss, /safe-area-inset-bottom/, '全面屏底部没留安全区');
+  const js = stripJs(read('packageAdmin/components/arrears-panel/index.js'));
+  assert.match(js, /clearPicked/, '没有「清空」——勾错了只能逐个取消');
+});

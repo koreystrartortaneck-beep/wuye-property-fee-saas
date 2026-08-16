@@ -99,6 +99,10 @@ Component({
     );
   },
 
+  clearPicked() {
+    this.applyPicked([]);
+  },
+
   toggleAll() {
     const all = this.data.rows.map((r) => r.houseId);
     this.applyPicked(this.data.picked.length === all.length ? [] : all);

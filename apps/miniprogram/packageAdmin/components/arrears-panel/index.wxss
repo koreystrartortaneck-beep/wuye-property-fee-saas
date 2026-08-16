@@ -79,3 +79,43 @@
 .r-call { display: inline-flex; margin-top: 8rpx; }
 
 .act { margin-top: 30rpx; }
+
+/* ── 选中即浮出的底部操作条 ── */
+.dun-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 18rpx 28rpx;
+  /* 全面屏底部留出安全区 */
+  padding-bottom: calc(18rpx + env(safe-area-inset-bottom));
+  background: rgba(253, 251, 247, 0.97);
+  border-top: 1rpx solid rgba(59, 43, 87, 0.12);
+  box-shadow: 0 -10rpx 30rpx rgba(37, 28, 56, 0.1);
+}
+.dun-bar-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 20rpx;
+}
+.dun-bar-n {
+  font-size: 28rpx;
+  font-weight: 900;
+  color: var(--text, #251c38);
+}
+.dun-bar-clear {
+  font-size: 24rpx;
+  color: var(--text-4, #8b8199);
+  text-decoration: underline;
+}
+.dun-bar-btn {
+  flex: 0 0 auto;
+  padding: 0 56rpx;
+}
+.dun-bar-pad { height: 140rpx; }
