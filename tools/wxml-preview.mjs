@@ -198,7 +198,17 @@ function render(node, scope) {
      * 实际产品早就给了 min-height 与占位底色（注释里写着「避免照片消失」）。
      * 这是工具第 3 次骗我，改成自定义元素后选择器照常生效。
      */
-    const st = `${style};background:#e6ded2;display:block`;
+    /*
+     * src 是 data:/http 时真的画出来(手册里的二维码不能是一块空色块);
+     * cloud:// 这类小程序专属协议画不了,保持占位底色。
+     */
+    const src = a.src ? interpolate(a.src, scope) : '';
+    const drawable = /^(data:|https?:)/.test(src);
+    // style 属性外层是双引号,url 里必须用单引号 —— 用双引号属性在第一个内引号处就断了
+    const bg = drawable
+      ? `background:#fff url('${src.replace(/["']/g, (m) => encodeURIComponent(m))}') center/contain no-repeat`
+      : 'background:#e6ded2';
+    const st = `${style};${bg};display:block`;
     return `<image class="${cls}" style="${st}" data-wx="image"></image>`;
   }
   if (node.tag === 'input' || node.tag === 'textarea') {

@@ -1,6 +1,7 @@
 # 使用手册（业主篇 / 员工篇）
 
-产物：`manual.pdf`（A4）。源文件：`manual.tex`，插图：`img/`。
+产物：`manual.pdf`（总手册,A4）与 `卡券手册.pdf`（发放/领用/核销专册,5 页）。
+源文件：`manual.tex` / `卡券手册.tex`（共用同一套版式宏与配色），插图：`img/`。
 
 ## 重新编译
 
@@ -45,6 +46,10 @@ xelatex manual.tex && xelatex manual.tex      # 跑两遍，第二遍才有目�
 | `s-tickets` | 报事报修（员工） |
 | `s-announce` | 发公告 |
 | `s-coupon` | 卡券核销 |
+| `cp-new-claim` / `cp-new-auto` | 发卡券(自领 / 缴费自动发) |
+| `cp-owner-claim` | 业主·可领取列表 |
+| `cp-owner-qr` | 业主·亮码浮层 |
+| `cp-verify` / `cp-verify-used` | 核销(可核 / 已核销) |
 | `s-housenew` | 新增房屋 |
 | `s-staff` | 员工与权限 |
 

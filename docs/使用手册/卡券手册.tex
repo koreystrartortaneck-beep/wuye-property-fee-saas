@@ -1,0 +1,276 @@
+% ============================================================================
+%  金港城物业费小程序 · 使用手册（业主篇 / 员工篇）
+%
+%  编译： xelatex manual.tex        （跑两遍，第二遍生成目录页码）
+%  依赖： TeXLive 2023+ 的 ctex / tcolorbox / titlesec / fontspec
+%  插图： img/ 目录；换图只需同名覆盖，无需改本文件
+% ============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[UTF8,fontset=macnew]{ctex}
+\usepackage[margin=2.1cm,top=2.3cm,bottom=2.2cm,headsep=0.7cm]{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{tikz}
+\tcbuselibrary{skins}
+
+% ── 取小程序自己的配色，手册和界面是同一家人 ───────────────────────────────
+\definecolor{plum}{HTML}{3B2B57}      % 主色：深紫
+\definecolor{deepink}{HTML}{251C38}
+\definecolor{gold}{HTML}{C9A66B}      % 强调：金
+\definecolor{golddeep}{HTML}{B8862F}
+\definecolor{cream}{HTML}{FBF7F0}     % 底：暖白
+\definecolor{cream2}{HTML}{F3EDE3}
+\definecolor{inkgray}{HTML}{55496B}
+\definecolor{subgray}{HTML}{7C7288}
+\definecolor{danger}{HTML}{C45656}
+\definecolor{okgreen}{HTML}{4F7D44}
+\definecolor{rule}{HTML}{E2DDD4}
+
+\hypersetup{colorlinks=true,linkcolor=plum,urlcolor=golddeep,pdftitle={金港城物业费小程序使用手册},pdfauthor={港城物业}}
+
+% ── 版式 ─────────────────────────────────────────────────────────────────
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.35em}
+\linespread{1.28}
+
+\titleformat{\section}[block]
+  {\normalfont\LARGE\bfseries\color{plum}}{\thesection}{0.6em}{}
+\titleformat{\subsection}[block]
+  {\normalfont\large\bfseries\color{deepink}}{}{0em}{}
+\titlespacing{\section}{0pt}{1.4em}{0.8em}
+\titlespacing{\subsection}{0pt}{1.1em}{0.4em}
+
+\setlength{\headheight}{22pt}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{rule}\leaders\hrule height \headrulewidth\hfill}}
+\fancyhead[L]{\small\color{subgray}金港城物业费小程序 · 卡券手册}
+\fancyhead[R]{\small\color{subgray}\leftmark}
+\fancyfoot[C]{\small\color{subgray}\thepage}
+
+% ── 步骤块：左图右文，比例固定，全篇统一 ──────────────────────────────────
+%   \step{图片文件名}{步骤标题}{正文}
+%   图片按高度对齐（手机截图都是竖的），所以每一步的视觉重量一致。
+% 插图全部预处理成 375×760(见 scratchpad/manual-shots.mjs 与裁切脚本),
+% 所以这里按**宽度**定尺寸即可 —— 每一步的图大小完全一致，版面才真的统一。
+% 早先按高度对齐:手机截图太瘦长，被压成一条细缝，字根本看不清。
+\newlength{\shotW}\setlength{\shotW}{5.15cm}  % 左栏宽度（含边框留白）
+\newlength{\shotIW}\setlength{\shotIW}{4.85cm} % 图片净宽
+\newcounter{stepno}[section]
+
+\newtcolorbox{shotframe}{
+  enhanced, sharp corners=downhill, arc=3pt, boxrule=0.5pt,
+  colback=cream, colframe=rule, boxsep=0pt, left=2pt, right=2pt, top=2pt, bottom=2pt,
+  drop shadow={black!12}
+}
+
+\newcommand{\stepbadge}[1]{%
+  \begin{tikzpicture}[baseline=(n.base)]
+    \node[circle, fill=plum, text=cream, font=\bfseries\small, inner sep=2.4pt, minimum size=6.4mm] (n) {#1};
+  \end{tikzpicture}%
+}
+
+\newcommand{\step}[3]{%
+  \par\vspace{0.55em}\noindent
+  \refstepcounter{stepno}%
+  \begin{minipage}[t]{\shotW}
+    \vspace{0pt}
+    \begin{shotframe}
+      \includegraphics[width=\shotIW]{img/#1}
+    \end{shotframe}
+  \end{minipage}%
+  \hfill
+  \begin{minipage}[t]{\dimexpr\textwidth-\shotW-0.7cm\relax}
+    \vspace{0pt}
+    {\stepbadge{\thestepno}\hspace{0.35em}\textbf{\large\color{deepink}#2}}\par
+    \vspace{0.45em}
+    #3
+  \end{minipage}%
+  \par\vspace{1.0em}
+}
+
+% ── 三种提示框：为什么这么设计 / 注意 / 这是钱 ─────────────────────────────
+% 注意:这两个框会用在 \step 的 minipage 里,那里**不能** breakable ——
+% tcolorbox 会把框拆成多段而正文一段都放不下,页面上只剩几条空色条(2026-08-05 修)。
+\newtcolorbox{why}{
+  enhanced, colback=cream2, colframe=gold, boxrule=0pt,
+  leftrule=2.4pt, arc=2pt, left=8pt, right=8pt, top=5pt, bottom=5pt,
+  fontupper=\small\color{inkgray}
+}
+\newtcolorbox{warn}{
+  enhanced, colback=danger!5, colframe=danger, boxrule=0pt,
+  leftrule=2.4pt, arc=2pt, left=8pt, right=8pt, top=5pt, bottom=5pt,
+  fontupper=\small\color{inkgray}
+}
+\newcommand{\kw}[1]{\textbf{\color{plum}#1}}
+% 行内的「按钮」标签:内边距压到最小 —— 否则一行里出现一个按钮就把整段行距顶开
+\newcommand{\btn}[1]{\tcbox[on line, colback=plum, colframe=plum, boxsep=0pt,
+  left=2.5pt, right=2.5pt, top=0.6pt, bottom=0.6pt, arc=1.6pt]{\color{cream}\footnotesize\textbf{#1}}}
+\newcommand{\gbtn}[1]{\tcbox[on line, colback=gold!30, colframe=gold, boxsep=0pt,
+  left=2.5pt, right=2.5pt, top=0.6pt, bottom=0.6pt, arc=1.6pt]{\color{deepink}\footnotesize\textbf{#1}}}
+
+\begin{document}
+
+% ══════════════════════════════ 封面 ══════════════════════════════
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{tikzpicture}[remember picture, overlay]
+  \fill[plum] (current page.north west) rectangle ([yshift=-10.8cm]current page.north east);
+  \fill[gold] ([yshift=-10.8cm]current page.north west) rectangle ([yshift=-11.02cm]current page.north east);
+\end{tikzpicture}
+
+\vspace*{2.2cm}
+{\color{cream}\fontsize{31}{38}\selectfont\bfseries 卡券手册}\par
+\vspace{0.6em}
+{\color{gold}\fontsize{22}{30}\selectfont\bfseries 发放 · 领用 · 核销}\par
+\vspace{1.4em}
+{\color{cream!85}\large 物业管理人员专用}\par
+\vspace{0.7em}
+{\color{cream!60}\normalsize 电影票、服务券、物业费抵扣券 —— 从发出到兑掉的全过程}\par
+
+\vfill
+{\color{inkgray}\large 金港城 · 港城物业}\par
+\vspace{0.3em}
+{\color{subgray}\small 2026 年 8 月}\par
+\vspace{1.4cm}
+\end{titlepage}
+
+% ══════════════════════════════ 先懂两件事 ══════════════════════════════
+\section{先懂两件事：券的种类与发放方式}
+\markboth{卡券手册}{卡券手册}
+
+\begin{why}
+卡券是\kw{承诺出去的成本}：发行量 × 奖品就是钱。所以本手册里所有「确认」按钮
+都会把数量、限领、有效期摆在眼前 —— 看清再按。
+\end{why}
+
+\vspace{0.4em}
+\noindent\textbf{\color{plum}三种券}\par
+\vspace{0.4em}
+\begin{tabular}{@{}>{\bfseries\color{plum}}l@{\hspace{0.9em}}p{\dimexpr\linewidth-7.2em\relax}@{}}
+礼品券 & 电影票、实物奖品。业主领到手后\kw{到前台核销}，当面换东西\\[0.3em]
+服务券 & 免上门费这类服务承诺，同样凭码核销\\[0.3em]
+抵扣券 & 业主\kw{缴物业费时直接抵钱}（可设满减门槛），不用核销，系统自动扣\\
+\end{tabular}
+\vspace{0.9em}
+
+\noindent\textbf{\color{plum}两种发放方式}\par
+\vspace{0.4em}
+\begin{tabular}{@{}>{\bfseries\color{plum}}l@{\hspace{0.9em}}p{\dimexpr\linewidth-9.4em\relax}@{}}
+业主自领 & 发布后出现在业主的「可领取」里，\kw{先到先得}，领完即止\\[0.3em]
+缴费自动发 & 业主\kw{线上缴费成功}且满足你设的条件时，自动发到他的卡券里。
+这种券\kw{不会}出现在「可领取」里 —— 它是缴费换来的，不能被没缴费的人抢走\\
+\end{tabular}
+
+% ══════════════════════════════ 发券 ══════════════════════════════
+\section{发券（仅物业管理员）}
+
+\step{cp-new-claim}{发一张自领的券：电影票}{%
+\kw{「功能」}页签 → \kw{发卡券}。类型选\kw{礼品券}，填：
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.15em]
+  \item \kw{券名称}：业主看到的名字，如「电影票兑换券」
+  \item \kw{发行总量}：一共发几张 —— \kw{这就是成本}，想清再填
+  \item \kw{每人限领}：默认 1 张，系统在数据库层面钉死，抢也抢不多
+  \item \kw{有效期}：开始日的\kw{零点}起可领可用，截止日\kw{全天}有效
+  \item \kw{说明}：业主领券时能看到，写清怎么兑
+\end{itemize}
+
+点\btn{发布这张券}，确认框会复述数量、限领、有效期 —— 核对后确认。
+\kw{发布后业主立刻能领。}
+}
+
+\step{cp-new-auto}{发一张自动发的券：缴费奖励}{%
+发放方式切到\kw{「缴费自动发」}，再设触发条件（可只设一个，多个之间是\kw{「且」}）：
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.15em]
+  \item \kw{实付满 X 元}：这笔线上缴费的实付金额达到门槛
+  \item \kw{须按时缴}：在账单到期日之前付清，逾期再交的不发
+  \item \kw{须无欠费}：缴完这笔后名下再无任何待缴
+\end{itemize}
+
+业主\kw{线上微信缴费成功的那一刻}，系统逐条核对，全中就把券发进他的
+「我的卡券」—— 全程无人工。
+
+\begin{why}
+只统计\kw{线上}缴费：线下收现金是咱们自己登记的，拿它触发奖励没有意义。
+发完为止：发行总量用尽后，再有人满足条件也不会发。
+\end{why}
+}
+
+\begin{warn}
+\textbf{发出去的收不回来}\quad 发行量发布后\kw{只能改小、不能撤回已领的}；
+业主退款也\kw{不追回}已发的券。填错数量的补救是尽快把发行量改小
+（电脑后台 → 卡券），已经领出去的部分认账。
+\end{warn}
+
+% ══════════════════════════════ 业主那头 ══════════════════════════════
+\section{业主那头发生什么}
+
+\step{cp-owner-claim}{领券：先到先得}{%
+业主打开\kw{「我的 → 我的卡券 → 可领取」}，点\gbtn{领取}即入账。
+每张券旁写着\kw{剩几张}；领完显示「已领完」，领过的显示「已领取」。
+
+\begin{why}
+业主问「为什么我看不到那张券」时，按顺序查四件事：
+①它是\kw{自动发}的（不进可领取，缴费才有）；②\kw{开始领取日}还没到；
+③\kw{已领完}；④券限定了别的小区。
+\end{why}
+}
+
+\step{cp-owner-qr}{用券：亮码}{%
+礼品券/服务券在\kw{「我的卡券」}里有\btn{亮码核销}，点开是一张大二维码，
+到前台给工作人员扫。业主手机不方便时，也可以\kw{点券码复制}发给前台，手动输入一样核。
+
+抵扣券不用亮码：业主\kw{缴物业费时}系统自动列出可用的抵扣券，
+选中即减，和支付同一笔完成，一张券绝不会抵两次。
+}
+
+% ══════════════════════════════ 核销 ══════════════════════════════
+\section{核销（收费员即可操作）}
+
+\step{cp-verify}{扫码 → 看清 → 确认}{%
+\kw{「功能」}页签 → \kw{核销卡券} → \btn{扫业主的券码}。屏幕立刻显示
+\kw{是什么券、什么状态、有效期到哪天} —— 看清确实是「未使用」，
+把奖品准备好当面交付，再点\gbtn{确认核销}。
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.15em]
+  \item 核销\kw{不可逆}：确认前先把东西拿在手里
+  \item 扫到不是本系统的码（付款码、网址）会明确拒绝，不会误核
+  \item 业主手机没电：让他报\kw{券码}，手动输入一样查一样核
+\end{itemize}
+}
+
+\step{cp-verify-used}{用过的、过期的，系统替你把关}{%
+已核销的券再扫，页面直接写\kw{「已核销」}和核销时间，确认按钮不会出现；
+过期的同理。\kw{两个前台同时核同一张码，只有一个能成功} ——
+另一边会看到「该券刚刚已被核销」，东西不会发两份。
+
+\begin{why}
+所以前台不需要人工记「这张用没用过」：\kw{扫一下，系统说能核才核}。
+唯一要人把住的是交付顺序 —— 先核销后给货，货不给第二次。
+\end{why}
+}
+
+% ══════════════════════════════ 常见问题 ══════════════════════════════
+\section{常见问题}
+
+% 问答用竖排块,不用两列表格 —— 多行问题会和答案错行,看着像答非所问
+\newcommand{\qa}[2]{\par\noindent{\bfseries\color{plum}#1}\par\vspace{0.2em}{\color{inkgray}#2}\par\vspace{0.9em}}
+
+\qa{自动发的券什么时候到账?}{业主线上缴费成功的一瞬间。线下收现金不触发。}
+\qa{发行量填错了怎么办?}{电脑后台可以改小;已领出的收不回,认账。}
+\qa{业主退款了,券要收回吗?}{不追回。追一张券的纠纷成本比券本身高。}
+\qa{能给指定的某户单独发吗?}{目前不能点名发。变通做法:用「缴费自动发」,把条件设到只有目标人群满足。}
+\qa{凌晨发的券业主看不到?}{老版本的坑,已修复:现在开始领取日的\kw{零点}即生效。}
+\qa{核销记录去哪查?}{电脑后台 → 卡券,每张券的领取与核销状态都在;券本身也记着核销时间。}
+
+\end{document}
