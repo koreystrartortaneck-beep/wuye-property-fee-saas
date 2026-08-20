@@ -133,3 +133,25 @@ test('上传脚本会自动刷新指纹，且排在预检之前', () => {
   assert.ok(iStamp > 0, '上传脚本没有刷新指纹——上传出去的会是过期版本号');
   assert.ok(iStamp < iPre, '刷新指纹排在了预检之后');
 });
+
+test('指纹不受本机杂物影响——它必须只取会上传的源码', async (t) => {
+  /*
+   * 2026-08-20 CI 首次运行抓到:同一份代码,我的 Mac 算出 069cb34、Linux 算出 f96dd78。
+   * 差别是开发者工具在本机生成的 project.private.config.json(已 gitignore、不上传)
+   * 被算进了哈希 —— 它不是点开头的文件,躲过了原来那条排除规则。
+   *
+   * 后果不是「值不好看」:我一直拿这个值告诉用户「上传这一版」,
+   * 而那个值只在我这台机器上复现。会漂的指纹比没有指纹更危险。
+   */
+  const base = await stampOfCopy(t);
+  const withPrivate = await stampOfCopy(t, (dir) => {
+    fs.writeFileSync(path.join(dir, 'project.private.config.json'), JSON.stringify({ setting: { compileHotReLoad: true } }));
+  });
+  assert.equal(withPrivate, base, '本机私有配置改变了指纹');
+
+  // 反向对照:真源码变了,指纹必须变(否则上面那条断言可能是永真)
+  const withRealChange = await stampOfCopy(t, (dir) => {
+    fs.writeFileSync(path.join(dir, 'utils/probe-real-change.js'), 'module.exports = {};\n');
+  });
+  assert.notEqual(withRealChange, base, '真源码变了指纹却没变');
+});

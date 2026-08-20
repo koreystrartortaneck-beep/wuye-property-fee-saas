@@ -32,6 +32,15 @@ const VERSION_FILE = path.join(MP, 'utils/version.js');
  */
 const EXCLUDE_DIRS = new Set(['node_modules', 'miniprogram_npm', '.git']);
 const SOURCE_EXT = new Set(['.js', '.json', '.wxml', '.wxss', '.wxs']);
+/*
+ * 开发者工具在每台机器上生成的**私有**配置(编译模式、本机路径等),已 gitignore、
+ * 不会随代码上传。它不是点开头的文件,所以躲过了上面那条规则 ——
+ * 2026-08-20 CI 首次运行抓到:同一份代码在我的 Mac 上算出 069cb34,
+ * 在 Linux 上是 f96dd78,差别就是这一个文件的有无。
+ * 指纹的用途是回答「手机上跑的是不是这份代码」,它必须只取**会上传的源码**;
+ * 随本机杂物漂移的指纹比没有指纹更危险 —— 它会让人以为版本对上了。
+ */
+const EXCLUDE_FILES = new Set(['project.private.config.json']);
 
 function collect(dir, root, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
@@ -44,7 +53,11 @@ function collect(dir, root, out = []) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       if (!EXCLUDE_DIRS.has(entry.name)) collect(full, root, out);
-    } else if (SOURCE_EXT.has(path.extname(entry.name)) && full !== path.join(root, 'utils/version.js')) {
+    } else if (
+      SOURCE_EXT.has(path.extname(entry.name)) &&
+      !EXCLUDE_FILES.has(entry.name) &&
+      full !== path.join(root, 'utils/version.js')
+    ) {
       out.push(full);
     }
   }
