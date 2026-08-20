@@ -1,0 +1,80 @@
+# 提交门禁 —— 只跑检查，绝不部署。
+#
+# 这条流水线的边界是刻意划死的，因为业主正在真金白银地用这套系统：
+#   · 没有任何部署步骤（生产由微信云托管从 main 自动构建，与本流水线无关）
+#   · 不使用任何 secrets，permissions 只给 contents: read
+#   · 不连生产数据库：DATABASE_URL 是个写死的假串，仅供 prisma 生成类型
+# 换句话说，这里再红也不会影响线上；这里绿了也不代表已部署。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 同一分支连续推送时，取消上一次未跑完的（省额度，也避免旧结果覆盖新结果）
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # 假串。prisma generate / validate 需要这个变量存在，但全部测试都用 mock，
+  # 不会真去连库 —— 写成明显假的值，免得日后有人以为它是真配置。
+  DATABASE_URL: "mysql://ci:ci@127.0.0.1:3306/ci_never_connected"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 装 Node 22（与生产 Dockerfile 的 node:22 一致）
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 装 pnpm（版本由 package.json 的 packageManager 钉住）
+        run: corepack enable
+
+      - name: 依赖（--frozen-lockfile：lock 与 package.json 不一致就红）
+        run: pnpm install --frozen-lockfile
+
+      - name: 红线检查（敏感文件 / 真实手机号 / 占位符里的真密钥）
+        run: node tools/check-secrets.mjs
+
+      - name: Prisma 生成客户端类型
+        run: pnpm --filter @pf/api exec prisma generate
+
+      - name: Prisma schema 校验
+        run: pnpm --filter @pf/api exec prisma validate
+
+      - name: 后端类型检查
+        run: pnpm --filter @pf/api exec tsc --noEmit
+
+      - name: 后端单测（资金逻辑、权限、状态机）
+        run: pnpm --filter @pf/api exec jest --ci
+
+      - name: 后台类型检查
+        run: pnpm --filter @pf/admin exec vue-tsc --noEmit -p tsconfig.json
+
+      - name: 后台单测
+        run: pnpm --filter @pf/admin exec vitest run
+
+      - name: 小程序静态预检（WXSS/WXML/JS 语法、app.json 一致性）
+        run: node tools/miniprogram-preflight.mjs
+
+      - name: 小程序守卫测试
+        run: node --test tests/*.test.js
+
+      - name: 小程序代码指纹是否最新
+        # 指纹是小程序源码的内容哈希，显示在业主端「我的」页底部。
+        # 改了代码忘记重打指纹 → 手机上显示的版本号会骗人。
+        run: node tools/stamp-miniprogram.mjs --check
+
+      - name: 全量构建（nest build + vite build）
+        run: pnpm -r build

@@ -20,6 +20,7 @@ import { BizException } from './biz.exception';
  *   POST /payment/wxpay/refund-notify  同上
  *   POST /owner/coupons/:id/claim      每次写库并生成核销码；脚本连打会白占库存名额、
  *                                      刷掉别人能领的份额（超发本身由唯一约束挡住）
+ *   GET  /owner/my/coupons/:id/qr      每次现算一张二维码(CPU),且只对本人未使用的券出码
  *   POST /auth/admin-exchange          权限授予点（业主令牌→管理员令牌）。判定本身
  *                                      很便宜，但这是暴力尝试「哪个号是管理员」的入口，
  *                                      且每个业主打开小程序都会静默探一次，要挡住脚本
