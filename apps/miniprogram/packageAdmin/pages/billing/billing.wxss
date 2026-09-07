@@ -1,5 +1,6 @@
 @import "../../adm.wxss";
-.adm-page {padding-bottom:calc(210rpx + env(safe-area-inset-bottom));}.adm-page .scope-submit,.adm-page .pub-btn,.adm-page .two-btn {position:fixed;bottom:0;left:0;right:0;margin:0;z-index:6;border-radius:0;padding-bottom:env(safe-area-inset-bottom);}.adm-page .scope-submit,.adm-page .pub-btn{height:calc(110rpx + env(safe-area-inset-bottom));}.adm-page .two-btn{background:#faf7f1;padding:20rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));}
+.adm-page { padding-bottom:calc(210rpx + env(safe-area-inset-bottom)); }
+.adm-page .scope-submit,.adm-page .pub-btn,.adm-page .two-btn { position:fixed;bottom:calc(24rpx + env(safe-area-inset-bottom));left:24rpx;right:24rpx;margin:0;z-index:6; }
 
 .pick-line {
   display: flex;

@@ -31,31 +31,32 @@
       <block wx:else>
         <view wx:if="{{loading}}" class="adm-hint">加载中…</view>
         <view wx:if="{{gridError}}" class="adm-hint adm-error" bindtap="retryGrid">{{gridError}}</view>
-        <view class="grid-legend">橙色：待缴　绿色：无欠费　灰色：停用</view>
+        <view class="grid-legend"><view class="dot dot-r"></view><text>待缴</text><view class="dot"></view><text>无欠费</text><view class="dot dot-g"></view><text>停用</text></view>
         <view wx:if="{{isFlat}}" class="adm-card">
           <view class="adm-row" wx:for="{{flatRows}}" wx:key="id" data-id="{{item.id}}" bindtap="goHouse"><view class="adm-row-main adm-row-title">{{item.displayName || item.label}}</view><text class="{{item.unpaidCount ? 'adm-danger' : ''}}">{{item.unpaidCount ? '¥'+item.unpaidAmount : item.disabled ? '停用' : '无欠费'}} ›</text></view>
         </view>
-        <block wx:else><block wx:for="{{units}}" wx:key="unit" wx:for-item="u">
+        <block wx:else><view class="unit-card" wx:for="{{units}}" wx:key="unit" wx:for-item="u">
+          <view class="unit-head"><view class="unit-name">{{picked}} · {{u.unit}}</view></view>
           <view class="frow" wx:for="{{u.floors}}" wx:key="floor" wx:for-item="f" wx:for-index="fi" id="floor-{{fi}}">
             <view class="ftag">{{f.floor}}F</view><view class="cells cols-{{u.cols}}">
               <view class="cell {{item.unpaidCount > 0 ? 'cell-unpaid' : ''}} {{item.disabled ? 'cell-off' : ''}}" wx:for="{{f.cells}}" wx:key="id" data-id="{{item.id}}" bindtap="goHouse"><view class="cno">{{item.label}}</view><view class="camt">{{item.unpaidCount ? '¥'+item.unpaidAmount : item.disabled ? '停用' : '无欠费'}}</view></view>
             </view>
           </view>
-        </block></block>
+        </view></block>
       </block>
     </view>
-    <view hidden="{{tab !== 'arrears'}}" style="--panel-top:96rpx"><arrears-panel wx:if="{{mounted.arrears}}" id="arrears" active="{{tab === 'arrears'}}" /></view>
-    <view hidden="{{tab !== 'tickets'}}" style="--panel-top:96rpx"><ticket-panel wx:if="{{mounted.tickets}}" id="tickets" active="{{tab === 'tickets'}}" /></view>
-    <view hidden="{{tab !== 'batches'}}" style="--panel-top:96rpx"><batch-panel wx:if="{{mounted.batches}}" id="batches" active="{{tab === 'batches'}}" /></view>
+    <view hidden="{{tab !== 'arrears'}}" style="--panel-top:116rpx"><arrears-panel wx:if="{{mounted.arrears}}" id="arrears" active="{{tab === 'arrears'}}" /></view>
+    <view hidden="{{tab !== 'tickets'}}" style="--panel-top:116rpx"><ticket-panel wx:if="{{mounted.tickets}}" id="tickets" active="{{tab === 'tickets'}}" /></view>
+    <view hidden="{{tab !== 'batches'}}" style="--panel-top:116rpx"><batch-panel wx:if="{{mounted.batches}}" id="batches" active="{{tab === 'batches'}}" /></view>
     <view wx:if="{{tab === 'tools'}}" class="tools">
-      <view class="tool tool-main" bindtap="goBilling"><view class="tool-name">发账单</view><view class="tool-desc">生成账单</view></view>
-      <view class="tool tool-receipts" bindtap="goReceipts"><view class="tool-name">收款收据</view><view class="tool-desc">查询缴费记录与电子收据</view></view>
-      <view class="tool" bindtap="goNewHouse"><view class="tool-name">新增房屋</view></view>
-      <view class="tool" bindtap="goApprovals"><view class="tool-name">绑定审批<text wx:if="{{bindingCount}}" class="tab-bd">{{bindingCount}}</text></view></view>
-      <view class="tool" bindtap="goCouponVerify"><view class="tool-name">核销卡券</view></view>
-      <view class="tool" bindtap="goAnnounce"><view class="tool-name">发公告</view></view>
-      <view wx:if="{{isAdmin}}" class="tool" bindtap="goCouponNew"><view class="tool-name">发卡券</view></view>
-      <view wx:if="{{isAdmin}}" class="tool" bindtap="goStaff"><view class="tool-name">员工与权限</view></view>
+      <view class="tool tool-main" bindtap="goBilling"><view class="tool-name">发账单</view><view class="tool-desc">按收费标准生成草稿、核对发布</view></view>
+      <view class="tool" bindtap="goReceipts"><view class="tool-name">收款收据</view><view class="tool-desc">查询缴费记录与电子收据</view></view>
+      <view class="tool" bindtap="goNewHouse"><view class="tool-name">新增房屋</view><view class="tool-desc">登记房屋、住户及收费标准</view></view>
+      <view class="tool" bindtap="goApprovals"><view class="tool-name">绑定审批<text wx:if="{{bindingCount}}" class="tab-bd">{{bindingCount}}</text></view><view class="tool-desc">审核业主的房屋绑定申请</view></view>
+      <view class="tool" bindtap="goCouponVerify"><view class="tool-name">核销卡券</view><view class="tool-desc">扫描券码，核对并核销</view></view>
+      <view class="tool" bindtap="goAnnounce"><view class="tool-name">发公告</view><view class="tool-desc">发布小区通知、管理置顶公告</view></view>
+      <view wx:if="{{isAdmin}}" class="tool" bindtap="goCouponNew"><view class="tool-name">发卡券</view><view class="tool-desc">设置券面、数量及领取条件</view></view>
+      <view wx:if="{{isAdmin}}" class="tool" bindtap="goStaff"><view class="tool-name">员工与权限</view><view class="tool-desc">添加员工、调整角色与状态</view></view>
     </view>
     <view wx:if="{{buildingOpen}}" class="adm-mask"><view class="adm-sheet"><view class="adm-sheet-title">选择楼栋<text bindtap="closeBuildings">关闭</text></view><input class="adm-search" placeholder="搜索楼栋" value="{{buildingQuery}}" bindinput="filterBuildings"/><scroll-view scroll-y style="max-height:55vh"><view class="adm-row" wx:for="{{buildingOptions}}" wx:key="building" data-b="{{item.building}}" bindtap="chooseBuilding"><view class="adm-row-main">{{item.building}}</view><text>{{item.houses}} 户 ›</text></view></scroll-view></view></view>
   </block>

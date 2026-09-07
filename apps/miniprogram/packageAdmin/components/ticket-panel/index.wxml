@@ -1,7 +1,7 @@
 <view wx:if="{{loading}}" class="adm-hint">加载中…</view>
 <view wx:elif="{{loadError}}" class="adm-hint adm-error" bindtap="load">加载失败，点击重试</view>
 <block wx:else>
-  <view class="adm-sticky"><view class="adm-filters"><view data-status="PENDING" bindtap="pickStatus">待受理 {{pending.length}}</view><view data-status="PROCESSING" bindtap="pickStatus">处理中 {{processing.length}}</view><view data-status="DONE" bindtap="pickStatus">已结束 {{done.length}}</view></view><view class="adm-pager"><view data-delta="-1" bindtap="turn">上一页</view><text>{{page}} / {{pages}}</text><view data-delta="1" bindtap="turn">下一页</view></view></view>
+  <view class="adm-sticky"><view class="adm-filters"><view class="{{selectedStatus === 'PENDING' ? 'adm-filter-on' : ''}}" data-status="PENDING" bindtap="pickStatus">待受理 {{pending.length}}</view><view class="{{selectedStatus === 'PROCESSING' ? 'adm-filter-on' : ''}}" data-status="PROCESSING" bindtap="pickStatus">处理中 {{processing.length}}</view><view class="{{selectedStatus === 'DONE' ? 'adm-filter-on' : ''}}" data-status="DONE" bindtap="pickStatus">已结束 {{done.length}}</view></view><view class="adm-pager"><view data-delta="-1" bindtap="turn">上一页</view><text>{{page}} / {{pages}}</text><view data-delta="1" bindtap="turn">下一页</view></view></view>
   <view wx:if="{{!visibleRows.length}}" class="adm-empty">暂无报修记录</view>
   <view class="t-card" wx:for="{{visibleRows}}" wx:key="id" data-id="{{item.id}}" bindtap="open"><view class="t-head"><view class="t-type">{{item.typeText}}</view><text>{{item.statusText}}</text></view><view class="t-body ticket-excerpt">{{item.content}}</view><view class="t-house">{{item.houseName}}</view><view class="t-at">{{item.at}} ›</view></view>
 </block>

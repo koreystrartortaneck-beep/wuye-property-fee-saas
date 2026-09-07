@@ -1,5 +1,7 @@
 @import "../../adm.wxss";
-.adm-page {padding-bottom:calc(210rpx + env(safe-area-inset-bottom));}.adm-page .add-btn,.adm-page .two-btn {position:fixed;bottom:0;left:0;right:0;margin:0;z-index:6;background:#faf7f1;padding:20rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));border-radius:0;}
+.adm-page { padding-bottom:calc(210rpx + env(safe-area-inset-bottom)); }
+.adm-page .add-btn { position:fixed;bottom:calc(24rpx + env(safe-area-inset-bottom));left:24rpx;right:24rpx;margin:0;z-index:6; }
+.adm-page .two-btn { position:fixed;bottom:calc(24rpx + env(safe-area-inset-bottom));left:24rpx;right:24rpx;margin:0;z-index:6; }
 
 .st-row {
   padding: 18rpx 0;

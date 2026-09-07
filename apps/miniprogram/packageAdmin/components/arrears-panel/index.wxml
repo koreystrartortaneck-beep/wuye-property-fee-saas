@@ -6,12 +6,12 @@
   </view>
 
   <block wx:else>
-    <view class="adm-sticky"><view class="sum-card">
+    <view class="sum-card">
       <view class="sum-num adm-num">¥{{total}}</view>
       <view class="sum-lab">{{totalHouses}} 户欠费<text wx:if="{{overdueHouses > 0}}"> · 其中 {{overdueHouses}} 户已逾期</text></view>
     </view>
 
-    <input class="adm-search" placeholder="搜索房号 / 业主 / 手机号" value="{{keyword}}" bindinput="onSearch" />
+    <view class="adm-sticky"><input class="adm-search" placeholder="搜索房号 / 业主 / 手机号" value="{{keyword}}" bindinput="onSearch" />
     <view class="f-strip">
       <view
         class="f-chip {{overdueDays === item.key ? 'f-on' : ''}}"
@@ -57,7 +57,7 @@
       <view wx:if="{{truncated}}" class="adm-hint adm-error">共 {{truncated}} 户欠费,这里只列出前 {{rows.length}} 户;要全量请在电脑后台导出。</view>
 
 
-      <!-- 勾了人才浮出的底部操作条:67 户的列表里,按钮不能要求人滑到底去找(2026-08-15 实测) -->
+      <!-- 全选与发送常驻底部，覆盖筛选后的全部页。 -->
       <view class="dun-bar" hidden="{{!active}}">
         <view class="dun-bar-info">
           <view class="dun-bar-n">已选 {{picked.length}} 户</view>

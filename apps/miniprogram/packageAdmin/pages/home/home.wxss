@@ -1,10 +1,13 @@
 @import "../../adm.wxss";
-.workspace-head { position:sticky;top:0;z-index:8;background:#faf7f1;padding-bottom:12rpx; }
+.workspace-head { position:sticky;top:0;z-index:8;background:var(--cream-2, #fdfbf7);padding:12rpx 0; }
+.workspace-head .tabs { margin-top:0; }
+.workspace-head .tab { position:relative;min-width:0; }
+.workspace-head .tab-bd { position:absolute;top:-8rpx;right:-2rpx;margin:0; }
 .workspace-head .adm-search { margin-top:16rpx; }
-.workspace .tool { background:#fffdf9;border:1rpx solid #e9e2d9;box-shadow:none;min-height:140rpx;display:flex;flex-direction:column;justify-content:center; }
-.workspace .tool-main { background:#34263f; }.workspace .tool-receipts { background:#f1e7d6;border-color:#d9bd8b; }
-.workspace .cell { background:#edf2ed;border:0;box-shadow:none;min-height:120rpx; }.workspace .cell-unpaid { background:#f6e9e1; }.workspace .cell-off { background:#eeeae7; }.workspace .camt { font-size:22rpx;color:#426957;margin-top:8rpx; }.workspace .cell-unpaid .camt { color:#a46447; }
-.grid-legend { color:#918793;font-size:22rpx;margin:20rpx 0; }
+.workspace .camt { color:var(--text-3, #7c7288); }
+.workspace .cell-unpaid .camt { color:var(--danger, #c45656); }
+.workspace .cell-off .camt { color:var(--text-4, #8b8199); }
+.grid-legend { display:flex;align-items:center;gap:10rpx;flex-wrap:wrap;color:var(--text-3, #7c7288);font-size:22rpx;margin:20rpx 0; }
 
 /* ── 功能箱:两列卡片,名字大、说明小,一眼找得到按钮 ── */
 .tools {
