@@ -1,0 +1,8 @@
+{
+  "preset": "ts-jest",
+  "testEnvironment": "node",
+  "rootDir": ".",
+  "testRegex": "receipt-isolated.integration.ts$",
+  "moduleNameMapper": { "^@pf/shared$": "<rootDir>/../../../packages/shared/src" },
+  "testTimeout": 30000
+}
