@@ -54,6 +54,13 @@ class ReverseOfflineDto {
 class ListPaymentsQuery extends PageQuery {
   @IsOptional()
   @IsString()
+  @MaxLength(100)
+  keyword?: string;
+  @IsOptional()
+  @IsString()
+  houseId?: string;
+  @IsOptional()
+  @IsString()
   communityId?: string;
 
   @IsOptional()
@@ -70,7 +77,18 @@ export class AdminPaymentsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(q: ListPaymentsQuery) {
+    const keyword = q.keyword?.trim();
+    const houseSearch = keyword ? { OR: [
+      { code: { contains: keyword } }, { displayName: { contains: keyword } },
+      { contacts: { some: { OR: [{ phone: { contains: keyword } }, { name: { contains: keyword } }] } } },
+    ] } : undefined;
     const where = {
+      ...(keyword ? { AND: [{ OR: [
+        { orderNo: { contains: keyword } }, { receiptNo: { contains: keyword } },
+        { bill: { house: houseSearch } },
+        { paymentBills: { some: { bill: { house: houseSearch } } } },
+      ] }] } : {}),
+      ...(q.houseId ? { OR: [{ bill: { houseId: q.houseId } }, { paymentBills: { some: { bill: { houseId: q.houseId } } } }] } : {}),
       ...(q.communityId ? { communityId: q.communityId } : {}),
       ...(q.channel ? { channel: q.channel } : {}),
       ...(q.status ? { status: q.status } : {}),
@@ -79,8 +97,10 @@ export class AdminPaymentsService {
       this.prisma.t.payment.findMany({
         where,
         ...pageArgs(q),
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         select: {
+          id: true,
+          paymentBills: { select: { billId: true } },
           orderNo: true, totalAmount: true, discountAmount: true, channel: true, status: true, paidAt: true,
           offlineVoucherNo: true, receiptNo: true, createdAt: true, billId: true,
           /*
@@ -180,6 +200,12 @@ export class AdminPaymentController {
     return this.payments.list(q);
   }
 
+  // 独立路径：旧后端明确拒绝搜索，不会忽略 keyword 返回所有收款。
+  @Get('receipt-search')
+  searchReceipts(@Query() q: ListPaymentsQuery) {
+    return this.payments.list(q);
+  }
+
   /*
    * 只读，PLATFORM_READONLY 也该能看 —— 排查支付问题时不该被迫用超管账号。
    * 故意不挂 @Roles：AdminGuard 已保证是管理员，读一笔自己租户的支付溯源没有额外风险。
@@ -187,6 +213,11 @@ export class AdminPaymentController {
   @Get('trace/:orderNo')
   trace(@Param('orderNo') orderNo: string) {
     return this.payments.trace(orderNo);
+  }
+
+  @Get(':orderNo/receipt')
+  receipt(@Current() cur: CurrentAdmin, @Param('orderNo') orderNo: string) {
+    return this.paymentService.getAdminReceipt(cur.tenantId, orderNo);
   }
 
   @Post('offline')

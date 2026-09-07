@@ -1117,8 +1117,22 @@ export class PaymentService {
   }
 
   async getPayment(ownerId: string, orderNo: string) {
-    const p = await this.prisma.raw.payment.findUnique({
-      where: { orderNo },
+    const p = await this.findReceiptPayment(orderNo);
+    if (!p || p.wxUserId !== ownerId) throw new BizException(ErrorCode.NOT_FOUND);
+    return this.presentPayment(p);
+  }
+
+  async getAdminReceipt(tenantId: string | null, orderNo: string) {
+    const p = await this.findReceiptPayment(orderNo, tenantId);
+    if (!p) throw new BizException(ErrorCode.NOT_FOUND);
+    const result = this.presentPayment(p);
+    return { orderNo: result.orderNo, totalAmount: result.totalAmount, status: result.status,
+      receiptNo: result.receiptNo, receipt: result.receipt, receiptVoid: result.receiptVoid };
+  }
+
+  private findReceiptPayment(orderNo: string, tenantId?: string | null) {
+    return this.prisma.raw.payment.findUnique({
+      where: { orderNo, ...(tenantId != null ? { tenantId } : {}) },
       include: {
         paymentBills: {
           include: {
@@ -1127,7 +1141,9 @@ export class PaymentService {
         },
       },
     });
-    if (!p || p.wxUserId !== ownerId) throw new BizException(ErrorCode.NOT_FOUND);
+  }
+
+  private presentPayment(p: NonNullable<Awaited<ReturnType<PaymentService['findReceiptPayment']>>>) {
     // 收据房屋以「订单本身对应的房屋」为准（取首张账单的房屋），而非当前选中房屋
     const firstHouse = p.paymentBills[0]?.bill?.house ?? null;
     // 收据：优先不可变快照；发布前已支付的历史订单无快照 → 按订单当前数据回退生成，保证老收据不消失
