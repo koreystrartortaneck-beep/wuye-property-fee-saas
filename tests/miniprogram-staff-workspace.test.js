@@ -13,17 +13,39 @@ function harness(file,mocks={}){
   instance.wx=wx;return instance;
 }
 async function asyncNoop(){return [];}
+test('手机号通过新搜索接口查询，返回结果仍严格分渠道',async()=>{
+  let url;const page=harness('packageAdmin/pages/receipts/receipts.js',{fetchAll:async u=>{url=u;return [{orderNo:'wx',channel:'WXPAY',status:'SUCCESS',totalAmount:'10.00'},{orderNo:'off',channel:'OFFLINE',status:'SUCCESS',totalAmount:'100.00'}];}});
+  page.houseId='h1';page.setData({keyword:'13900001111'});await page.load();assert.match(url,/\/admin\/payments\/receipt-search\?/);assert.match(url,/keyword=13900001111/);assert.match(url,/houseId=h1/);assert.equal(page.data.total,1);assert.equal(page.data.amount,'10.00');
+});
+test('旧服务不支持搜索时显示失败，不将全部订单当搜索结果',async()=>{
+  const page=harness('packageAdmin/pages/receipts/receipts.js',{fetchAll:async()=>{const e=new Error('资源不存在');e.code=40400;throw e;}});page.setData({keyword:'测试业主'});await page.load();assert.match(page.data.error,/暂不支持收据搜索/);assert.equal(page.data.rows.length,0);
+});
 test('收据筛选关闭不生效，确定后重算全集，清除恢复默认',async()=>{
   const page=harness('packageAdmin/pages/receipts/receipts.js',{fetchAll:async()=>[
     {orderNo:'a',totalAmount:'1234.56',status:'SUCCESS',channel:'WXPAY',paidAt:'2026-09-07T01:00:00Z'},
     {orderNo:'b',totalAmount:'100.00',status:'SUCCESS',channel:'OFFLINE',paidAt:'2026-09-07T01:00:00Z'},
     {orderNo:'c',totalAmount:'20.00',status:'REFUNDED',channel:'OFFLINE',paidAt:'2026-09-07T01:00:00Z'}
   ]});
-  await page.load();assert.equal(page.data.amountDisplay,'1,334.56');
-  page.openFilters();page.setData({draftChannel:2});page.closeFilters();assert.equal(page.data.channelIndex,0);assert.equal(page.data.total,2);
-  page.openFilters();assert.equal(page.data.draftChannel,0);page.setData({draftChannel:2,draftState:2});page.applyFilters();
-  assert.equal(page.data.total,2);assert.equal(page.data.amount,'100.00');assert.equal(page.data.filterCount,2);
-  page.resetFilters();assert.equal(page.data.total,2);assert.equal(page.data.amount,'1334.56');assert.equal(page.data.filterCount,0);
+  await page.load();assert.equal(page.data.amountDisplay,'1,234.56');
+  page.openFilters();page.setData({draftState:1});page.closeFilters();assert.equal(page.data.stateIndex,0);assert.equal(page.data.total,1);
+  page.pickChannel(event('index',1));page.openFilters();assert.equal(page.data.draftState,0);page.setData({draftState:2});page.applyFilters();
+  assert.equal(page.data.total,2);assert.equal(page.data.amount,'100.00');assert.equal(page.data.filterCount,1);
+  page.resetFilters();assert.equal(page.data.channelIndex,1);assert.equal(page.data.total,1);assert.equal(page.data.amount,'100.00');assert.equal(page.data.filterCount,0);
+});
+test('默认仅真实微信成功支付，线下、模拟、关闭及退款不混入',async()=>{
+  const page=harness('packageAdmin/pages/receipts/receipts.js',{fetchAll:async()=>[
+    {orderNo:'wx',channel:'WXPAY',status:'SUCCESS',totalAmount:'302.01'},
+    {orderNo:'off',channel:'OFFLINE',status:'SUCCESS',totalAmount:'1000.00'},
+    {orderNo:'mock',channel:'MOCK',status:'SUCCESS',totalAmount:'9000.00'},
+    {orderNo:'unknown',channel:'OTHER',status:'SUCCESS',totalAmount:'7000.00'},
+    {orderNo:'refund',channel:'WXPAY',status:'REFUNDED',totalAmount:'50.00'},
+    {orderNo:'closed',channel:'WXPAY',status:'CLOSED',totalAmount:'30.00'},
+    {orderNo:'pending',channel:'WXPAY',status:'CREATED',totalAmount:'20.00'}
+  ]});
+  await page.load();assert.equal(page.data.total,1);assert.equal(page.data.rows[0].orderNo,'wx');assert.equal(page.data.amount,'302.01');
+  page.openFilters();page.setData({draftState:1});page.applyFilters();assert.equal(page.data.rows[0].orderNo,'refund');assert.equal(page.data.amount,'0.00');
+  page.pickChannel(event('index',1));assert.equal(page.data.total,1);assert.equal(page.data.rows[0].orderNo,'off');assert.equal(page.data.amount,'1000.00');
+  page.pickChannel(event('index',0));assert.equal(page.data.rows[0].orderNo,'wx');assert.equal(page.data.states[1],'已退款');
 });
 test('收据页自绘导航按胶囊位置留安全区，直达页面也能返回管理首页',()=>{
   const page=harness('packageAdmin/pages/receipts/receipts.js');let redirected;

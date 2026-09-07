@@ -54,6 +54,10 @@ class ReverseOfflineDto {
 class ListPaymentsQuery extends PageQuery {
   @IsOptional()
   @IsString()
+  @MaxLength(100)
+  keyword?: string;
+  @IsOptional()
+  @IsString()
   houseId?: string;
   @IsOptional()
   @IsString()
@@ -73,7 +77,17 @@ export class AdminPaymentsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(q: ListPaymentsQuery) {
+    const keyword = q.keyword?.trim();
+    const houseSearch = keyword ? { OR: [
+      { code: { contains: keyword } }, { displayName: { contains: keyword } },
+      { contacts: { some: { OR: [{ phone: { contains: keyword } }, { name: { contains: keyword } }] } } },
+    ] } : undefined;
     const where = {
+      ...(keyword ? { AND: [{ OR: [
+        { orderNo: { contains: keyword } }, { receiptNo: { contains: keyword } },
+        { bill: { house: houseSearch } },
+        { paymentBills: { some: { bill: { house: houseSearch } } } },
+      ] }] } : {}),
       ...(q.houseId ? { OR: [{ bill: { houseId: q.houseId } }, { paymentBills: { some: { bill: { houseId: q.houseId } } } }] } : {}),
       ...(q.communityId ? { communityId: q.communityId } : {}),
       ...(q.channel ? { channel: q.channel } : {}),
@@ -183,6 +197,12 @@ export class AdminPaymentController {
 
   @Get()
   list(@Query() q: ListPaymentsQuery) {
+    return this.payments.list(q);
+  }
+
+  // 独立路径：旧后端明确拒绝搜索，不会忽略 keyword 返回所有收款。
+  @Get('receipt-search')
+  searchReceipts(@Query() q: ListPaymentsQuery) {
     return this.payments.list(q);
   }
 

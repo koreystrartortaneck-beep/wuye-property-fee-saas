@@ -5,6 +5,7 @@
 .receipt-back { width:96rpx;height:var(--receipt-nav-height);font-size:58rpx;color:var(--text, #251c38);display:flex;align-items:center;justify-content:center; }
 .receipt-nav-title { font-size:34rpx;font-weight:800; }
 .receipts-body { padding:12rpx 24rpx calc(150rpx + env(safe-area-inset-bottom)); }
+.receipt-channels { margin:4rpx 0 12rpx; }
 .receipt-searchbar { position:sticky;top:var(--receipt-nav-bottom);z-index:5;display:flex;align-items:center;gap:16rpx;padding:12rpx 0;background:#f6f0e7; }
 .receipt-searchbar .adm-search { flex:1;min-width:0;height:84rpx;padding:0 26rpx;font-size:26rpx;background:rgba(37,28,56,.055); }
 .receipt-filter { flex-shrink:0;min-width:96rpx;height:88rpx;color:var(--text-2, #55496b);font-size:27rpx;font-weight:700; }

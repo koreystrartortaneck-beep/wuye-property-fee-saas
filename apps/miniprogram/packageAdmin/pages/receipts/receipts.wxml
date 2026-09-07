@@ -4,24 +4,25 @@
     <view class="receipt-nav-title">收款收据</view>
   </view>
   <view class="receipts-body">
+    <view class="receipt-channels tabs"><view role="button" wx:for="{{channels}}" wx:key="*this" class="tab {{channelIndex === index ? 'tab-on' : ''}}" data-index="{{index}}" bindtap="pickChannel">{{item}}</view></view>
     <view class="receipt-searchbar">
-      <input class="adm-search" placeholder="房号 / 收据编号 / 订单号" value="{{keyword}}" bindinput="search" confirm-type="search" />
+      <input class="adm-search" placeholder="手机号 / 房号 / 姓名 / 编号" maxlength="100" value="{{keyword}}" bindinput="search" confirm-type="search" />
       <view role="button" class="receipt-control receipt-filter {{filterCount ? 'receipt-filter-on' : ''}}" bindtap="openFilters">筛选<text wx:if="{{filterCount}}"> {{filterCount}}</text></view>
     </view>
     <view wx:if="{{!loading && !error}}" class="receipt-overview">
-      <view><text class="receipt-overview-label">有效实收</text><text class="receipt-overview-amount">¥{{amountDisplay}}</text></view>
+      <view><text class="receipt-overview-label">{{channelIndex === 0 ? '微信实收' : '线下实收'}}</text><text class="receipt-overview-amount">¥{{amountDisplay}}</text></view>
       <text class="receipt-count">{{total}} 张收据</text>
     </view>
     <view wx:if="{{filterCount}}" class="receipt-filter-summary"><text>{{filterLabel}}</text><view role="button" class="receipt-control"  bindtap="resetFilters">清除</view></view>
     <view wx:if="{{loading}}" class="receipt-state">正在加载收据…</view>
-    <view wx:elif="{{error}}" class="receipt-state"><view>收据列表加载失败</view><view class="receipt-state-sub">请检查网络后重试</view><view role="button" class="receipt-control adm-btn adm-btn-ghost" bindtap="load">重新加载</view></view>
+    <view wx:elif="{{error}}" class="receipt-state"><view>收据列表加载失败</view><view class="receipt-state-sub">{{error}}</view><view role="button" class="receipt-control adm-btn adm-btn-ghost" bindtap="load">重新加载</view></view>
     <block wx:else>
       <view wx:if="{{!rows.length}}" class="receipt-state"><view>暂无符合条件的收据</view><view role="button" wx:if="{{keyword || filterCount}}" class="receipt-control adm-btn adm-btn-ghost" bindtap="resetSearch">清除查询条件</view></view>
       <view class="receipt-list" wx:if="{{rows.length}}">
         <view class="receipt-entry {{item.status === 'REFUNDED' ? 'receipt-entry-void' : ''}}" wx:for="{{rows}}" wx:key="orderNo" data-order="{{item.orderNo}}" bindtap="open" hover-class="receipt-entry-hover" role="button" aria-label="{{item.name}}，{{item.amount}}元，查看收据">
           <view class="receipt-house">{{item.name || '房屋信息未提供'}}</view>
           <view class="receipt-charge">{{item.title || '缴费记录'}}</view>
-          <view class="receipt-value-row"><text class="receipt-channel">{{item.channelText}}<text wx:if="{{item.status === 'REFUNDED'}}" class="receipt-void-label"> · 已作废</text></text><text class="receipt-value">¥{{item.amountDisplay}}</text></view>
+          <view class="receipt-value-row"><text class="receipt-channel">{{item.channelText}}<text wx:if="{{item.status === 'REFUNDED'}}" class="receipt-void-label"> · {{item.channel === 'WXPAY' ? '已退款' : '已作废'}}</text></text><text class="receipt-value">¥{{item.amountDisplay}}</text></view>
           <view class="receipt-entry-foot"><text class="receipt-date">{{item.atShort}}</text><text class="receipt-open">查看收据 ›</text></view>
         </view>
       </view>
@@ -34,8 +35,6 @@
     <view class="receipt-sheet" catchtap="noop">
       <view class="receipt-sheet-head"><text>筛选收据</text><view role="button" class="receipt-control"  bindtap="closeFilters" aria-label="关闭筛选">关闭</view></view>
       <scroll-view scroll-y class="receipt-sheet-scroll">
-        <view class="receipt-field-title">收款渠道</view>
-        <view class="receipt-options"><view role="button" wx:for="{{channels}}" wx:key="*this" class="receipt-control {{draftChannel === index ? 'receipt-option-on' : ''}}" data-key="draftChannel" data-index="{{index}}" bindtap="pickDraft">{{item}}</view></view>
         <view class="receipt-field-title">收据状态</view>
         <view class="receipt-options"><view role="button" wx:for="{{states}}" wx:key="*this" class="receipt-control {{draftState === index ? 'receipt-option-on' : ''}}" data-key="draftState" data-index="{{index}}" bindtap="pickDraft">{{item}}</view></view>
         <view class="receipt-field-title">缴费日期</view>
