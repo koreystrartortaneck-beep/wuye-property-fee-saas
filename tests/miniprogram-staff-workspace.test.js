@@ -1,8 +1,8 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const root=path.resolve(__dirname,'../apps/miniprogram');
 function harness(file,mocks={}){
-  let definition;const exported={exports:{}};const wx={pageScrollTo(){},showToast(){},showModal(o){o.success({confirm:true});},navigateTo(){},stopPullDownRefresh(){},hideShareMenu(){}};
-  const sandbox={module:exported,exports:exported.exports,Page:d=>definition=d,Component:d=>definition=d,wx,console,setTimeout,clearTimeout,getApp:()=>({loginReady:Promise.resolve()}),require:p=>{
+  let definition;const exported={exports:{}};const wx={pageScrollTo(){},showToast(){},showModal(o){o.success({confirm:true});},navigateTo(){},navigateBack(){},redirectTo(){},getWindowInfo:()=>({statusBarHeight:44}),getMenuButtonBoundingClientRect:()=>({top:48,height:32}),stopPullDownRefresh(){},hideShareMenu(){}};
+  const sandbox={module:exported,exports:exported.exports,Page:d=>definition=d,Component:d=>definition=d,wx,console,setTimeout,clearTimeout,getCurrentPages:()=>mocks.pages||[{}],getApp:()=>({loginReady:Promise.resolve()}),require:p=>{
     if(p.includes('utils/admin')||p==='../utils/admin')return {ensureAdmin:async()=>({role:'TENANT_ADMIN'}),adminRequest:mocks.request||asyncNoop,currentAdmin:()=>({name:'物业'})};
     if(p==='../../list')return {fetchAll:mocks.fetchAll||asyncNoop,cents:v=>Math.round(Number(v)*100),pageSlice:(r,p)=>r.slice((p-1)*20,p*20)};
     return require(path.resolve(path.dirname(path.join(root,file)),p));
@@ -13,6 +13,36 @@ function harness(file,mocks={}){
   instance.wx=wx;return instance;
 }
 async function asyncNoop(){return [];}
+test('收据筛选关闭不生效，确定后重算全集，清除恢复默认',async()=>{
+  const page=harness('packageAdmin/pages/receipts/receipts.js',{fetchAll:async()=>[
+    {orderNo:'a',totalAmount:'1234.56',status:'SUCCESS',channel:'WXPAY',paidAt:'2026-09-07T01:00:00Z'},
+    {orderNo:'b',totalAmount:'100.00',status:'SUCCESS',channel:'OFFLINE',paidAt:'2026-09-07T01:00:00Z'},
+    {orderNo:'c',totalAmount:'20.00',status:'REFUNDED',channel:'OFFLINE',paidAt:'2026-09-07T01:00:00Z'}
+  ]});
+  await page.load();assert.equal(page.data.amountDisplay,'1,334.56');
+  page.openFilters();page.setData({draftChannel:2});page.closeFilters();assert.equal(page.data.channelIndex,0);assert.equal(page.data.total,2);
+  page.openFilters();assert.equal(page.data.draftChannel,0);page.setData({draftChannel:2,draftState:2});page.applyFilters();
+  assert.equal(page.data.total,2);assert.equal(page.data.amount,'100.00');assert.equal(page.data.filterCount,2);
+  page.resetFilters();assert.equal(page.data.total,2);assert.equal(page.data.amount,'1334.56');assert.equal(page.data.filterCount,0);
+});
+test('收据页自绘导航按胶囊位置留安全区，直达页面也能返回管理首页',()=>{
+  const page=harness('packageAdmin/pages/receipts/receipts.js');let redirected;
+  page.wx.redirectTo=o=>redirected=o.url;page.onLoad({});assert.equal(page.data.navTop,44);assert.equal(page.data.navHeight,40);assert.equal(page.data.navBottom,84);
+  page.back();assert.equal(redirected,'/packageAdmin/pages/home/home');
+});
+test('收据分页首尾不越界，长房号与金额分别独立排版',async()=>{
+  const page=harness('packageAdmin/pages/receipts/receipts.js',{fetchAll:async()=>[]});await page.load();page.turn(event('delta',-1));page.turn(event('delta',1));assert.equal(page.data.page,1);
+  const wxml=fs.readFileSync(path.join(root,'packageAdmin/pages/receipts/receipts.wxml'),'utf8');
+  assert.match(wxml,/class="receipt-house"/);assert.match(wxml,/class="receipt-value-row"/);assert.match(wxml,/查看收据/);assert.doesNotMatch(wxml,/<button\b/);
+});
+test('收据详情404不伪造凭证，显示明确失败状态并允许恢复',async()=>{
+  const exported={exports:{}};
+  vm.runInNewContext(fs.readFileSync(path.join(root,'utils/receipt-page.js'),'utf8'),{module:exported,require:p=>p==='./share'?{}:p==='./datetime'?{fmtDateTimeSec:()=>''}:{},getApp:()=>({loginReady:Promise.resolve()})});
+  let definition,fail=true;
+  vm.runInNewContext(fs.readFileSync(path.join(root,'packageAdmin/pages/receipt/receipt.js'),'utf8'),{Page:p=>definition=p,wx:{hideShareMenu(){}},require:p=>p.includes('utils/admin')?{ensureAdmin:async()=>{},adminRequest:async()=>{if(fail){const e=new Error('资源不存在');e.code=40400;throw e;}return {receipt:{receiptNo:'TEST',totalAmount:'12.00',bills:[]}};}}:exported.exports});
+  definition.setData=function(d){Object.assign(this.data,d)};definition.orderNo='TEST';await definition.load();assert.equal(definition.data.error,true);assert.equal(definition.data.r,null);assert.equal(definition.data.errorMessage,'收据暂时无法查看');
+  fail=false;await definition.load();assert.equal(definition.data.error,false);assert.equal(definition.data.r.receiptNo,'TEST');assert.equal(definition.data.errorHint,'');
+});
 function event(key,value){return {currentTarget:{dataset:{[key]:value}}};}
 test('全量读取超过一页，不把截断清单当成全部',async()=>{
   const all=Array.from({length:550},(_,i)=>({id:'h'+i})),calls=[];

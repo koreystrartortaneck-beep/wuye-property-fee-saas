@@ -114,6 +114,7 @@
 .rc-save {
   margin: 40rpx 40rpx 0;
 }
+.rc-error-hint { margin:18rpx 32rpx 0;font-size:25rpx;line-height:1.6;text-align:center;color:var(--text-3, #7c7288); }
 
 /* 加载/错误态 */
 .rc-state {

@@ -1,1 +1,1 @@
-{"navigationStyle":"default","navigationBarTitleText":"收款收据","navigationBarBackgroundColor":"#faf7f1","enablePullDownRefresh":true}
+{"navigationStyle":"custom","navigationBarTitleText":"收款收据","enablePullDownRefresh":true,"backgroundColor":"#f6f0e7","backgroundTextStyle":"dark"}

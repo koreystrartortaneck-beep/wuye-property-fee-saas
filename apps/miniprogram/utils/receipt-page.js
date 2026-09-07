@@ -7,7 +7,7 @@ module.exports = function createReceiptPage(loadPayment) { return {
   onShareAppMessage: share.onShareAppMessage,
   onShareTimeline: share.onShareTimeline,
 
-  data: { r: null, loading: true, error: false, noReceipt: false, saving: false },
+  data: { r: null, loading: true, error: false, errorMessage:'',errorHint:'', noReceipt: false, saving: false },
 
   onLoad(options) {
     this.orderNo = options.orderNo || '';
@@ -19,7 +19,7 @@ module.exports = function createReceiptPage(loadPayment) { return {
       this.setData({ loading: false, error: true });
       return;
     }
-    this.setData({ loading: true, error: false });
+    this.setData({ loading: true, error: false, errorMessage:'',errorHint:'' });
     try {
       await getApp().loginReady;
       const p = await (loadPayment ? loadPayment(this.orderNo) : request(`/owner/payments/${this.orderNo}`, { silent: true }));
@@ -65,7 +65,7 @@ module.exports = function createReceiptPage(loadPayment) { return {
         },
       });
     } catch (e) {
-      this.setData({ loading: false, error: true });
+      this.setData({ loading: false, error: true, r:null, errorMessage:e.receiptMessage || '收据加载失败',errorHint:e.receiptHint || '请检查网络后重试' });
     }
   },
 

@@ -367,6 +367,15 @@ test('分包每一页都必须显式声明导航栏——全局是自定义导�
   const sub = app.subpackages.find((s) => s.root === 'packageAdmin');
   for (const p of sub.pages) {
     const cfg = JSON.parse(fs.readFileSync(path.join(MP, 'packageAdmin', p + '.json'), 'utf8'));
+    if (p === 'pages/receipts/receipts') {
+      assert.equal(cfg.navigationStyle, 'custom');
+      const js = fs.readFileSync(path.join(MP, 'packageAdmin', p + '.js'), 'utf8');
+      const css = fs.readFileSync(path.join(MP, 'packageAdmin', p + '.wxss'), 'utf8');
+      assert.match(js, /getMenuButtonBoundingClientRect/);
+      assert.match(js, /navBottom:navTop\+navHeight/);
+      assert.match(css, /padding-top:var\(--receipt-nav-bottom\)/);
+      continue;
+    }
     assert.equal(cfg.navigationStyle, 'default', `packageAdmin/${p}.json 没声明原生导航,内容会顶进刘海`);
   }
 });
