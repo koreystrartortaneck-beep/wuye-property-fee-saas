@@ -11,6 +11,8 @@
 const { adminRequest, currentAdmin } = require('../../../utils/admin');
 // 枚举文案一律取自 utils/labels(与后端枚举有守卫比对),页面不自建映射
 const { TICKET_TYPE, TICKET_STATUS, label } = require('../../../utils/labels');
+const { fetchAll, pageSlice } = require('../../list');
+const { fmtDateTimeSec } = require('../../../utils/datetime');
 
 Component({
   properties: {
@@ -28,6 +30,7 @@ Component({
     loading: true,
     loadError: false,
     pending: [],
+    visibleRows:[], selectedStatus:'PENDING', page:1,pages:1,
     processing: [],
     done: [],
     showDone: false,
@@ -38,9 +41,9 @@ Component({
 
 
   async load() {
-    this.setData({ loading: true, loadError: false });
+    this.setData({ loading: this.data.pending.length + this.data.processing.length + this.data.done.length === 0, loadError: false });
     try {
-      const d = await adminRequest('/admin/tickets?page=1&pageSize=50', { silent: true });
+      const d = { list: await fetchAll('/admin/tickets') };
       const rows = (d.list || []).map((t) => ({
         id: t.id,
         typeText: label(TICKET_TYPE, t.type),
@@ -51,13 +54,14 @@ Component({
         houseId: t.houseId,
         assignee: t.assigneeName || '',
         reply: t.replyContent || '',
-        at: String(t.createdAt || '').slice(0, 16).replace('T', ' '),
+        at: fmtDateTimeSec(t.createdAt),
       }));
       this.setData({
         pending: rows.filter((r) => r.status === 'PENDING'),
         processing: rows.filter((r) => r.status === 'PROCESSING'),
         done: rows.filter((r) => r.status !== 'PENDING' && r.status !== 'PROCESSING'),
       });
+      this.showPage();
     } catch (e) {
       this.setData({ loadError: true });
     } finally {
@@ -68,6 +72,10 @@ Component({
   toggleDone() {
     this.setData({ showDone: !this.data.showDone });
   },
+  pickStatus(e){this.setData({selectedStatus:e.currentTarget.dataset.status,page:1});this.showPage();},
+  showPage(){const rows=this.data.selectedStatus==='PENDING'?this.data.pending:this.data.selectedStatus==='PROCESSING'?this.data.processing:this.data.done;const pages=Math.max(1,Math.ceil(rows.length/20)),page=Math.min(this.data.page,pages);this.setData({pages,page,visibleRows:pageSlice(rows,page)});},
+  turn(e){const page=this.data.page+Number(e.currentTarget.dataset.delta);if(page<1||page>this.data.pages)return;this.setData({page});this.showPage();wx.pageScrollTo({scrollTop:0,duration:0});},
+  open(e){wx.navigateTo({url:'/packageAdmin/pages/ticket-detail/ticket-detail?id='+encodeURIComponent(e.currentTarget.dataset.id)});},
 
   async accept(e) {
     const { id, name } = e.currentTarget.dataset;

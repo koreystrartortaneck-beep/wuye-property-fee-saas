@@ -1,7 +1,7 @@
 <view class="page adm-page">
   <view class="adm-card pad">
-    <!-- 扫码是主动线:业主亮码,扫一下直达查券 -->
-    <view class="adm-btn cv-scan" bindtap="scan">扫业主的券码</view>
+    <!-- 扫码是主动线:业主亮码,扫一下直达查询卡券 -->
+    <view class="adm-btn cv-scan" bindtap="scan">扫码核销</view>
     <view class="cv-or">或手动输入</view>
     <view class="cv-row">
       <input
@@ -12,9 +12,9 @@
         bindinput="onInput"
         bindconfirm="lookup"
       />
-      <view class="adm-btn cv-btn {{checking ? 'adm-btn-dim' : ''}}" bindtap="lookup">{{checking ? '查询中…' : '查券'}}</view>
+      <view class="adm-btn cv-btn {{checking ? 'adm-btn-dim' : ''}}" bindtap="lookup">{{checking ? '查询中…' : '查询卡券'}}</view>
     </view>
-    <view class="adm-hint">业主的券码在「我的 → 我的卡券」里,点一下即可复制</view>
+
   </view>
 
   <view wx:if="{{error}}" class="adm-hint adm-error">{{error}}</view>

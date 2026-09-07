@@ -74,7 +74,7 @@
  * 「已作废」和「收讫」渲染成一模一样的红色印章，业主完全看不出这张收据无效。
  * 改成灰调 + 降透明度，与收讫形成明确区分。
  */
-.rc-stamp-void {
+.rc-stamp.rc-stamp-void {
   border-color: rgba(124, 114, 136, 0.55);
   color: rgba(124, 114, 136, 0.7);
   font-size: 34rpx;

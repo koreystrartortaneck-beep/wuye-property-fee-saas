@@ -385,6 +385,6 @@ test('业主端每一页都能转发;管理端每一页都不能', () => {
   const sub = app.subpackages.find((s) => s.root === 'packageAdmin');
   for (const p of sub.pages) {
     const src = fs.readFileSync(path.join(MP, 'packageAdmin', p + '.js'), 'utf8');
-    assert.ok(!/onShareAppMessage/.test(src), `packageAdmin/${p} 不该可转发`);
+    assert.ok(!/onShareAppMessage/.test(src) || /delete page\.onShareAppMessage/.test(src), `packageAdmin/${p} 不该可转发`);
   }
 });

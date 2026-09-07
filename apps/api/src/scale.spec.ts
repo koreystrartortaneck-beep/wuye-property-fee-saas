@@ -135,7 +135,7 @@ describe('聚合下推：不得把账单整表拉进内存累加', () => {
     const body = methodBody(read('billing/arrears.controller.ts'), 'async list', 5000);
     // 合计必须在 slice 之前算
     const totalAt = body.indexOf('const totalCents');
-    const sliceAt = body.indexOf('.slice(0, ArrearsService.LIST_CAP)');
+    const sliceAt = body.indexOf('.slice(offset, offset + ArrearsService.LIST_CAP)');
     expect(totalAt).toBeGreaterThan(-1);
     expect(sliceAt).toBeGreaterThan(-1);
     expect(totalAt).toBeLessThan(sliceAt);

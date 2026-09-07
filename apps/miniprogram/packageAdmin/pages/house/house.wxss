@@ -1,4 +1,5 @@
 @import "../../adm.wxss";
+.adm-page {padding-bottom:calc(220rpx + env(safe-area-inset-bottom));}.adm-page>.tabs {position:sticky;top:0;z-index:5;}.house-pager {position:sticky;top:96rpx;background:#faf7f1;z-index:4;padding:10rpx 0;}.ed-btns {position:fixed;bottom:0;left:0;right:0;z-index:6;background:#faf7f1;padding:20rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));}
 
 /* 头卡:深紫渐变,待缴/已缴左右分栏 */
 .hero {

@@ -1,7 +1,7 @@
 <view class="page adm-page">
   <view wx:if="{{loading}}" class="adm-hint">加载中…</view>
   <view wx:elif="{{loadError}}" class="adm-denied">
-    <view class="adm-denied-title">收不了这笔</view>
+    <view class="adm-denied-title">无法登记收款</view>
     <view class="adm-denied-desc">{{loadError}}</view>
     <view class="adm-btn adm-retry" bindtap="back">返回</view>
   </view>
@@ -14,8 +14,8 @@
       <view class="done-lab">收据号 {{result.receiptNo}}</view>
       <view class="done-lab">订单号 {{result.orderNo}}</view>
     </view>
-    <view class="adm-hint">业主打开小程序,这笔已经是「已缴」并能看到电子收据。收错了可以在这户的账单里冲正(需管理员账号)。</view>
-    <view class="adm-btn act" bindtap="back">完成</view>
+
+    <view class="adm-btn act" bindtap="goReceipt">电子收据</view>
   </block>
 
   <block wx:else>
@@ -50,14 +50,14 @@
       </view>
       <view class="f-row">
         <view class="f-lab">付款人</view>
-        <input class="adm-input f-in" data-k="payerName" value="{{payerName}}" bindinput="onInput" placeholder="选填,谁来交的" />
+        <input class="adm-input f-in" data-k="payerName" value="{{payerName}}" bindinput="onInput" placeholder="选填" />
       </view>
       <view class="f-row">
         <view class="f-lab">备注</view>
         <input class="adm-input f-in" data-k="remark" value="{{remark}}" bindinput="onInput" placeholder="选填" />
       </view>
     </view>
-    <view class="adm-hint">单据号是这笔现金唯一的线下痕迹,以后对账只能靠它回到纸面,所以必填。</view>
+
 
     <view class="adm-btn act {{submitting ? 'adm-btn-busy' : ''}}" bindtap="submit">
       {{submitting ? '登记中…' : '确认收到 ¥' + bill.amount}}

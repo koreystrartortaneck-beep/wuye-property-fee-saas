@@ -1,5 +1,5 @@
 <view class="page adm-page">
-  <view wx:if="{{loading}}" class="adm-hint">正在算这户该收多少…</view>
+  <view wx:if="{{loading}}" class="adm-hint">加载中…</view>
   <view wx:elif="{{loadError}}" class="adm-denied">
     <view class="adm-denied-title">加载失败</view>
     <view class="adm-denied-desc">请检查网络后重试</view>
@@ -21,7 +21,7 @@
         <view class="adm-hint">{{blockedAll}}</view>
       </view>
       <view wx:elif="{{candidates.length === 0}}" class="adm-card">
-        <view class="adm-hint">这户没挂按年收费的标准,所以出不了账单。回上一页「收费标准」里挂一条即可。</view>
+        <view class="adm-hint">未设置年度收费标准</view>
       </view>
 
       <view class="adm-card" wx:if="{{candidates.length > 0}}">
@@ -79,13 +79,13 @@
           <view class="adm-card">
             <view class="adm-hint">
               这张账单进了草稿批次「{{result.batchTitle}}」,里面现在共 {{result.batchCount}} 户<text wx:if="{{result.batchTotal}}">、合计 ¥{{result.batchTotal}}</text>。
-              发布是整批一起发布 —— 点下面去核对整批,再一起发。
+              请核对并选择需要发布的账单。
             </view>
           </view>
           <view class="adm-btn act" bindtap="goBatches">去核对这一批({{result.batchCount}} 户)</view>
         </block>
       </block>
-      <view wx:else class="adm-hint">业主打开小程序就能看到这笔账单并缴费。</view>
+      <view wx:else class="adm-hint">账单已发布</view>
 
       <view class="adm-btn adm-btn-ghost act2" bindtap="back">返回这户</view>
     </block>

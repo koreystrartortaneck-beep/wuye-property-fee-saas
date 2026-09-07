@@ -253,6 +253,7 @@ Page({
       this.setData({ publishing: false });
     }
   },
+  reviewBatch(){const b=this.data.batch;if(b)wx.navigateTo({url:'/packageAdmin/pages/batch-detail/batch-detail?id='+encodeURIComponent(b.id)});},
 
   backToScope() {
     this.setData({ step: 1, rows: [], batch: null });

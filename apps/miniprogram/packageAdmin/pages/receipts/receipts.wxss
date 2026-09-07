@@ -1,0 +1,2 @@
+@import "../../adm.wxss";
+.receipt-row { margin-top: 20rpx; }.receipt-meta { display:flex;justify-content:space-between;gap:16rpx;padding:18rpx 0;color:#918793;font-size:22rpx; }

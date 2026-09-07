@@ -25,6 +25,12 @@ function shanghaiTodayStart(): Date {
 
 class ArrearsQuery {
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  page?: number;
+  @IsOptional()
   @IsString()
   communityId?: string;
 
@@ -143,8 +149,8 @@ export class ArrearsService {
 
     houses.sort((a, b) =>
       q.sort === 'days'
-        ? b.overdueDays - a.overdueDays || toCents(b.unpaidAmount) - toCents(a.unpaidAmount)
-        : toCents(b.unpaidAmount) - toCents(a.unpaidAmount) || b.overdueDays - a.overdueDays,
+        ? b.overdueDays - a.overdueDays || toCents(b.unpaidAmount) - toCents(a.unpaidAmount) || a.houseId.localeCompare(b.houseId)
+        : toCents(b.unpaidAmount) - toCents(a.unpaidAmount) || b.overdueDays - a.overdueDays || a.houseId.localeCompare(b.houseId),
     );
 
     // 合计取自全量聚合（过滤后），与明细是否截断无关
@@ -156,7 +162,8 @@ export class ArrearsService {
      */
     const overdueHouses = houses.filter((h) => h.overdueDays > 0).length;
 
-    const page = houses.slice(0, ArrearsService.LIST_CAP);
+    const offset = ((q.page || 1) - 1) * ArrearsService.LIST_CAP;
+    const page = houses.slice(offset, offset + ArrearsService.LIST_CAP);
     const pageIds = page.map((h) => h.houseId);
 
     // 房屋信息与账期明细只为要返回的那几百户取

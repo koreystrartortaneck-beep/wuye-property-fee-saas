@@ -38,9 +38,10 @@
 
     <!-- ① 账单 -->
     <block wx:if="{{tab === 'bills'}}">
+      <view class="adm-pager house-pager"><view data-delta="-1" bindtap="turnBills">上一页</view><text>{{billPage}} / {{billPages}}</text><view data-delta="1" bindtap="turnBills">下一页</view></view>
       <view class="adm-card">
         <view wx:if="{{bills.length === 0}}" class="adm-hint">还没有账单</view>
-        <view class="bill-row" wx:for="{{bills}}" wx:key="id">
+        <view class="bill-row" wx:for="{{visibleBills}}" wx:key="id">
           <view class="bill-line">
             <view class="adm-row-main">
               <view class="adm-row-title">{{item.title}}</view>
@@ -52,24 +53,24 @@
             </view>
           </view>
           <view wx:if="{{item.canCollect || item.canRefund || item.canReverse || item.canReissue}}" class="bill-acts">
-            <view wx:if="{{item.canCollect}}" class="adm-pill adm-pill-ok" data-id="{{item.id}}" bindtap="goCollect">收到现金 · 登记</view>
+            <view wx:if="{{item.canCollect}}" class="adm-pill adm-pill-ok" data-id="{{item.id}}" bindtap="goCollect">登记线下收款</view>
             <view wx:if="{{item.canRefund}}" class="adm-pill adm-pill-danger" data-order="{{item.orderNo}}" data-amount="{{item.amount}}" bindtap="refund">退款</view>
             <view wx:if="{{item.canReverse}}" class="adm-pill adm-pill-danger" data-order="{{item.orderNo}}" data-amount="{{item.amount}}" bindtap="reverse">冲正线下收款</view>
             <view wx:if="{{item.canReissue}}" class="adm-pill" data-id="{{item.id}}" data-amount="{{item.amount}}" data-title="{{item.title}}" bindtap="reissue">重开账单</view>
           </view>
         </view>
       </view>
-      <view wx:if="{{!isAdmin}}" class="adm-hint">退款与冲正要物业管理员来做 —— 你可以先登记收款,退款请找管理员。</view>
+      <view wx:if="{{!isAdmin}}" class="adm-hint">退款或冲正请找管理员。</view>
       <view wx:if="{{house.status !== 'ACTIVE'}}" class="adm-hint adm-error">
-        这套房是「停用」状态,系统不会给它出账。要出账单,先去「信息」把状态改成「在用」。
+        房屋已停用，请启用后出账。
       </view>
-      <view class="adm-btn adm-btn-gold act-btn" bindtap="goBillThisHouse">给这户发账单</view>
+      <view class="adm-dock"><view class="adm-dock-row"><view class="adm-btn adm-btn-ghost" bindtap="goReceipts">收款收据</view><view class="adm-btn adm-btn-gold" bindtap="goBillThisHouse">给这户发账单</view></view></view>
     </block>
 
     <!-- ② 住户 -->
     <block wx:elif="{{tab === 'contacts'}}">
       <view class="adm-card">
-        <view wx:if="{{contacts.length === 0}}" class="adm-hint">还没有授权任何手机号,在下方添加</view>
+        <view wx:if="{{contacts.length === 0}}" class="adm-hint">暂无住户</view>
         <view class="adm-row" wx:for="{{contacts}}" wx:key="id">
           <view class="avatar">{{item.name ? item.name[0] : '住'}}</view>
           <view class="adm-row-main">
@@ -89,13 +90,13 @@
         </view>
         <view class="adm-link {{adding ? 'adm-btn-busy' : ''}}" bindtap="addContact">＋ 添加授权手机号</view>
       </view>
-      <view class="adm-hint">换住户 = 先移除旧号(对方立即看不到账单),再添加新号(对方在小程序授权手机号即见账单)。</view>
+
     </block>
 
     <!-- ③ 收费标准 -->
     <block wx:elif="{{tab === 'standards'}}">
       <view class="adm-card">
-        <view wx:if="{{standards.length === 0}}" class="adm-hint">没挂标准 —— 这户永远不会出账单(空置/免收就该这样)</view>
+        <view wx:if="{{standards.length === 0}}" class="adm-hint">未设置收费标准</view>
         <view class="adm-row" wx:for="{{standards}}" wx:key="ruleId">
           <view class="adm-row-main">
             <view class="adm-row-title">{{item.name}}</view>
@@ -105,19 +106,19 @@
         </view>
 
         <block wx:if="{{pickingRule}}">
-          <view wx:if="{{rules.length === 0}}" class="adm-hint">没有可挂的按年收费标准了(要新建标准请在电脑后台)</view>
+          <view wx:if="{{rules.length === 0}}" class="adm-hint">暂无可用收费标准</view>
           <view class="adm-row" wx:for="{{rules}}" wx:key="id" data-i="{{index}}" bindtap="attachRule" hover-class="adm-row-hover">
             <view class="adm-row-main">
               <view class="adm-row-title">{{item.name}}</view>
               <view class="adm-row-sub">{{item.price}}</view>
             </view>
-            <view class="adm-pill adm-pill-quiet">挂上</view>
+            <view class="adm-pill adm-pill-quiet">添加</view>
           </view>
         </block>
-        <view class="adm-link" bindtap="togglePickRule">{{pickingRule ? '收起' : '＋ 挂一条收费标准'}}</view>
+        <view class="adm-link" bindtap="togglePickRule">{{pickingRule ? '收起' : '添加收费标准'}}</view>
       </view>
-      <view class="adm-hint">挂了才出账。调价改标准那一条,挂着它的房屋下次出账全部跟着变。</view>
-      <view class="adm-btn adm-btn-gold act-btn" bindtap="goBillThisHouse">给这户发账单</view>
+
+      <view class="adm-dock"><view class="adm-btn adm-btn-gold" bindtap="goBillThisHouse">给这户发账单</view></view>
     </block>
 
     <!-- ④ 房屋信息(含危险区) -->
@@ -143,7 +144,7 @@
             <view class="adm-row-main"><view class="adm-row-sub">状态</view></view>
             <view class="adm-pill {{house.status === 'ACTIVE' ? 'adm-pill-ok' : 'adm-pill-quiet'}}">{{house.status === 'ACTIVE' ? '在用' : '停用'}}</view>
           </view>
-          <view class="adm-link" bindtap="startEdit">编辑这些信息</view>
+          <view class="adm-link" bindtap="startEdit">编辑资料</view>
         </block>
 
         <block wx:else>
@@ -172,13 +173,13 @@
             <view class="adm-btn adm-btn-ghost half" bindtap="cancelEdit">取消</view>
             <view class="adm-btn half {{saving ? 'adm-btn-busy' : ''}}" bindtap="saveHouse">{{saving ? '保存中…' : '保存'}}</view>
           </view>
-          <view class="adm-hint">放户日期 = 这户每年该出账的那一天。改了它,以后出账的月份也跟着变。</view>
+
         </block>
       </view>
 
       <view wx:if="{{isAdmin}}" class="danger">
         <view class="danger-t">删除这套房</view>
-        <view class="danger-d">出过账单的房屋删不掉 —— 账单是审计凭据,得能回答「这房去年收过多少」。这种情况请改成「停用」:停用后不出账、不进欠费、楼盘图里变灰。</view>
+        <view class="danger-d">已有账单的房屋不可删除，可将房屋停用。</view>
         <view class="adm-btn adm-btn-ghost danger-b {{deleting ? 'adm-btn-busy' : ''}}" bindtap="removeHouse">删除这套房</view>
       </view>
     </block>

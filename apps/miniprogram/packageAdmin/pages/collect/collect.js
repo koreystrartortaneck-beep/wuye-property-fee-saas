@@ -17,6 +17,7 @@ const { adminRequest } = require('../../../utils/admin');
 const METHODS = ['现金', '微信收款码', '银行转账', '其他'];
 
 Page({
+  goReceipt(){if(this.data.result&&this.data.result.orderNo)wx.navigateTo({url:'/packageAdmin/pages/receipt/receipt?orderNo='+encodeURIComponent(this.data.result.orderNo)});},
   data: {
     billId: '',
     houseId: '',

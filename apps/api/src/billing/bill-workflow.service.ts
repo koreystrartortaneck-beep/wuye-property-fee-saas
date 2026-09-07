@@ -7,6 +7,7 @@ import { IdempotencyService } from '../common/idempotency.service';
 import { OutboxService } from '../notify/outbox.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { runWithTenant } from '../tenant/tenant-cls';
+import { toCents } from './engine/money';
 
 /** 关闭账单占用的进行中订单（由支付服务实现），避免账单与作废竞态。 */
 export const BILL_ORDER_CLOSER = Symbol('BILL_ORDER_CLOSER');
@@ -15,6 +16,8 @@ export interface BillOrderCloser {
 }
 
 interface PublishBatchInput {
+  expectedTotalAmount?: string;
+  billIds?: string[];
   batchId: string;
   adminId: string;
   actingTenantId: string | null;
@@ -67,14 +70,18 @@ export class BillWorkflowService {
 
   /** 发布草稿批次：原子将批次内 DRAFT 账单转 UNPAID 并冻结业务字段；幂等。 */
   async publishBatch(input: PublishBatchInput): Promise<{ batchId: string; status: string; publishedCount: number }> {
+    const selected = input.billIds ? [...new Set(input.billIds)].sort() : undefined;
+    if (selected && (selected.length === 0 || selected.length > 2000 || selected.length !== input.billIds!.length)) {
+      throw new BizException(ErrorCode.VALIDATION, '请选择有效账单');
+    }
     const batch = await this.prisma.raw.billBatch.findUnique({ where: { id: input.batchId } });
     if (!batch) throw new BizException(ErrorCode.NOT_FOUND, '批次不存在');
     this.assertTenant(input.actingTenantId, batch.tenantId);
-    if (batch.status === 'PUBLISHED') {
+    if (batch.status === 'PUBLISHED' && !selected) {
       const publishedCount = await this.prisma.raw.bill.count({ where: { batchId: batch.id, status: { not: 'DRAFT' } } });
       return { batchId: batch.id, status: 'PUBLISHED', publishedCount };
     }
-    if (batch.status === 'CANCELED') {
+    if (batch.status === 'CANCELED' && !selected) {
       throw new BizException(ErrorCode.BILL_NOT_PAYABLE, '批次已作废，不可发布');
     }
 
@@ -87,7 +94,7 @@ export class BillWorkflowService {
         actorKey: input.adminId,
         action: 'admin.bill.publish',
         requestId: input.requestId,
-        payload: { batchId: input.batchId },
+        payload: { batchId: input.batchId, ...(selected ? { billIds: selected } : {}), ...(input.expectedTotalAmount ? { expectedTotalAmount: input.expectedTotalAmount } : {}) },
       });
       if (reservation.outcome === 'REPLAY') return reservation.responseBody as { batchId: string; status: string; publishedCount: number };
       if (reservation.outcome === 'IN_PROGRESS') throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '发布处理中，请稍候');
@@ -95,10 +102,10 @@ export class BillWorkflowService {
 
       try {
         const now = new Date();
-        const { publishedCount } = await this.prisma.raw.$transaction(async (tx) => {
+        const { publishedCount, status } = await this.prisma.raw.$transaction(async (tx) => {
           const b = await tx.billBatch.updateMany({
-            where: { id: input.batchId, tenantId, status: { in: ['DRAFT', 'GENERATING', 'READY'] } },
-            data: { status: 'PUBLISHED', publishedAt: now, publishedBy: input.adminId },
+            where: { id: input.batchId, tenantId, status: selected ? 'DRAFT' : { in: ['DRAFT', 'GENERATING', 'READY'] } },
+            data: selected ? { status: 'DRAFT' } : { status: 'PUBLISHED', publishedAt: now, publishedBy: input.adminId },
           });
           if (b.count !== 1) throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '批次状态已变更');
           /*
@@ -106,16 +113,28 @@ export class BillWorkflowService {
            * 3000 户批次一次拉进内存约数 MB，且全部要过 Decimal 反序列化。
            */
           const drafts = await tx.bill.findMany({
-            where: { batchId: input.batchId, status: 'DRAFT' },
+            where: { batchId: input.batchId, status: 'DRAFT', ...(selected ? { id: { in: selected } } : {}) },
             select: {
               id: true, tenantId: true, communityId: true, houseId: true,
               period: true, title: true, amount: true, dueDate: true,
             },
           });
+          if (selected && drafts.length !== selected.length) {
+            throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '所选账单已变更，请刷新后重新选择');
+          }
+          if (input.expectedTotalAmount !== undefined && drafts.reduce((n,bill)=>n+toCents(String(bill.amount)),0) !== toCents(input.expectedTotalAmount)) {
+            throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '账单金额已变更，请刷新后重新核对');
+          }
           const upd = await tx.bill.updateMany({
-            where: { batchId: input.batchId, status: 'DRAFT' },
+            where: { batchId: input.batchId, status: 'DRAFT', ...(selected ? { id: { in: selected } } : {}) },
             data: { status: 'UNPAID', publishedAt: now, publishedBy: input.adminId },
           });
+          if (upd.count !== drafts.length) throw new BizException(ErrorCode.PAYMENT_STATE_INVALID, '账单状态已变更');
+          const remaining = selected ? await tx.bill.count({ where: { batchId: input.batchId, status: 'DRAFT' } }) : 0;
+          const status = remaining > 0 ? 'DRAFT' : 'PUBLISHED';
+          if (selected && remaining === 0) {
+            await tx.billBatch.updateMany({ where: { id: input.batchId, tenantId }, data: { status: 'PUBLISHED', publishedAt: now, publishedBy: input.adminId } });
+          }
           await this.audit.append(
             {
               tenantId,
@@ -127,7 +146,7 @@ export class BillWorkflowService {
               resourceId: input.batchId,
               reason: input.reason ?? null,
               requestId: input.requestId,
-              afterSummary: { status: 'PUBLISHED', publishedCount: upd.count },
+              afterSummary: { status, publishedCount: upd.count, ...(selected ? { billIds: selected, remaining } : {}) },
             },
             tx,
           );
@@ -172,7 +191,7 @@ export class BillWorkflowService {
             // 承接 enqueue 原有的 P2002 幂等语义：同 dedupKey 已存在则跳过
             skipDuplicates: true,
           });
-          return { publishedCount: upd.count };
+          return { publishedCount: upd.count, status };
         }, {
           // 与 outbox.service.ts 的三处事务对齐。默认 5s 在几百户时就会超时，
           // 而这里超时等于永久发不出账单（见上）。
@@ -196,7 +215,7 @@ export class BillWorkflowService {
          * 挂在「确认发布」这个 HTTP 请求里必然撞网关超时。
          */
 
-        const response = { batchId: input.batchId, status: 'PUBLISHED', publishedCount };
+        const response = { batchId: input.batchId, status, publishedCount };
         await this.idempotency.complete({ tenantId, recordId: reservation.recordId, responseCode: 0, responseBody: response });
         return response;
       } catch (error) {

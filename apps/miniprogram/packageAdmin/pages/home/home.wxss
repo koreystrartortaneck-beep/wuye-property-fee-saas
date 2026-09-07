@@ -1,4 +1,10 @@
 @import "../../adm.wxss";
+.workspace-head { position:sticky;top:0;z-index:8;background:#faf7f1;padding-bottom:12rpx; }
+.workspace-head .adm-search { margin-top:16rpx; }
+.workspace .tool { background:#fffdf9;border:1rpx solid #e9e2d9;box-shadow:none;min-height:140rpx;display:flex;flex-direction:column;justify-content:center; }
+.workspace .tool-main { background:#34263f; }.workspace .tool-receipts { background:#f1e7d6;border-color:#d9bd8b; }
+.workspace .cell { background:#edf2ed;border:0;box-shadow:none;min-height:120rpx; }.workspace .cell-unpaid { background:#f6e9e1; }.workspace .cell-off { background:#eeeae7; }.workspace .camt { font-size:22rpx;color:#426957;margin-top:8rpx; }.workspace .cell-unpaid .camt { color:#a46447; }
+.grid-legend { color:#918793;font-size:22rpx;margin:20rpx 0; }
 
 /* ── 功能箱:两列卡片,名字大、说明小,一眼找得到按钮 ── */
 .tools {
@@ -233,4 +239,3 @@
   font-weight: 800;
   color: #b23f3f;
 }
-

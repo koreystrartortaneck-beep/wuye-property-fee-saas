@@ -2,6 +2,7 @@ const { adminRequest, currentAdmin } = require('../../../utils/admin');
 // 枚举文案一律取自 utils/labels(与后端枚举有守卫逐项比对),页面不自建映射
 const { BILL_STATUS, label, periodLabel } = require('../../../utils/labels');
 const { createPoller } = require('../../../utils/poller');
+const { fetchAll, pageSlice } = require('../../list');
 
 /*
  * 房屋详情 —— 管理端的核心一屏:这套房的一切,以及现场要做的动作。
@@ -36,6 +37,7 @@ Page({
     house: null,
     summary: null,
     bills: [],
+    visibleBills: [], billPage:1,billPages:1,
     payments: [],
     /** 退款在途的笔数:汇总里待缴/已缴都不含它,不单独说就看不见 */
     refunding: 0,
@@ -98,13 +100,18 @@ Page({
   },
 
   async load() {
-    this.setData({ loading: true, loadError: false });
+    this.setData({ loading: !this.data.house, loadError: false });
     try {
       const [profile, contacts, standards] = await Promise.all([
         adminRequest(`/admin/house-profile/${this.data.id}`, { silent: true }),
         adminRequest(`/admin/houses/${this.data.id}/contacts`, { silent: true }),
         adminRequest(`/admin/houses/${this.data.id}/standards`, { silent: true }),
       ]);
+      const [allBills,allPayments]=await Promise.all([
+        fetchAll('/admin/bills?houseId='+encodeURIComponent(this.data.id)),
+        fetchAll('/admin/payments?houseId='+encodeURIComponent(this.data.id)),
+      ]);
+      profile.bills=allBills;profile.payments=allPayments;
       /*
        * 放户日期两处都能给:/standards 一直有,/house-profile 是这次新加的。
        * 优先取前者 —— 后端还没部署完时若只认 profile,页面会对着一个填好的
@@ -135,8 +142,8 @@ Page({
          *   线下已缴 → 冲正(把这笔现金记录作废,账单回到待缴)
          * profile.payments 里有 id/orderNo/channel,账单上有 paymentId,在这里对上。
          */
-        bills: (profile.bills || []).slice(0, 20).map((b) => {
-          const pay = b.paymentId ? (profile.payments || []).find((p) => p.id === b.paymentId) : null;
+        bills: (profile.bills || []).map((b) => {
+          const pay = b.paymentId ? (profile.payments || []).find((p) => p.id === b.paymentId || (p.paymentBills || []).some(pb=>pb.billId===b.id)) : null;
           return {
             ...b,
             statusLabel: label(BILL_STATUS, b.status),
@@ -182,6 +189,7 @@ Page({
     } finally {
       this.setData({ loading: false });
       // 有钱在路上(退款中 / 支付未终结)就自己转起来,变完自动停
+      this.showBillPage();
       this._poller.kick();
     }
   },
@@ -189,6 +197,9 @@ Page({
   pickTab(e) {
     this.setData({ tab: e.currentTarget.dataset.t, editing: false });
   },
+  showBillPage(){const billPages=Math.max(1,Math.ceil(this.data.bills.length/20)),billPage=Math.min(this.data.billPage,billPages);this.setData({billPages,billPage,visibleBills:pageSlice(this.data.bills,billPage)});},
+  turnBills(e){const billPage=this.data.billPage+Number(e.currentTarget.dataset.delta);if(billPage<1||billPage>this.data.billPages)return;this.setData({billPage});this.showBillPage();wx.pageScrollTo({scrollTop:0,duration:0});},
+  goReceipts(){wx.navigateTo({url:'/packageAdmin/pages/receipts/receipts?houseId='+encodeURIComponent(this.data.id)});},
 
   /* ── 编辑房屋信息 ── */
   startEdit() {

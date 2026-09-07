@@ -41,6 +41,10 @@ Page({
     picked: '',
     /** 选中楼栋的单元列表(渲染用) */
     units: [],
+    unitOptions: [], unitIndex: 0, floorOptions: [], floorIndex: 0,
+    flatRows: [], flatPage: 1, flatPages: 1, isFlat: false,
+    buildingOpen: false, buildingQuery: '', buildingOptions: [],
+    mounted: {},
     keyword: '',
     houses: [],
     houseTotal: 0,
@@ -72,6 +76,7 @@ Page({
     }
   },
   async onShow() {
+    const returnScroll = this._returnScroll;
     let s;
     try {
       s = await ensureAdmin();
@@ -88,7 +93,9 @@ Page({
     await Promise.all([this.loadTodos(), this.loadGrid()]);
     // 当前面板重新拉一次:刚登记完收款回来,数字要变
     this.refreshPanel();
+    if(returnScroll != null)this.setData({},()=>wx.pageScrollTo({scrollTop:returnScroll,duration:0}));
   },
+  onHide() { this._returnScroll = this._scrollTop || 0; },
 
   async loadTodos() {
     try {
@@ -132,7 +139,7 @@ Page({
       const buildings = this._grid.map((b) => ({ building: b.building, houses: b.houses, unpaidHouses: b.unpaidHouses }));
       this.setData({ communityId: community.id, buildings });
       // 默认展开第一栋:进来就有东西看,而不是一排按钮等人猜
-      if (this._grid.length > 0 && !this.data.picked) this.pickBuildingByName(this._grid[0].building);
+      if (this._grid.length > 0) this.pickBuildingByName(this.data.picked || this._grid[0].building, true);
     } catch (e) {
       this.setData({ gridError: '楼盘图加载失败,请检查网络后点此重试' });
     } finally {
@@ -141,8 +148,12 @@ Page({
   },
 
   pickTab(e) {
-    this.setData({ tab: e.currentTarget.dataset.t });
+    const tab = e.currentTarget.dataset.t;
+    this._scrolls = this._scrolls || {};
+    this._scrolls[this.data.tab] = this._scrollTop || 0;
+    this.setData({ tab, [`mounted.${tab}`]: true }, () => wx.pageScrollTo({scrollTop:this._scrolls[tab] || 0,duration:0}));
   },
+  onPageScroll(e) { this._scrollTop = e.scrollTop; },
 
   /** 让当前显示的面板重新拉数据(面板是组件,自己不知道页面什么时候回到前台) */
   refreshPanel() {
@@ -159,11 +170,30 @@ Page({
     this.pickBuildingByName(e.currentTarget.dataset.b);
   },
 
-  pickBuildingByName(name) {
+  pickBuildingByName(name, preserve) {
     const b = (this._grid || []).find((x) => x.building === name);
     if (!b) return;
-    this.setData({ picked: name, units: b.units.map(withColumns) });
+    const unitIndex = preserve ? Math.min(this.data.unitIndex, b.units.length - 1) : 0;
+    this.setData({ picked: name, unitOptions: b.units.map(u=>u.unit || '全部'), unitIndex: Math.max(0,unitIndex), flatPage: preserve ? this.data.flatPage : 1 });
+    this.showUnit();
   },
+  showUnit() {
+    const b = (this._grid || []).find(x=>x.building===this.data.picked);
+    if (!b || !b.units.length) return;
+    const u = b.units[this.data.unitIndex], isFlat = !u.unit;
+    const cells = (u.floors || []).reduce((a,f)=>a.concat(f.cells || []),[]);
+    const flatPages=Math.max(1,Math.ceil(cells.length/20)), flatPage=Math.min(this.data.flatPage,flatPages);
+    this.setData({ units: [withColumns(u)], isFlat, flatPage, flatPages,
+      flatRows:cells.slice((flatPage-1)*20,flatPage*20), floorOptions:(u.floors||[]).map(f=>String(f.floor)+'层'), floorIndex:0 });
+  },
+  pickUnit(e) { this.setData({unitIndex:Number(e.detail.value),flatPage:1});this.showUnit(); },
+  jumpFloor(e) { const i=Number(e.detail.value);this.setData({floorIndex:i});wx.createSelectorQuery().select('#floor-'+i).boundingClientRect().exec(r=>{if(r[0])wx.pageScrollTo({scrollTop:Math.max(0,(this._scrollTop||0)+r[0].top-200),duration:150});}); },
+  turnFlat(e) { const page=this.data.flatPage+Number(e.currentTarget.dataset.delta);if(page<1||page>this.data.flatPages)return;this.setData({flatPage:page});this.showUnit();wx.pageScrollTo({scrollTop:0,duration:0}); },
+  openBuildings() { this.setData({buildingOpen:true,buildingQuery:'',buildingOptions:this.data.buildings}); },
+  closeBuildings() { this.setData({buildingOpen:false}); },
+  filterBuildings(e) { const q=e.detail.value;this.setData({buildingQuery:q,buildingOptions:this.data.buildings.filter(b=>b.building.toLowerCase().includes(q.toLowerCase()))}); },
+  chooseBuilding(e) { this.pickBuildingByName(e.currentTarget.dataset.b);this.closeBuildings();wx.pageScrollTo({scrollTop:0,duration:0}); },
+  goReceipts() { wx.navigateTo({url:'/packageAdmin/pages/receipts/receipts'}); },
 
   goHouse(e) {
     const id = e.currentTarget.dataset.id;
@@ -217,6 +247,7 @@ Page({
 
   /* ── 搜索(保留:接电话查户仍是它快) ── */
   onKeywordInput(e) {
+    ++this._ticket;
     const keyword = e.detail.value;
     this.setData({ keyword });
     clearTimeout(this._timer);

@@ -1,0 +1,11 @@
+<view class="page adm-page">
+  <view wx:if="{{loading}}" class="adm-hint">加载中…</view>
+  <view wx:elif="{{error}}" class="adm-hint adm-error" bindtap="load">{{error}}</view>
+  <block wx:else>
+    <view class="adm-sticky"><view class="adm-summary"><text>待发布 {{total}} 笔</text><text>草稿</text></view><view class="adm-pager"><view data-delta="-1" bindtap="turn">上一页</view><text>{{page}} / {{pages}}</text><view data-delta="1" bindtap="turn">下一页</view></view></view>
+    <view wx:if="{{!rows.length}}" class="adm-empty">暂无待发布账单</view>
+    <view class="adm-card batch-row" wx:for="{{rows}}" wx:key="id" data-id="{{item.id}}" bindtap="toggle"><view class="adm-row"><view class="adm-check {{item.checked ? 'adm-check-on' : ''}}">{{item.checked ? '✓' : ''}}</view><view class="adm-row-main"><view class="adm-row-title">{{item.name}}</view><view class="adm-row-sub">{{item.title}} · {{item.period}}</view></view><text class="adm-num">¥{{item.amount}}</text></view></view>
+    <view class="adm-dock-pad"></view>
+    <view wx:if="{{total}}" class="adm-dock"><view class="adm-dock-meta"><text>已选 {{picked.length}} 笔 · ¥{{selectedAmount}}</text><text bindtap="clear">清空</text></view><view class="adm-dock-row"><view class="adm-btn adm-btn-ghost" bindtap="all">{{allPicked ? '取消全选' : '全部勾选'}}</view><view class="adm-btn {{busy ? 'adm-btn-busy' : ''}}" bindtap="publish">{{busy ? '发布中…' : '确认发布'}}</view></view></view>
+  </block>
+</view>

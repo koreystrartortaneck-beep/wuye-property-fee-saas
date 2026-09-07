@@ -17,14 +17,14 @@
     <picker mode="date" fields="month" value="{{period}}" bindchange="onPeriod">
       <view class="adm-input pick-line">{{period}} ›</view>
     </picker>
-    <view class="adm-hint">按年收费:每户只在自己放户日那个月出账。所以这里选的是「扫哪个月」。</view>
+
 
     <view class="adm-sec">发给谁</view>
     <view class="scope-row">
       <view class="scope {{scope === 'all' ? 'scope-on' : ''}}" data-s="all" bindtap="pickScope">全部</view>
       <view class="scope {{scope === 'building' ? 'scope-on' : ''}}" data-s="building" bindtap="pickScope">按楼栋</view>
     </view>
-    <view class="adm-hint">只给某一户出账,请在楼盘图上点那个房间,里面有「给这户发账单」。</view>
+
 
     <view wx:if="{{scope === 'all'}}" class="adm-hint">范围:挂了这条标准、且放户日在 {{period}} 的全部房屋</view>
 
@@ -43,7 +43,7 @@
       </scroll-view>
     </block>
 
-    <view class="adm-btn step-btn {{previewing ? 'adm-btn-busy' : ''}}" bindtap="preview">
+    <view class="adm-btn step-btn scope-submit {{previewing ? 'adm-btn-busy' : ''}}" bindtap="preview">
       {{previewing ? '计算中…' : '下一步:预览金额'}}
     </view>
   </block>
@@ -111,7 +111,7 @@
         {{generating ? '生成中…' : '生成草稿'}}
       </view>
     </view>
-    <view class="adm-hint">草稿业主看不到。生成后还要你确认一次才发布。</view>
+
   </block>
 
   <!-- ③ 草稿已生成,待发布 -->
@@ -124,8 +124,8 @@
       <view class="adm-pill {{batch.published ? 'adm-pill-ok' : 'adm-pill-danger'}}">{{batch.published ? '已发布' : '业主看不到'}}</view>
     </view>
 
-    <view wx:if="{{!batch.published}}" class="adm-btn pub-btn {{publishing ? 'adm-btn-busy' : ''}}" bindtap="publish">
-      发布给业主({{batch.count}} 户)
+    <view wx:if="{{!batch.published}}" class="adm-btn pub-btn" bindtap="reviewBatch">
+      核对并发布
     </view>
     <view wx:else class="adm-hint">已发布,业主可在小程序看到并缴费。</view>
 

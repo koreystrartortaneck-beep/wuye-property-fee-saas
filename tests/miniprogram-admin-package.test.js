@@ -123,10 +123,11 @@ test('首页是楼盘图:楼栋条 → 层格子,欠费格标金额,点格进房
    * 搜索是接电话用的;日常巡查靠空间视图 —— 这条钉住别退回纯搜索。
    */
   const wxml = read('packageAdmin/pages/home/home.wxml').replace(/<!--[\s\S]*?-->/g, '');
-  assert.match(wxml, /pickBuilding/, '没有楼栋切换');
+  assert.match(wxml, /openBuildings/, '没有楼栋选择入口');
+  assert.match(wxml, /chooseBuilding/, '没有楼栋切换');
   assert.match(wxml, /wx:for="\{\{u\.floors\}\}"/, '没有按层铺格子');
   assert.match(wxml, /cell-unpaid/, '欠费格没有红色状态类');
-  assert.match(wxml, /\{\{item\.unpaidAmount\}\}/, '欠费格没有金额');
+  assert.match(wxml, /item\.unpaidAmount/, '欠费格没有金额');
   assert.match(wxml, /data-id="\{\{item\.id\}\}" bindtap="goHouse"/, '格子点不进房屋详情');
   // 搜索保留:接电话查户仍是它最快
   assert.match(wxml, /bindinput="onKeywordInput"/, '搜索框被删掉了');
@@ -278,7 +279,7 @@ test('待办数字必须落在能点进去的入口上,不许出现「请回电�
   assert.match(js, /\/packageAdmin\/pages\/approvals\/approvals/, '绑定审批失去了唯一入口');
   assert.ok(!/请在电脑后台处理/.test(js), '又出现了「请在电脑后台处理」');
   const wxml = read('packageAdmin/pages/home/home.wxml');
-  assert.match(wxml, /draftCount > 0/, '待发布标签的角标条件不见了');
+  assert.match(wxml, /wx:if="\{\{draftCount\}\}"/, '待发布标签的角标条件不见了');
   assert.match(wxml, /goApprovals/, '绑定审批按钮不见了');
   assert.ok(!/todo-strip/.test(wxml), '待办条又回来了');
 });
@@ -422,7 +423,7 @@ test('发公告:发布即可见,所以要确认受众;可撤回但要说清收�
   assert.match(js, /本公司全部小区|本小区/, '确认框没有说清受众范围');
   assert.match(js, /admin\/announcements/, '没有调公告接口');
   const wxml = read('packageAdmin/pages/announce/announce.wxml').replace(/<!--[\s\S]*?-->/g, '');
-  assert.ok(/看过的人收不回来|收不回来/.test(js + wxml), '撤回没有说清「看过的人收不回」');
+  assert.ok(/看过的人收不回来|收不回来|已经看过的人无法收回/.test(js + wxml), '撤回没有说明已阅读内容无法收回');
 });
 
 test('员工与权限:收费员看不到会 403 的按钮,且界面显隐只是免死按钮', () => {
@@ -576,7 +577,8 @@ test('催缴的发送按钮是浮动操作条,不许再沉回列表底部', () =
    * 且必须给列表垫底(不然最后一行被条盖住勾不着)。
    */
   const wxml = read('packageAdmin/components/arrears-panel/index.wxml');
-  assert.match(wxml, /wx:if="\{\{picked\.length > 0\}\}"[\s\S]{0,80}dun-bar/, '操作条没有跟着勾选显隐');
+  assert.match(wxml, /class="dun-bar" hidden="\{\{!active\}\}"/, '底部全选与催缴栏没有按当前页签显隐');
+  assert.match(wxml, /全部勾选/, '底部缺少全选入口');
   assert.match(wxml, /dun-bar-pad/, '没给列表垫底,最后一行会被操作条盖住');
   const wxss = read('packageAdmin/components/arrears-panel/index.wxss');
   assert.match(wxss, /\.dun-bar \{[\s\S]{0,120}position: fixed/, '操作条不是固定在屏幕底部');

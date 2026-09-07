@@ -71,6 +71,10 @@
       "name": "admin",
       "pages": [
         "pages/home/home",
+        "pages/receipts/receipts",
+        "pages/receipt/receipt",
+        "pages/batch-detail/batch-detail",
+        "pages/ticket-detail/ticket-detail",
         "pages/house/house",
         "pages/approvals/approvals",
         "pages/billing/billing",

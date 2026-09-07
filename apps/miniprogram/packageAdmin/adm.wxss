@@ -10,9 +10,7 @@
  *   · 一屏一个主动作,主动作永远是深紫实心
  */
 
-page {
-  background: linear-gradient(180deg, #efe7dc, #f6f0e7 30%);
-}
+page { background: #faf7f1; --text:#34263f; --plum:#34263f; --gold:#b58e51; --text-3:#918793; }
 
 .adm-page {
   padding: 24rpx 24rpx 60rpx;
@@ -236,3 +234,34 @@ page {
   text-align: center;
 }
 .tab-on .tab-bd { background: rgba(253, 251, 247, 0.9); color: var(--plum, #3b2b57); }
+
+/* Staff workspace: shared layout and controls. */
+.adm-page { padding: 20rpx 32rpx 50rpx; color:#34263f; }
+.adm-page .adm-card { border:1rpx solid #e9e2d9; border-radius:28rpx; background:#fffdf9; box-shadow:none; }
+.adm-page .adm-btn { background:#34263f;box-shadow:none;font-weight:600;height:88rpx;font-size:27rpx; }
+.adm-page .adm-btn-ghost { background:#f1eae1;color:#7c6755; }
+.adm-page .adm-btn-gold { background:#e9d8b6;color:#745628; }
+.adm-page .adm-search,.adm-page .adm-input { border:1rpx solid #e9e2d9;border-radius:18rpx;background:#fffefa;height:84rpx;font-size:26rpx; }
+.adm-page .tabs { margin:0;padding:0;border-radius:0;border-bottom:1rpx solid #e9e2d9;background:#faf7f1;height:96rpx; }
+.adm-page .tab { border-radius:0;background:none;box-shadow:none;color:#918793;height:90rpx;border-bottom:6rpx solid transparent;font-weight:500; }
+.adm-page .tab-on { border-bottom-color:#34263f;color:#34263f;font-weight:700; }
+.adm-page .tab-bd { min-width:0;padding:0 5rpx;font-size:18rpx;background:#eee5d8;color:#88673d; }
+.adm-sticky { position:sticky;top:var(--panel-top,0);z-index:4;background:#faf7f1;padding-bottom:16rpx; }
+.adm-filters { display:flex;align-items:center;justify-content:space-between;gap:16rpx;margin:16rpx 0;flex-wrap:wrap;font-size:25rpx; }
+.adm-filters>view,.adm-filters picker { padding:15rpx 8rpx; }
+.adm-pager { display:flex;justify-content:space-between;align-items:center;font-size:24rpx;margin:14rpx 0; }
+.adm-pager>view { padding:16rpx 20rpx;border-radius:12rpx;background:#f1eae1; }
+.adm-summary { display:flex;align-items:center;justify-content:space-between;margin:16rpx 0;font-size:24rpx;color:#918793; }
+.adm-summary .adm-num { display:block;font-size:42rpx;color:#34263f; }
+.adm-empty { text-align:center;padding:100rpx 20rpx;color:#918793;font-size:26rpx; }
+.adm-dock { position:fixed;bottom:0;left:0;right:0;z-index:6;padding:20rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));border-top:1rpx solid #e9e2d9;background:#faf7f1; }
+.adm-dock-row { display:flex;gap:16rpx;align-items:center; }.adm-dock-row>.adm-btn { flex:1; }
+.adm-dock-meta { display:flex;justify-content:space-between;font-size:24rpx;margin-bottom:16rpx; }
+.adm-dock-pad { height:calc(200rpx + env(safe-area-inset-bottom)); }
+.adm-mask { position:fixed;top:0;bottom:0;left:0;right:0;z-index:20;background:#26193466;display:flex;align-items:flex-end; }
+.adm-sheet { width:100%;box-sizing:border-box;background:#faf7f1;border-radius:40rpx 40rpx 0 0;padding:35rpx 32rpx calc(32rpx + env(safe-area-inset-bottom)); }
+.adm-sheet-title { display:flex;justify-content:space-between;font-size:32rpx;font-weight:600;margin-bottom:25rpx; }
+.adm-sheet-title text { font-size:26rpx;color:#987438; }
+.adm-check { width:40rpx;height:40rpx;border:2rpx solid #cabba7;border-radius:9rpx;text-align:center;line-height:40rpx;flex-shrink:0; }.adm-check-on { background:#34263f;color:white;border-color:#34263f; }
+.adm-page .hero { background:#34263f;box-shadow:none;border-radius:28rpx;padding:30rpx; }
+.adm-page .sum-card,.adm-page .t-card,.adm-page .bt-card { background:#fffdf9;border:1rpx solid #e9e2d9;box-shadow:none;border-radius:28rpx; }

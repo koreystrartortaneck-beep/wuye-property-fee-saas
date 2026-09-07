@@ -1,4 +1,5 @@
 @import "../../adm.wxss";
+.ticket-excerpt { display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden; }
 
 .t-card {
   margin-bottom: 22rpx;

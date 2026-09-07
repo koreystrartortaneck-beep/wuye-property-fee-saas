@@ -1,151 +1,62 @@
-<view class="page adm-page">
-  <block wx:if="{{denied}}">
-    <view class="adm-denied">
-      <view class="adm-denied-title">没有管理权限</view>
-      <view class="adm-denied-desc">此入口仅限物业工作人员。若您是物业人员,请联系管理员把您的手机号登记为管理账号,然后重新授权手机号。</view>
-      <view class="adm-btn adm-retry" bindtap="onShow">重试</view>
-    </view>
-  </block>
-
+<view class="page adm-page workspace">
+  <view wx:if="{{denied}}" class="adm-denied"><view class="adm-denied-title">没有管理权限</view><view class="adm-denied-desc">请联系物业管理员开通账号</view><view class="adm-btn adm-retry" bindtap="onShow">重试</view></view>
   <block wx:else>
-    <input
-      class="adm-search"
-      placeholder="搜房号 / 业主 / 手机号"
-      value="{{keyword}}"
-      confirm-type="search"
-      bindinput="onKeywordInput"
-    />
-
-    <!-- 搜索态:结果列表替换楼盘图 -->
-    <block wx:if="{{keyword}}">
-      <view wx:if="{{searching}}" class="adm-hint">搜索中…</view>
-      <view wx:elif="{{houses.length === 0}}" class="adm-hint">没有找到,试试房号其他写法(B-5-1602 / 2-1-1-701)</view>
-      <view class="adm-card" wx:if="{{houses.length > 0}}">
-        <view class="adm-row" wx:for="{{houses}}" wx:key="id" data-id="{{item.id}}" bindtap="goHouse" hover-class="adm-row-hover">
-          <view class="adm-row-main">
-            <view class="adm-row-title">{{item.displayName}}</view>
-            <view class="adm-row-sub">{{item.code}}<text wx:if="{{item.ownerName}}"> · {{item.ownerName}}</text></view>
-          </view>
-          <view class="adm-arrow">›</view>
-        </view>
-        <view wx:if="{{houseTotal > houses.length}}" class="adm-hint">共 {{houseTotal}} 套,输入更完整的房号缩小范围</view>
-      </view>
-    </block>
-
-    <block wx:else>
-      <!-- 四块横向切:一屏一件事,角标告诉你今天该干哪一件 -->
+    <view class="workspace-head">
       <view class="tabs">
         <view class="tab {{tab === 'grid' ? 'tab-on' : ''}}" data-t="grid" bindtap="pickTab">楼盘图</view>
-        <view class="tab {{tab === 'arrears' ? 'tab-on' : ''}}" data-t="arrears" bindtap="pickTab">
-          欠费<text wx:if="{{arrears}}" class="tab-bd">{{arrears.houses}}</text>
-        </view>
-        <view class="tab {{tab === 'tickets' ? 'tab-on' : ''}}" data-t="tickets" bindtap="pickTab">
-          报修<text wx:if="{{ticketCount > 0}}" class="tab-bd">{{ticketCount}}</text>
-        </view>
-        <view class="tab {{tab === 'batches' ? 'tab-on' : ''}}" data-t="batches" bindtap="pickTab">
-          待发布<text wx:if="{{draftCount > 0}}" class="tab-bd">{{draftCount}}</text>
-        </view>
-        <view class="tab {{tab === 'tools' ? 'tab-on' : ''}}" data-t="tools" bindtap="pickTab">
-          功能<text wx:if="{{bindingCount > 0}}" class="tab-bd">{{bindingCount}}</text>
-        </view>
+        <view class="tab {{tab === 'arrears' ? 'tab-on' : ''}}" data-t="arrears" bindtap="pickTab">欠费<text wx:if="{{arrears.houses}}" class="tab-bd">{{arrears.houses}}</text></view>
+        <view class="tab {{tab === 'tickets' ? 'tab-on' : ''}}" data-t="tickets" bindtap="pickTab">报修<text wx:if="{{ticketCount}}" class="tab-bd">{{ticketCount}}</text></view>
+        <view class="tab {{tab === 'batches' ? 'tab-on' : ''}}" data-t="batches" bindtap="pickTab">待发布<text wx:if="{{draftCount}}" class="tab-bd">{{draftCount}}</text></view>
+        <view class="tab {{tab === 'tools' ? 'tab-on' : ''}}" data-t="tools" bindtap="pickTab">功能</view>
       </view>
-
-      <!-- ② 欠费 / ③ 报修 / ④ 待发布:与各自的独立页面共用同一个组件 -->
-      <!-- ⑤ 功能箱:原来堆在楼盘图底部的一排排按钮,收进并列页签(用户:「在哪找按钮啊」) -->
-      <view wx:if="{{tab === 'tools'}}" class="tools">
-        <view class="tool tool-main" bindtap="goBilling">
-          <view class="tool-name">发账单</view>
-          <view class="tool-desc">按标准批量出账,先草稿后发布</view>
+      <block wx:if="{{tab === 'grid'}}">
+        <input class="adm-search" placeholder="搜索房号 / 业主 / 手机号" value="{{keyword}}" confirm-type="search" bindinput="onKeywordInput" />
+        <view wx:if="{{!keyword}}" class="adm-filters">
+          <view bindtap="openBuildings">{{picked || '选择楼栋'}} ▾</view>
+          <picker wx:if="{{!isFlat}}" range="{{unitOptions}}" value="{{unitIndex}}" bindchange="pickUnit"><view>{{unitOptions[unitIndex]}} ▾</view></picker>
+          <picker wx:if="{{!isFlat}}" range="{{floorOptions}}" value="{{floorIndex}}" bindchange="jumpFloor"><view>楼层 ▾</view></picker>
         </view>
-        <view class="tool" bindtap="goNewHouse">
-          <view class="tool-name">新增房屋</view>
-          <view class="tool-desc">建房、登记住户手机、挂收费标准</view>
+        <view wx:if="{{!keyword && isFlat}}" class="adm-pager"><view data-delta="-1" bindtap="turnFlat">上一页</view><text>{{flatPage}} / {{flatPages}}</text><view data-delta="1" bindtap="turnFlat">下一页</view></view>
+      </block>
+    </view>
+    <view hidden="{{tab !== 'grid'}}">
+      <block wx:if="{{keyword}}">
+        <view wx:if="{{searching}}" class="adm-hint">搜索中…</view>
+        <view wx:elif="{{houses.length === 0}}" class="adm-empty">未找到房屋</view>
+        <view class="adm-card" wx:if="{{houses.length}}">
+          <view class="adm-row" wx:for="{{houses}}" wx:key="id" data-id="{{item.id}}" bindtap="goHouse"><view class="adm-row-main"><view class="adm-row-title">{{item.displayName || item.code}}</view><view class="adm-row-sub">{{item.code}} {{item.ownerName}}</view></view><text>›</text></view>
         </view>
-        <view class="tool" bindtap="goApprovals">
-          <view class="tool-name">绑定审批<text wx:if="{{bindingCount > 0}}" class="tab-bd">{{bindingCount}}</text></view>
-          <view class="tool-desc">业主自助申请绑房的审核</view>
+        <view wx:if="{{houseTotal > houses.length}}" class="adm-hint">共 {{houseTotal}} 户，请输入完整房号查询</view>
+      </block>
+      <block wx:else>
+        <view wx:if="{{loading}}" class="adm-hint">加载中…</view>
+        <view wx:if="{{gridError}}" class="adm-hint adm-error" bindtap="retryGrid">{{gridError}}</view>
+        <view class="grid-legend">橙色：待缴　绿色：无欠费　灰色：停用</view>
+        <view wx:if="{{isFlat}}" class="adm-card">
+          <view class="adm-row" wx:for="{{flatRows}}" wx:key="id" data-id="{{item.id}}" bindtap="goHouse"><view class="adm-row-main adm-row-title">{{item.displayName || item.label}}</view><text class="{{item.unpaidCount ? 'adm-danger' : ''}}">{{item.unpaidCount ? '¥'+item.unpaidAmount : item.disabled ? '停用' : '无欠费'}} ›</text></view>
         </view>
-        <view class="tool" bindtap="goCouponVerify">
-          <view class="tool-name">核销卡券</view>
-          <view class="tool-desc">扫业主的券码,当面兑奖品</view>
-        </view>
-        <view class="tool" bindtap="goAnnounce">
-          <view class="tool-name">发公告</view>
-          <view class="tool-desc">停水停电、缴费通知,可置顶</view>
-        </view>
-        <view wx:if="{{isAdmin}}" class="tool" bindtap="goCouponNew">
-          <view class="tool-name">发卡券</view>
-          <view class="tool-desc">电影票、抵扣券,业主自领(仅管理员)</view>
-        </view>
-        <view wx:if="{{isAdmin}}" class="tool" bindtap="goStaff">
-          <view class="tool-name">员工与权限</view>
-          <view class="tool-desc">加人、改角色、停用(仅管理员)</view>
-        </view>
-      </view>
-
-      <arrears-panel wx:if="{{tab === 'arrears'}}" id="arrears" active="{{true}}" />
-      <ticket-panel wx:if="{{tab === 'tickets'}}" id="tickets" active="{{true}}" />
-      <batch-panel wx:if="{{tab === 'batches'}}" id="batches" active="{{true}}" />
-    </block>
-
-    <block wx:if="{{!keyword && tab === 'grid'}}">
-      <!-- 待办不再单独铺一条(黄色 chip 又占位又重复)——报修/待发布的数字就在标签角标上 -->
-      <!-- 欠费:不是「待处理单据」而是常态,所以单独一条,点进去催缴 -->
-      <view wx:if="{{arrears}}" class="ar-bar" bindtap="goDun">
-        <view class="ar-main">
-          <view class="ar-num adm-num">¥{{arrears.amount}}</view>
-          <view class="ar-lab">{{arrears.houses}} 户欠费<text wx:if="{{arrears.overdueHouses > 0}}"> · {{arrears.overdueHouses}} 户已逾期</text></view>
-        </view>
-        <view class="ar-go">去催缴 ›</view>
-      </view>
-
-      <!-- 楼栋条 -->
-      <view wx:if="{{loading}}" class="adm-hint">加载楼盘图…</view>
-      <view wx:if="{{gridError}}" class="adm-hint adm-error" bindtap="retryGrid">{{gridError}}</view>
-      <scroll-view wx:if="{{buildings.length > 0}}" scroll-x class="b-strip" enhanced show-scrollbar="{{false}}">
-        <view
-          class="b-chip {{picked === item.building ? 'b-chip-on' : ''}}"
-          wx:for="{{buildings}}"
-          wx:key="building"
-          data-b="{{item.building}}"
-          bindtap="pickBuilding"
-        >
-          <view class="b-chip-name">{{item.building}}</view>
-          <view class="b-chip-sub">
-            <text wx:if="{{item.unpaidHouses > 0}}" class="b-chip-warn">欠 {{item.unpaidHouses}} 户</text>
-            <text wx:else class="b-chip-ok">无欠费</text>
-          </view>
-        </view>
-      </scroll-view>
-
-      <!-- 楼盘图:一层一行,列数固定(每层同一列 = 同一位置),顶层在上 -->
-      <view class="unit-card" wx:for="{{units}}" wx:key="unit" wx:for-item="u">
-        <view class="unit-head">
-          <view class="unit-name">{{picked}}<text wx:if="{{u.unit}}"> · {{u.unit}}</text></view>
-          <view class="unit-legend">
-            <view class="dot"></view>正常
-            <view class="dot dot-r"></view>待缴
-            <view class="dot dot-g"></view>停用
-          </view>
-        </view>
-        <view class="frow" wx:for="{{u.floors}}" wx:key="floor" wx:for-item="f">
-          <view class="ftag">{{f.floor > 0 ? f.floor : ''}}</view>
-          <view class="cells cols-{{u.cols}}">
-            <view
-              class="cell {{item.unpaidCount > 0 ? 'cell-unpaid' : ''}} {{item.disabled ? 'cell-off' : ''}}"
-              wx:for="{{f.cells}}"
-              wx:key="id"
-              data-id="{{item.id}}"
-              bindtap="goHouse"
-              hover-class="cell-hover"
-            >
-              <view class="cno">{{item.label}}</view>
-              <view wx:if="{{item.unpaidCount > 0}}" class="camt">¥{{item.unpaidAmount}}</view>
+        <block wx:else><block wx:for="{{units}}" wx:key="unit" wx:for-item="u">
+          <view class="frow" wx:for="{{u.floors}}" wx:key="floor" wx:for-item="f" wx:for-index="fi" id="floor-{{fi}}">
+            <view class="ftag">{{f.floor}}F</view><view class="cells cols-{{u.cols}}">
+              <view class="cell {{item.unpaidCount > 0 ? 'cell-unpaid' : ''}} {{item.disabled ? 'cell-off' : ''}}" wx:for="{{f.cells}}" wx:key="id" data-id="{{item.id}}" bindtap="goHouse"><view class="cno">{{item.label}}</view><view class="camt">{{item.unpaidCount ? '¥'+item.unpaidAmount : item.disabled ? '停用' : '无欠费'}}</view></view>
             </view>
           </view>
-        </view>
-      </view>
-      <view wx:if="{{units.length > 0}}" class="adm-hint">点房间 = 进这一户:改面积/放户日期、换住户手机号、只给这一户发账单。发账单、建房、核销等都在「功能」页签。</view>
-    </block>
+        </block></block>
+      </block>
+    </view>
+    <view hidden="{{tab !== 'arrears'}}" style="--panel-top:96rpx"><arrears-panel wx:if="{{mounted.arrears}}" id="arrears" active="{{tab === 'arrears'}}" /></view>
+    <view hidden="{{tab !== 'tickets'}}" style="--panel-top:96rpx"><ticket-panel wx:if="{{mounted.tickets}}" id="tickets" active="{{tab === 'tickets'}}" /></view>
+    <view hidden="{{tab !== 'batches'}}" style="--panel-top:96rpx"><batch-panel wx:if="{{mounted.batches}}" id="batches" active="{{tab === 'batches'}}" /></view>
+    <view wx:if="{{tab === 'tools'}}" class="tools">
+      <view class="tool tool-main" bindtap="goBilling"><view class="tool-name">发账单</view><view class="tool-desc">生成账单</view></view>
+      <view class="tool tool-receipts" bindtap="goReceipts"><view class="tool-name">收款收据</view><view class="tool-desc">查询缴费记录与电子收据</view></view>
+      <view class="tool" bindtap="goNewHouse"><view class="tool-name">新增房屋</view></view>
+      <view class="tool" bindtap="goApprovals"><view class="tool-name">绑定审批<text wx:if="{{bindingCount}}" class="tab-bd">{{bindingCount}}</text></view></view>
+      <view class="tool" bindtap="goCouponVerify"><view class="tool-name">核销卡券</view></view>
+      <view class="tool" bindtap="goAnnounce"><view class="tool-name">发公告</view></view>
+      <view wx:if="{{isAdmin}}" class="tool" bindtap="goCouponNew"><view class="tool-name">发卡券</view></view>
+      <view wx:if="{{isAdmin}}" class="tool" bindtap="goStaff"><view class="tool-name">员工与权限</view></view>
+    </view>
+    <view wx:if="{{buildingOpen}}" class="adm-mask"><view class="adm-sheet"><view class="adm-sheet-title">选择楼栋<text bindtap="closeBuildings">关闭</text></view><input class="adm-search" placeholder="搜索楼栋" value="{{buildingQuery}}" bindinput="filterBuildings"/><scroll-view scroll-y style="max-height:55vh"><view class="adm-row" wx:for="{{buildingOptions}}" wx:key="building" data-b="{{item.building}}" bindtap="chooseBuilding"><view class="adm-row-main">{{item.building}}</view><text>{{item.houses}} 户 ›</text></view></scroll-view></view></view>
   </block>
 </view>

@@ -54,6 +54,9 @@ class ReverseOfflineDto {
 class ListPaymentsQuery extends PageQuery {
   @IsOptional()
   @IsString()
+  houseId?: string;
+  @IsOptional()
+  @IsString()
   communityId?: string;
 
   @IsOptional()
@@ -71,6 +74,7 @@ export class AdminPaymentsService {
 
   async list(q: ListPaymentsQuery) {
     const where = {
+      ...(q.houseId ? { OR: [{ bill: { houseId: q.houseId } }, { paymentBills: { some: { bill: { houseId: q.houseId } } } }] } : {}),
       ...(q.communityId ? { communityId: q.communityId } : {}),
       ...(q.channel ? { channel: q.channel } : {}),
       ...(q.status ? { status: q.status } : {}),
@@ -79,8 +83,10 @@ export class AdminPaymentsService {
       this.prisma.t.payment.findMany({
         where,
         ...pageArgs(q),
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         select: {
+          id: true,
+          paymentBills: { select: { billId: true } },
           orderNo: true, totalAmount: true, discountAmount: true, channel: true, status: true, paidAt: true,
           offlineVoucherNo: true, receiptNo: true, createdAt: true, billId: true,
           /*
@@ -187,6 +193,11 @@ export class AdminPaymentController {
   @Get('trace/:orderNo')
   trace(@Param('orderNo') orderNo: string) {
     return this.payments.trace(orderNo);
+  }
+
+  @Get(':orderNo/receipt')
+  receipt(@Current() cur: CurrentAdmin, @Param('orderNo') orderNo: string) {
+    return this.paymentService.getAdminReceipt(cur.tenantId, orderNo);
   }
 
   @Post('offline')

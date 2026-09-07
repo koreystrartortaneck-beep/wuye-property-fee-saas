@@ -11,7 +11,7 @@
       申请人:{{item.applicant}} · {{item.relation}}
       <text wx:if="{{item.phone}}" class="ap-phone" data-phone="{{item.phone}}" bindtap="callPhone"> {{item.phone}} 📞</text>
     </view>
-    <view class="adm-hint">核对要点:姓名与物业登记是否一致;拿不准就打电话问</view>
+
     <view class="ap-actions">
       <view class="adm-btn adm-btn-ghost ap-btn {{busy === item.id ? 'adm-btn-busy' : ''}}" data-id="{{item.id}}" bindtap="reject">驳回</view>
       <view class="adm-btn ap-btn {{busy === item.id ? 'adm-btn-busy' : ''}}" data-id="{{item.id}}" bindtap="approve">通过</view>

@@ -49,6 +49,9 @@ export class AdminTicketsController {
     return this.service.process(id, dto.assigneeName);
   }
 
+  @Get(':id')
+  detail(@Param('id') id: string) { return this.service.adminDetail(id); }
+
   @Post(':id/done')
   done(@Param('id') id: string, @Body() dto: DoneDto) {
     return this.service.done(id, dto.replyContent);

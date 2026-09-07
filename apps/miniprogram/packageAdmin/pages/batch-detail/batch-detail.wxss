@@ -1,0 +1,2 @@
+@import "../../adm.wxss";
+.batch-row { margin:18rpx 0; }

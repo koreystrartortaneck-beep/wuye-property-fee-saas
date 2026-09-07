@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Injectable, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { ArrayMaxSize, IsArray, IsIn, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
-import { BILL_BATCH_STATUSES, BILL_STATUSES, BillBatchStatus, BillStatus } from '@pf/shared';
+import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsIn, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { BILL_BATCH_STATUSES, BILL_STATUSES, BillBatchStatus, BillStatus, ErrorCode } from '@pf/shared';
+import { BizException } from '../common/biz.exception';
 import { AdminGuard } from '../auth/admin.guard';
 import { Current, CurrentAdmin } from '../auth/current.decorator';
 import { Roles, RolesGuard } from '../auth/roles.decorator';
@@ -63,6 +64,17 @@ class CancelBillDto {
 class ReissueBillDto extends CancelBillDto {}
 
 class PublishBatchDto {
+  @IsOptional()
+  @Matches(/^\d{1,12}\.\d{2}$/)
+  expectedTotalAmount?: string;
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(2000)
+  @ArrayUnique()
+  @IsString({ each: true })
+  billIds?: string[];
+
   @IsString()
   @IsNotEmpty()
   requestId!: string;
@@ -125,7 +137,7 @@ export class BillsAdminService {
       this.prisma.t.bill.findMany({
         where,
         ...pageArgs(q),
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         include: { house: { select: { code: true, displayName: true } } },
       }),
       this.prisma.t.bill.count({ where }),
@@ -140,7 +152,7 @@ export class BillsAdminService {
       ...(q.status ? { status: q.status } : {}),
     };
     const [list, total] = await Promise.all([
-      this.prisma.t.billBatch.findMany({ where, ...pageArgs(q), orderBy: { createdAt: 'desc' } }),
+      this.prisma.t.billBatch.findMany({ where, ...pageArgs(q), orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
       this.prisma.t.billBatch.count({ where }),
     ]);
     return pageResult(list, total, q);
@@ -215,7 +227,19 @@ export class BillRunController {
       actingTenantId: cur.tenantId,
       requestId: dto.requestId,
       reason: dto.reason ?? null,
+      billIds: dto.billIds,
+      expectedTotalAmount: dto.expectedTotalAmount,
     });
+  }
+
+  // Separate route: an older server must fail closed, never interpret selected publication as publish-all.
+  @Post('bill-batches/:id/publish-selected')
+  publishSelected(@Current() cur: CurrentAdmin, @Param('id') id: string, @Body() dto: PublishBatchDto) {
+    if (!dto.billIds || !dto.billIds.length || dto.expectedTotalAmount === undefined) {
+      throw new BizException(ErrorCode.VALIDATION, '请选择账单并核对金额');
+    }
+    return this.workflow.publishBatch({ batchId: id, adminId: cur.adminId, actingTenantId: cur.tenantId,
+      requestId: dto.requestId, reason: dto.reason ?? null, billIds: dto.billIds, expectedTotalAmount: dto.expectedTotalAmount });
   }
 
   /*

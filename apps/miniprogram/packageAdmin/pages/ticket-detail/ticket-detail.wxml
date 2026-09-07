@@ -1,0 +1,10 @@
+<view class="page adm-page">
+  <view wx:if="{{loading}}" class="adm-hint">加载中…</view><view wx:elif="{{error}}" class="adm-hint adm-error" bindtap="load">{{error}}</view>
+  <block wx:elif="{{ticket}}">
+    <view class="adm-card"><view class="adm-row"><view class="adm-row-main adm-row-title">{{ticket.typeText}}</view><text>{{ticket.statusText}}</text></view><view class="adm-row-sub">{{ticket.name}} · {{ticket.at}}</view><view class="ticket-content">{{ticket.content}}</view><image class="ticket-image" wx:for="{{ticket.images}}" wx:key="*this" src="{{item}}" mode="widthFix" data-url="{{item}}" bindtap="image"/><view wx:if="{{ticket.wxUser.phone}}" class="adm-link" bindtap="call">联系报修人</view></view>
+    <view wx:if="{{ticket.status === 'PENDING'}}"><view class="adm-sec">处理人</view><input class="adm-input" maxlength="100" value="{{assignee}}" data-key="assignee" bindinput="input" placeholder="填写处理人"/></view>
+    <view wx:else class="adm-card"><view class="adm-row">处理人：{{ticket.assigneeName || '未分配'}}</view><view wx:if="{{ticket.replyContent}}" class="ticket-content">{{ticket.replyContent}}</view></view>
+    <view wx:if="{{ticket.status === 'PROCESSING'}}"><view class="adm-sec">处理结果</view><textarea class="ticket-reply" maxlength="1000" value="{{reply}}" data-key="reply" bindinput="input" placeholder="填写处理结果"/></view>
+    <view class="adm-dock-pad"></view><view wx:if="{{ticket.status === 'PENDING' || ticket.status === 'PROCESSING'}}" class="adm-dock"><view class="adm-btn {{busy ? 'adm-btn-busy' : ''}}" bindtap="submit">{{busy ? '提交中…' : ticket.status === 'PENDING' ? '确认受理' : '确认办结'}}</view></view>
+  </block>
+</view>

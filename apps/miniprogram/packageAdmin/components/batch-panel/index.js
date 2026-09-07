@@ -9,6 +9,7 @@
  * 首页每次 onShow 也会让当前面板重新拉一次(收完款回来,数字要变)。
  */
 const { adminRequest } = require('../../../utils/admin');
+const { fetchAll, pageSlice } = require('../../list');
 
 const PAGE = 200;
 
@@ -28,6 +29,7 @@ Component({
     loading: true,
     loadError: false,
     batches: [],
+    visibleBatches: [], page:1, pages:1,
     busy: '',
   },
 
@@ -35,9 +37,9 @@ Component({
 
 
   async load() {
-    this.setData({ loading: true, loadError: false });
+    this.setData({ loading: this.data.batches.length === 0, loadError: false });
     try {
-      const d = await adminRequest('/admin/bill-batches?status=DRAFT&pageSize=50', { silent: true });
+      const d = { list: await fetchAll('/admin/bill-batches?status=DRAFT') };
       /*
        * 户数取「批次里还是草稿的账单条数」,不取批次上的 validRows ——
        * validRows 是生成那一刻写的,剔除过之后它就偏大了,
@@ -65,7 +67,8 @@ Component({
        * 待办说有 1 件事、点进来说「没有待发布的账单」—— 红点永远消不掉。
        * 0 户的批次照样列出来,给它「整批不发」这条出路。
        */
-      this.setData({ batches });
+      const pages=Math.max(1,Math.ceil(batches.length/20)),page=Math.min(this.data.page,pages);
+      this.setData({ batches, pages, page, visibleBatches:pageSlice(batches,page) });
     } catch (e) {
       this.setData({ loadError: true });
     } finally {
@@ -91,6 +94,8 @@ Component({
       [`batches[${i}].truncated`]: (d.total || 0) > PAGE ? d.total : 0,
     });
   },
+  open(e) { wx.navigateTo({url:'/packageAdmin/pages/batch-detail/batch-detail?id='+encodeURIComponent(e.currentTarget.dataset.id)}); },
+  turn(e) {const page=this.data.page+Number(e.currentTarget.dataset.delta);if(page<1||page>this.data.pages)return;this.setData({page,visibleBatches:pageSlice(this.data.batches,page)});wx.pageScrollTo({scrollTop:0,duration:0});},
 
   async removeBill(e) {
     const i = Number(e.currentTarget.dataset.i);

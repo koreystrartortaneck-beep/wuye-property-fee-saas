@@ -36,6 +36,7 @@ describe('BillWorkflowService 草稿发布 / 作废 / 重开', () => {
     return {
       billBatch: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       bill: {
+        count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([draftBill]),
         findFirst: jest.fn().mockResolvedValue(null),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -81,6 +82,35 @@ describe('BillWorkflowService 草稿发布 / 作废 / 重开', () => {
   }
 
   const publishInput = { batchId: 'batch-1', adminId: 'admin-1', actingTenantId: 'tenant-1', requestId: 'req-1' };
+
+  it('部分发布只更新已选账单，剩余草稿保留，通知只包含已选账单', async () => {
+    const tx=makeTx();tx.bill.count.mockResolvedValue(4);
+    const res=await makeService(makePrisma(tx)).publishBatch({...publishInput,billIds:['bill-1'],expectedTotalAmount:'100.00'});
+    expect(res).toEqual({batchId:'batch-1',status:'DRAFT',publishedCount:1});
+    expect(tx.bill.updateMany).toHaveBeenCalledWith(expect.objectContaining({where:{batchId:'batch-1',status:'DRAFT',id:{in:['bill-1']}}}));
+    expect(tx.outboxEvent.createMany.mock.calls[0][0].data.map((x:{aggregateId:string})=>x.aggregateId)).toEqual(['bill-1']);
+  });
+  it('最后一笔发布后批次完成', async () => {
+    const tx=makeTx();const r=await makeService(makePrisma(tx)).publishBatch({...publishInput,billIds:['bill-1']});
+    expect(r.status).toBe('PUBLISHED');expect(tx.billBatch.updateMany).toHaveBeenCalledTimes(2);
+  });
+  it('跨批次或已变更账单拒绝整次选择', async () => {
+    const tx=makeTx();tx.bill.findMany.mockResolvedValue([]);
+    await expect(makeService(makePrisma(tx)).publishBatch({...publishInput,billIds:['foreign-bill']})).rejects.toThrow('所选账单已变更');
+    expect(tx.bill.updateMany).not.toHaveBeenCalled();expect(tx.outboxEvent.createMany).not.toHaveBeenCalled();
+  });
+  it('金额变化拒绝发布', async () => {
+    const tx=makeTx();await expect(makeService(makePrisma(tx)).publishBatch({...publishInput,billIds:['bill-1'],expectedTotalAmount:'99.00'})).rejects.toThrow('账单金额已变更');
+    expect(tx.bill.updateMany).not.toHaveBeenCalled();
+  });
+  it('空选择不退化为整批发布', async () => {
+    const tx=makeTx();await expect(makeService(makePrisma(tx)).publishBatch({...publishInput,billIds:[]})).rejects.toThrow('请选择有效账单');
+    expect(tx.billBatch.updateMany).not.toHaveBeenCalled();
+  });
+  it('已选发布重复请求直接重放，不再次通知', async () => {
+    const tx=makeTx();idempotency.reserve.mockResolvedValue({outcome:'REPLAY',responseBody:{batchId:'batch-1',status:'DRAFT',publishedCount:1}});
+    await makeService(makePrisma(tx)).publishBatch({...publishInput,billIds:['bill-1']});expect(tx.bill.updateMany).not.toHaveBeenCalled();
+  });
 
   it('发布草稿批次：原子将草稿账单转 UNPAID，事务内写审计与 Outbox（一次批量写）', async () => {
     const tx = makeTx();

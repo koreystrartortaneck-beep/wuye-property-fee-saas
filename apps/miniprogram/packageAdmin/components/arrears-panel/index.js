@@ -9,6 +9,7 @@
  * 首页每次 onShow 也会让当前面板重新拉一次(收完款回来,数字要变)。
  */
 const { adminRequest } = require('../../../utils/admin');
+const { pageSlice, cents } = require('../../list');
 
 const FILTERS = [
   { key: 0, label: '全部欠费' },
@@ -32,6 +33,8 @@ Component({
     loading: true,
     loadError: false,
     rows: [],
+    visibleRows: [], page: 1, pages: 1,
+    keyword: '',
     total: '0.00',
     totalHouses: 0,
     overdueHouses: 0,
@@ -48,11 +51,23 @@ Component({
 
 
   async load() {
-    this.setData({ loading: true, loadError: false });
+    const version = this._version = (this._version || 0) + 1;
+    this.setData({ loading: this.data.rows.length === 0, loadError: false });
     try {
       const q = [`sort=${this.data.sort}`];
       if (this.data.overdueDays > 0) q.push(`overdueDays=${this.data.overdueDays}`);
       const d = await adminRequest(`/admin/arrears?${q.join('&')}`, { silent: true });
+      const list = (d.list || []).slice();
+      for (let page = 2; list.length < d.totalHouses && page <= 1000; page++) {
+        const next = await adminRequest(`/admin/arrears?${q.join('&')}&page=${page}`, { silent: true });
+        if (next.totalHouses !== d.totalHouses || next.totalAmount !== d.totalAmount || !next.list.length) throw new Error('欠费数据已更新，请刷新');
+        const seen = new Set(list.map(r=>r.houseId));
+        if(next.list.some(r=>seen.has(r.houseId))) throw new Error('欠费数据已更新，请刷新');
+        list.push(...next.list);
+      }
+      if(list.length !== d.totalHouses) throw new Error('欠费数据加载不完整');
+      if(version !== this._version)return;
+      d.list = list;
       const rows = (d.list || []).map((r) => ({
         houseId: r.houseId,
         name: r.displayName || r.code,
@@ -69,28 +84,32 @@ Component({
        * 截断也必须说出来。
        */
       this.setData({
-        rows: rows.map((r) => ({ ...r, checked: false })),
+        rows,
         total: d.totalAmount || '0.00',
         totalHouses: d.totalHouses || rows.length,
         overdueHouses: d.overdueHouses || 0,
-        truncated: d.truncated ? d.totalHouses : 0,
-        picked: [],
-        allPicked: false,
+        truncated: 0,
       });
+      this._allRows=rows;this._totals=d;
+      this.applyFilter();
     } catch (e) {
-      this.setData({ loadError: true });
+      if(version === this._version)this.setData({ loadError: true });
     } finally {
-      this.setData({ loading: false });
+      if(version === this._version)this.setData({ loading: false });
     }
   },
 
   pickFilter(e) {
-    this.setData({ overdueDays: Number(e.currentTarget.dataset.k) }, () => void this.load());
+    this.setData({ overdueDays: Number(e.currentTarget.dataset.k), page:1, picked:[] }, () => void this.load());
   },
 
   toggleSort() {
     this.setData({ sort: this.data.sort === 'days' ? 'amount' : 'days' }, () => void this.load());
   },
+  onSearch(e){this.setData({keyword:e.detail.value,page:1,picked:[]});this.applyFilter();},
+  applyFilter(){const q=this.data.keyword.trim().toLowerCase();const rows=(this._allRows||[]).filter(r=>!q||[r.code,r.name,r.ownerName,r.phone].join(' ').toLowerCase().includes(q));
+    this.setData({rows,total:q?(rows.reduce((n,r)=>n+cents(r.unpaidAmount),0)/100).toFixed(2):this._totals.totalAmount,totalHouses:rows.length,overdueHouses:rows.filter(r=>r.overdueDays>0).length});
+    this.applyPicked(this.data.picked.filter(id=>rows.some(r=>r.houseId===id)));},
 
   toggleRow(e) {
     const id = e.currentTarget.dataset.id;
@@ -104,6 +123,7 @@ Component({
   },
 
   toggleAll() {
+    if(this.data.loading || this.data.loadError || this.data.dunning)return;
     const all = this.data.rows.map((r) => r.houseId);
     this.applyPicked(this.data.picked.length === all.length ? [] : all);
   },
@@ -120,12 +140,15 @@ Component({
   applyPicked(picked) {
     const set = {};
     for (const id of picked) set[id] = true;
+    const rows = this.data.rows.map((r) => ({ ...r, checked: !!set[r.houseId] }));
+    const pages = Math.max(1,Math.ceil(rows.length/20)), page=Math.min(this.data.page,pages);
     this.setData({
       picked,
-      rows: this.data.rows.map((r) => ({ ...r, checked: !!set[r.houseId] })),
+      rows, visibleRows:pageSlice(rows,page), page, pages,
       allPicked: picked.length > 0 && picked.length === this.data.rows.length,
     });
   },
+  turn(e) { const page=this.data.page+Number(e.currentTarget.dataset.delta);if(page<1||page>this.data.pages)return;this.setData({page});this.applyPicked(this.data.picked);wx.pageScrollTo({scrollTop:0,duration:0}); },
 
   call(e) {
     const phone = e.currentTarget.dataset.phone;
@@ -137,12 +160,14 @@ Component({
   },
 
   async dun() {
+    if(this.data.dunning || this.data.loading || this.data.loadError)return;
     const ids = this.data.picked;
+    if(ids.length>500)return wx.showToast({title:'单次最多500户，请分批发送',icon:'none'});
     if (ids.length === 0) return wx.showToast({ title: '先勾要催的户', icon: 'none' });
     const ok = await new Promise((resolve) =>
       wx.showModal({
         title: `催缴 ${ids.length} 户`,
-        content: '给这些户发微信缴费提醒。业主没授权过订阅消息的收不到 —— 那几户还得打电话。',
+        content: `向已选 ${ids.length} 户发送缴费提醒。没授权订阅消息的业主无法接收。`,
         confirmText: '发提醒',
         success: (r) => resolve(r.confirm),
         // 弹窗失败(文案超长/已有弹窗在显示)也必须把 Promise 收掉,否则界面永久卡在「处理中」
@@ -184,7 +209,7 @@ Component({
             : `这 ${h} 户的提醒之前已经发过(每张账单的同一类提醒只发一次,微信一次性订阅也不允许重复推)。要继续催,请打电话。`,
         showCancel: false,
       });
-      this.setData({ picked: [] });
+      this.applyPicked([]);
     } finally {
       this.setData({ dunning: false });
     }

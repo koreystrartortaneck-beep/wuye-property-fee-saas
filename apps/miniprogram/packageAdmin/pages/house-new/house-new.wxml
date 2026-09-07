@@ -49,8 +49,7 @@
     <view wx:if="{{ruleId}}" class="adm-link" bindtap="clearRule">不挂标准</view>
   </view>
 
-  <view class="adm-hint">房号在本小区内唯一。填了已有的房号是<text class="em">更新</text>那套房,不会出现两套同号的。</view>
-  <view class="adm-hint">面积和放户日期可以以后再补,但补齐之前这套房出不了账。</view>
+  <view class="adm-hint">房号已存在时，将更新原房屋资料。</view>
 
   <view class="adm-btn act {{saving ? 'adm-btn-busy' : ''}}" bindtap="submit">{{saving ? '保存中…' : '保存'}}</view>
 </view>

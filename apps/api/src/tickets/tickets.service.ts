@@ -86,6 +86,13 @@ export class TicketsService {
   }
 
   // ---------- 管理侧（租户隔离 client） ----------
+  async adminDetail(id: string) {
+    const ticket = await this.prisma.t.ticket.findFirst({ where: { id }, include: {
+      house: { select: { displayName: true, code: true } }, wxUser: { select: { phone: true } },
+    } });
+    if (!ticket) throw new BizException(ErrorCode.NOT_FOUND);
+    return { ...ticket, images: signUploadPaths(ticket.images) };
+  }
 
   async adminList(q: PageQuery & { communityId?: string; type?: TicketType; status?: TicketStatus }) {
     const where = {
@@ -97,7 +104,7 @@ export class TicketsService {
       this.prisma.t.ticket.findMany({
         where,
         ...pageArgs(q),
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         include: {
           house: { select: { displayName: true, code: true } },
           wxUser: { select: { phone: true } },

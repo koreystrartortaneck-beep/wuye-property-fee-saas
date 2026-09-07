@@ -1,0 +1,2 @@
+@import "../../adm.wxss";
+.ticket-content{padding:24rpx 0;font-size:28rpx;white-space:pre-wrap;word-break:break-all;line-height:1.8}.ticket-image{width:100%;margin:14rpx 0}.ticket-reply{box-sizing:border-box;background:#fffefa;border:1rpx solid #e9e2d9;border-radius:18rpx;padding:24rpx;width:100%;min-height:240rpx;font-size:28rpx}
